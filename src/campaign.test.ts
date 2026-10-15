@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DAYS, income, LAST_DAY, pourCost, profitOf, TOTAL_VISITS, unlocksFor } from './campaign';
+import { DAYS, earlyOffers, income, LAST_DAY, pourCost, profitOf, TOTAL_VISITS, unlocksFor } from './campaign';
 import { CUSTOMERS } from './data';
 import { solve } from './solver';
 
@@ -44,5 +44,13 @@ describe('경영', () => {
 
   it('하루 손익은 수입에서 재료비와 임대료를 뺀 값', () => {
     expect(profitOf({ sales: 60, tips: 70, ingredients: 18, rent: 30 })).toBe(82);
+  });
+
+  it('미리 들여오기는 내일 이후에 입고될 재료만, 이미 산 것은 빼고 판다', () => {
+    const offers = earlyOffers(1, new Set(['bitters'] as const));
+    expect(offers).not.toContain('wine');
+    expect(offers).not.toContain('bitters');
+    expect(offers).toContain('cream');
+    expect(earlyOffers(6, new Set())).toEqual([]);
   });
 });

@@ -27,7 +27,21 @@ export interface RackBottle {
   lift: number;
   appearAt: number;
   lent: boolean;
+  /** 마우스를 올리면 병 뒤로 비치는 밝은 테두리 */
+  shell?: THREE.Mesh;
+  /** 끌다가 놓아 제자리로 날아가는 중 */
+  returning?: boolean;
 }
+
+const RIM_MAT = new THREE.MeshBasicMaterial({
+  color: 0xffe2a8,
+  side: THREE.BackSide,
+  transparent: true,
+  opacity: 0,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  toneMapped: false,
+});
 
 function slotOf(index: number) {
   let tier = 0;
@@ -49,8 +63,16 @@ export class BottleRack {
   }
 
   private buildStand() {
-    const wood = new THREE.MeshPhysicalMaterial({ color: 0x3a1c33, roughness: 0.45, clearcoat: 0.6, clearcoatRoughness: 0.3 });
-    const glow = new THREE.MeshBasicMaterial({ color: 0xffc98a, toneMapped: false });
+    const wood = new THREE.MeshPhysicalMaterial({
+      color: 0x3a1c33,
+      roughness: 0.45,
+      clearcoat: 0.6,
+      clearcoatRoughness: 0.3,
+    });
+    const glow = new THREE.MeshBasicMaterial({
+      color: 0xffc98a,
+      toneMapped: false,
+    });
     const width = PER_TIER[0] * COL_W + 0.1;
     for (let t = 0; t < PER_TIER.length; t++) {
       const h = 0.05 + t * STEP_H;
@@ -77,7 +99,10 @@ export class BottleRack {
         const mouth = bottle.userData.mouthY * BOTTLE_SCALE;
         bottle.position.y = -mouth;
         bottle.rotation.y = -0.35;
-        const hit = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * BOTTLE_SCALE + 0.02, 0.2 * BOTTLE_SCALE + 0.02, mouth + 0.04, 10), new THREE.MeshBasicMaterial({ visible: false }));
+        const hit = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.2 * BOTTLE_SCALE + 0.02, 0.2 * BOTTLE_SCALE + 0.02, mouth + 0.04, 10),
+          new THREE.MeshBasicMaterial({ visible: false }),
+        );
         hit.position.y = -mouth / 2;
         hit.userData.ingredient = ing.id;
         const pivot = new THREE.Group();
@@ -85,6 +110,12 @@ export class BottleRack {
         const home = slotOf(index).add(new THREE.Vector3(0, mouth, 0));
         pivot.position.copy(home);
         const body = bottle.children[0] as THREE.Mesh;
+        // 병 몸통을 조금 키운 뒷면 껍질: 앞면에 가려지고 가장자리만 빛나 윤곽선처럼 보인다.
+        const shell = new THREE.Mesh(body.geometry, RIM_MAT.clone());
+        shell.scale.setScalar(1.09);
+        shell.position.copy(body.position);
+        shell.renderOrder = -1;
+        bottle.add(shell);
         const entry: RackBottle = {
           id: ing.id,
           pivot,
@@ -94,6 +125,7 @@ export class BottleRack {
           lift: 0,
           appearAt: animate ? now + index * 70 : -1e9,
           lent: false,
+          shell,
         };
         this.bottles.set(ing.id, entry);
         this.hits.push(hit);
@@ -128,12 +160,16 @@ export class BottleRack {
     return b ?? null;
   }
 
-  giveBack(id: IngredientId) {
+  /** 빌려 간 병을 돌려받는다. smooth면 놓은 자리에서 제자리로 날아 돌아간다. */
+  giveBack(id: IngredientId, smooth = false) {
     const b = this.bottles.get(id);
     if (!b) return;
     b.lent = false;
-    b.pivot.position.copy(b.home);
-    b.pivot.rotation.set(0, 0, 0);
+    b.returning = smooth;
+    if (!smooth) {
+      b.pivot.position.copy(b.home);
+      b.pivot.rotation.set(0, 0, 0);
+    }
   }
 
   update(now: number, dt: number) {
@@ -142,14 +178,23 @@ export class BottleRack {
       if (b.lent) continue;
       const hot = this.enabled && this.hovered === b.id;
       b.lift += ((hot ? 0.07 : 0) - b.lift) * k;
-      const targetGlow = this.hovered === b.id ? 0.55 : 0.2;
+      const targetGlow = this.hovered === b.id ? 0.6 : 0.2;
       b.glow += (targetGlow - b.glow) * k;
       b.body.emissiveIntensity = b.glow;
+      if (b.shell) (b.shell.material as THREE.MeshBasicMaterial).opacity = Math.max(0, (b.glow - 0.2) / 0.35) * 0.55;
       // 새 병은 위에서 살짝 튀며 내려앉는다.
       const p = Math.min(1, Math.max(0, (now - b.appearAt) / 550));
       const drop = p < 1 ? (1 - easeOutBounce(p)) * 0.8 : 0;
       b.pivot.visible = now >= b.appearAt;
-      b.pivot.position.set(b.home.x, b.home.y + b.lift + drop, b.home.z);
+      const target = new THREE.Vector3(b.home.x, b.home.y + b.lift + drop, b.home.z);
+      if (b.returning) {
+        const r = Math.min(1, dt * 9);
+        b.pivot.position.lerp(target, r);
+        b.pivot.rotation.z *= 1 - r;
+        if (b.pivot.position.distanceTo(target) < 0.01) b.returning = false;
+        continue;
+      }
+      b.pivot.position.copy(target);
       b.pivot.rotation.z = hot ? Math.sin(now / 140) * 0.03 : 0;
     }
   }
