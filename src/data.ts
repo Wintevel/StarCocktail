@@ -26,7 +26,9 @@ export type IngredientId =
   | 'soda'
   | 'cream'
   | 'bitters'
-  | 'nebula';
+  | 'nebula'
+  | 'mead'
+  | 'espresso';
 
 export interface Ingredient {
   id: IngredientId;
@@ -48,6 +50,8 @@ export const INGREDIENTS: Ingredient[] = [
   { id: 'cream', name: '구름 크림', kind: '크림', color: '#fff3e2', alpha: 0.95, delta: { sweet: 1, strength: 0, body: 2 } },
   { id: 'bitters', name: '그림자 비터스', kind: '비터스', color: '#4b2a33', alpha: 0.92, delta: { sweet: -2, strength: 1, body: 0 } },
   { id: 'nebula', name: '성운 리큐르', kind: '리큐르', color: '#7c5cff', alpha: 0.8, delta: { sweet: 1, strength: 1, body: 0 }, fx: 'sparkle' },
+  { id: 'mead', name: '꿀빛 미드', kind: '벌꿀주', color: '#f0b23a', alpha: 0.85, delta: { sweet: 2, strength: 1, body: 1 } },
+  { id: 'espresso', name: '혜성 에스프레소', kind: '커피', color: '#4a2a1a', alpha: 0.95, delta: { sweet: -1, strength: 0, body: 2 } },
 ];
 
 export const INGREDIENT_BY_ID = Object.fromEntries(INGREDIENTS.map((i) => [i.id, i])) as Record<IngredientId, Ingredient>;
@@ -124,8 +128,6 @@ export interface Customer {
   accent: string;
   hair: string;
   longHair?: boolean;
-  greeting: string;
-  order: Constraint[];
   reactions: { perfect: string; good: string; fail: string };
 }
 
@@ -137,11 +139,6 @@ export const CUSTOMERS: Customer[] = [
     color: '#6fa8ff',
     accent: '#ffe08a',
     hair: '#3b4f8f',
-    greeting: '야간 운행 끝났어요… 달달하고 순한 걸로 부탁해요. 내일 또 출근이라.',
-    order: [
-      { kind: 'attr', attr: 'sweet', op: '>=', value: 2 },
-      { kind: 'attr', attr: 'strength', op: '<=', value: 1 },
-    ],
     reactions: {
       perfect: '아, 이거예요. 꿈속에서도 이 맛이 날 것 같아요.',
       good: '음, 나쁘지 않아요. 조금만 더 제 취향이었으면…',
@@ -155,12 +152,6 @@ export const CUSTOMERS: Customer[] = [
     color: '#8a8fa3',
     accent: '#c9782c',
     hair: '#5a5d6b',
-    greeting: '사건이 꼬였어. 쓰고 독한 걸로. 얼음은 잔뜩 넣어서 머리를 식혀 줘.',
-    order: [
-      { kind: 'attr', attr: 'sweet', op: '<=', value: -1 },
-      { kind: 'attr', attr: 'strength', op: '>=', value: 2 },
-      { kind: 'ice', ice: 'more' },
-    ],
     reactions: {
       perfect: '…좋아. 실마리가 보이는군.',
       good: '흠, 쓸 만하네. 완벽하진 않지만.',
@@ -175,11 +166,6 @@ export const CUSTOMERS: Customer[] = [
     accent: '#ffffff',
     hair: '#ff6fa8',
     longHair: true,
-    greeting: '공연 전에 목을 부드럽게 감싸 줄 묵직한 한 잔이 필요해요. 와인 잔에 담아 주세요!',
-    order: [
-      { kind: 'attr', attr: 'body', op: '>=', value: 2 },
-      { kind: 'glass', glass: 'wine' },
-    ],
     reactions: {
       perfect: '라~ 목소리가 벨벳처럼 나와요! 고마워요.',
       good: '괜찮아요, 무대는 해낼 수 있겠어요.',
@@ -193,12 +179,6 @@ export const CUSTOMERS: Customer[] = [
     color: '#9c7cff',
     accent: '#9c1d45',
     hair: '#4b3a7a',
-    greeting: '노을이 겹겹이 쌓인 하늘 같은 술을 원해요. 와인을 넣고, 젓지 말고 층을 살려 주세요. 조금은 달콤하게.',
-    order: [
-      { kind: 'contains', ingredient: 'wine' },
-      { kind: 'layered' },
-      { kind: 'attr', attr: 'sweet', op: '>=', value: 1 },
-    ],
     reactions: {
       perfect: '아… 이 잔 하나로 시 한 편이 나오겠군요.',
       good: '아름답지만, 마지막 한 줄이 비어 있는 느낌이에요.',
@@ -212,12 +192,6 @@ export const CUSTOMERS: Customer[] = [
     color: '#4fbf9a',
     accent: '#ffd84a',
     hair: '#e6e6ee',
-    greeting: '위스키! 하지만 텁텁한 건 질색이야. 가볍게, 그리고 레몬 한 조각 꽂아 주게.',
-    order: [
-      { kind: 'contains', ingredient: 'whisky' },
-      { kind: 'attr', attr: 'body', op: '<=', value: 0 },
-      { kind: 'garnish', garnish: 'lemon' },
-    ],
     reactions: {
       perfect: '하하! 옛날 함선 갑판에서 마시던 그 맛이야!',
       good: '나쁘지 않군, 바텐더. 다음엔 더 잘해 보게.',
@@ -232,13 +206,6 @@ export const CUSTOMERS: Customer[] = [
     accent: '#7c5cff',
     hair: '#c9d2ff',
     longHair: true,
-    greeting: '정확함을 원합니다. 단맛 0, 도수 2, 바디 0. 반드시 저어서 완성할 것.',
-    order: [
-      { kind: 'attr', attr: 'sweet', op: '==', value: 0 },
-      { kind: 'attr', attr: 'strength', op: '==', value: 2 },
-      { kind: 'attr', attr: 'body', op: '==', value: 0 },
-      { kind: 'stirred' },
-    ],
     reactions: {
       perfect: '오차 없음. 기록해 두겠습니다.',
       good: '허용 범위… 아슬아슬하군요.',
@@ -252,12 +219,6 @@ export const CUSTOMERS: Customer[] = [
     color: '#ffb36b',
     accent: '#e8304a',
     hair: '#ff9a3c',
-    greeting: '나도 어른들처럼 멋진 거 마실래! 술은 빼고, 엄청 달게! 체리도 올려 줘!',
-    order: [
-      { kind: 'attr', attr: 'strength', op: '<=', value: 0 },
-      { kind: 'attr', attr: 'sweet', op: '>=', value: 2 },
-      { kind: 'garnish', garnish: 'cherry' },
-    ],
     reactions: {
       perfect: '우와아! 세상에서 제일 멋진 음료야!',
       good: '음… 맛있긴 한데 뭔가 부족해!',
@@ -272,12 +233,6 @@ export const CUSTOMERS: Customer[] = [
     accent: '#7c5cff',
     hair: '#ffcf5c',
     longHair: true,
-    greeting: '오늘 밤은 축제야! 키 큰 하이볼 잔에 화끈하게, 그래도 살짝 달콤하게 부탁해!',
-    order: [
-      { kind: 'glass', glass: 'highball' },
-      { kind: 'attr', attr: 'strength', op: '>=', value: 3 },
-      { kind: 'attr', attr: 'sweet', op: '>=', value: 1 },
-    ],
     reactions: {
       perfect: '최고야! 이 잔으로 건배하자, 모두!',
       good: '좋아, 축제 분위기는 나네!',
@@ -285,6 +240,8 @@ export const CUSTOMERS: Customer[] = [
     },
   },
 ];
+
+export const CUSTOMER_BY_ID = Object.fromEntries(CUSTOMERS.map((c) => [c.id, c])) as Record<string, Customer>;
 
 export interface Recipe {
   id: string;
@@ -392,6 +349,28 @@ export const RECIPES: Recipe[] = [
       { kind: 'glass', glass: 'rocks' },
       { kind: 'ice', ice: 'more' },
       { kind: 'contains', ingredient: 'whisky', min: 2 },
+    ],
+  },
+  {
+    id: 'honey-moon',
+    name: '꿀달 토디',
+    desc: '보름달처럼 둥글고 따뜻한 단맛.',
+    hint: '꿀빛 미드에 크림을 더해 저어서.',
+    conditions: [
+      { kind: 'contains', ingredient: 'mead' },
+      { kind: 'contains', ingredient: 'cream' },
+      { kind: 'stirred' },
+    ],
+  },
+  {
+    id: 'dawn-comet',
+    name: '새벽 혜성',
+    desc: '밤을 새운 사람을 위한 쌉쌀하고 진한 한 잔.',
+    hint: '혜성 에스프레소와 위스키, 쿠페 잔에.',
+    conditions: [
+      { kind: 'glass', glass: 'coupe' },
+      { kind: 'contains', ingredient: 'espresso' },
+      { kind: 'contains', ingredient: 'whisky' },
     ],
   },
 ];

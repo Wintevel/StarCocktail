@@ -137,7 +137,7 @@ button:focus-visible {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(260px, 320px) 1fr minmax(320px, 410px);
+  grid-template-columns: 1fr minmax(320px, 400px);
   gap: 24px;
   height: calc(100vh - var(--topbar));
   padding: 8px 24px 24px;
@@ -198,41 +198,34 @@ button:focus-visible {
   border-bottom-right-radius: 8px;
 }
 
-/* ── 손님 ───────────────────────────── */
-.customer {
-  text-align: center;
-}
-
-.portrait-wrap {
-  position: relative;
-  width: 176px;
-  height: 176px;
-  margin: 0 auto 8px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 40%, rgba(255, 211, 107, 0.28), rgba(139, 107, 255, 0.18) 55%, rgba(12, 8, 28, 0.6) 72%);
-  box-shadow:
-    0 0 0 2px var(--line-strong),
-    0 0 0 6px rgba(12, 8, 28, 0.6),
-    0 0 0 7px var(--line),
-    0 12px 30px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-}
-
-.portrait-wrap canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
+/* ── 주문서: 오른쪽 패널 위쪽 ───────────────── */
+.order {
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
 }
 
 .who {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 10px 0 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 2px 0 10px;
+}
+
+.who .dot {
+  align-self: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.25),
+    0 0 10px var(--c);
 }
 
 .who strong {
-  font-size: 21px;
+  font-size: 19px;
 }
 
 .who span {
@@ -242,28 +235,17 @@ button:focus-visible {
 
 .bubble {
   position: relative;
-  margin: 0 0 16px;
-  padding: 13px 15px;
+  margin: 0 0 12px;
+  padding: 11px 14px;
   border-radius: 14px;
   background: linear-gradient(180deg, #fffaf2, #f1e6ff);
   color: #2a2140;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.55;
   text-align: left;
   box-shadow:
-    0 6px 0 rgba(120, 90, 180, 0.35),
-    0 12px 24px rgba(0, 0, 0, 0.35);
-}
-
-.bubble::before {
-  content: '';
-  position: absolute;
-  top: -8px;
-  left: 50%;
-  margin-left: -8px;
-  border: 8px solid transparent;
-  border-top: 0;
-  border-bottom-color: #fffaf2;
+    0 5px 0 rgba(120, 90, 180, 0.35),
+    0 10px 20px rgba(0, 0, 0, 0.3);
 }
 
 .bubble.react.perfect {
@@ -274,7 +256,8 @@ button:focus-visible {
   background: linear-gradient(180deg, #fff0f2, #ffd6dc);
 }
 
-.customer h3 {
+.order h3,
+.card h3 {
   margin: 0 0 8px;
   font-size: 12px;
   letter-spacing: 0.12em;
@@ -947,6 +930,309 @@ button:focus-visible {
   color: var(--gold);
 }
 
+/* ── 병 이름표: 진열대 병과 같은 동작 ───────────── */
+.bottle-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.bottle-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(70, 52, 130, 0.55), rgba(32, 22, 66, 0.8));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 3px 0 rgba(8, 4, 20, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  font-size: 13px;
+  text-align: left;
+  transition:
+    transform 0.1s,
+    border-color 0.15s,
+    box-shadow 0.1s;
+}
+
+.bottle-chip i {
+  flex: none;
+  width: 10px;
+  height: 18px;
+  border-radius: 3px 3px 4px 4px;
+  background: var(--c, #555);
+  box-shadow:
+    0 0 8px var(--c, transparent),
+    inset 0 2px 0 rgba(255, 255, 255, 0.35);
+}
+
+.bottle-chip span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bottle-chip small {
+  flex: none;
+  color: var(--gold);
+  font-size: 12px;
+}
+
+.bottle-chip:not(:disabled):hover {
+  transform: translateY(-1px);
+  border-color: var(--c, var(--gold));
+}
+
+.bottle-chip:not(:disabled):active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(8, 4, 20, 0.85);
+}
+
+.bottle-chip.locked {
+  opacity: 0.55;
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.bottle-chip.locked i {
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: none;
+}
+
+.bottle-chip.locked small,
+.lock {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.option .lock {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* 진열대 병 위에 뜨는 이름표 */
+.tip-card {
+  position: fixed;
+  z-index: 15;
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(18, 12, 40, 0.92);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  font-size: 14px;
+}
+
+.tip-card[hidden] {
+  display: none;
+}
+
+.tip-card small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tip-card .deltas {
+  justify-content: flex-start;
+}
+
+/* ── 영업 일정·경영 ───────────────────────────── */
+.pill.day {
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(180deg, rgba(139, 107, 255, 0.55), rgba(70, 40, 160, 0.6));
+  border-color: rgba(185, 165, 255, 0.6);
+}
+
+.money {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  transition: transform 0.2s;
+}
+
+.debt,
+.pill.money.debt {
+  color: var(--bad) !important;
+}
+
+.eyebrow {
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.day-card,
+.shop {
+  text-align: center;
+}
+
+.day-card h2,
+.shop h2 {
+  margin: 0 0 6px;
+  font-size: 26px;
+}
+
+.day-card h3,
+.shop h3 {
+  margin-top: 18px;
+}
+
+.arrivals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.arrivals li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 92px;
+  padding: 6px 4px 8px;
+  border-radius: 12px;
+  background: rgba(255, 211, 107, 0.08);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  animation: pop 0.4s cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
+}
+
+.arrivals li:nth-child(2) {
+  animation-delay: 0.08s;
+}
+
+.arrivals li:nth-child(3) {
+  animation-delay: 0.16s;
+}
+
+.arrivals .icon3d {
+  width: 56px;
+  height: 56px;
+}
+
+.facts {
+  list-style: none;
+  margin: 18px auto 0;
+  padding: 0;
+  max-width: 300px;
+  display: grid;
+  gap: 4px;
+}
+
+.facts li {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 14px;
+}
+
+.facts strong {
+  color: var(--gold);
+}
+
+.ledger {
+  width: 100%;
+  max-width: 300px;
+  margin: 16px auto 0;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger td {
+  padding: 5px 10px;
+}
+
+.ledger td:last-child {
+  text-align: right;
+  font-weight: 700;
+}
+
+.ledger tr.sum td {
+  border-top: 1px solid var(--line-strong);
+  padding-top: 8px;
+  color: var(--gold);
+  font-weight: 800;
+}
+
+.goods {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+}
+
+.goods li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.goods li > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.goods li > div > span,
+.goods .with-icon span span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.goods .with-icon {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.goods .with-icon > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.goods .with-icon .icon3d {
+  width: 44px;
+  height: 44px;
+}
+
+.goods li.owned {
+  border-color: rgba(126, 226, 168, 0.5);
+  background: rgba(126, 226, 168, 0.08);
+}
+
+.goods button {
+  flex: none;
+  min-width: 84px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-weight: 800;
+}
+
 /* ── 좁은 화면: 위쪽에 3D 무대를 고정하고 아래로 조작 ── */
 @media (max-width: 860px) {
   #app {
@@ -1037,26 +1323,12 @@ button:focus-visible {
     overflow: visible;
   }
 
-  .customer {
-    display: grid;
-    grid-template-columns: 84px 1fr;
-    column-gap: 14px;
-    text-align: left;
-    align-items: start;
+  .bottle-list {
+    grid-template-columns: repeat(2, 1fr);
   }
 
-  .portrait-wrap {
-    width: 84px;
-    height: 84px;
-    margin: 0;
-  }
-
-  .who {
-    margin-top: 0;
-  }
-
-  .bubble::before {
-    display: none;
+  .card {
+    padding: 22px 18px;
   }
 
   .icon3d {
