@@ -1,17 +1,18 @@
 :root {
-  --bg-0: #0b0820;
-  --bg-1: #17113a;
-  --panel: rgba(30, 22, 66, 0.72);
-  --panel-line: rgba(255, 220, 160, 0.22);
-  --text: #f4ecff;
-  --muted: #b8acd8;
+  --bg: #0c0718;
+  --panel: rgba(18, 12, 40, 0.72);
+  --line: rgba(255, 214, 140, 0.28);
+  --line-strong: rgba(255, 214, 140, 0.65);
+  --text: #f6efff;
+  --muted: #b9add6;
   --gold: #ffd36b;
-  --gold-deep: #e0a83a;
+  --gold-deep: #d99a2b;
   --violet: #8b6bff;
   --pink: #ff8fc8;
   --ok: #7ee2a8;
   --bad: #ff7a8a;
-  --radius: 14px;
+  --radius: 16px;
+  --topbar: 60px;
   font-family: 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
   color: var(--text);
 }
@@ -23,51 +24,16 @@
 html,
 body {
   margin: 0;
-  min-height: 100%;
+  height: 100%;
+  background: var(--bg);
 }
 
 body {
-  background:
-    radial-gradient(1200px 600px at 50% -10%, rgba(139, 107, 255, 0.35), transparent 60%),
-    radial-gradient(800px 500px at 90% 110%, rgba(255, 143, 200, 0.18), transparent 60%),
-    linear-gradient(180deg, var(--bg-1), var(--bg-0));
-  background-attachment: fixed;
   overflow-x: hidden;
 }
 
-/* 은은하게 깜빡이는 별 배경 */
-body::before,
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    radial-gradient(1.5px 1.5px at 12% 18%, #fff 50%, transparent 51%),
-    radial-gradient(1px 1px at 28% 72%, #fff 50%, transparent 51%),
-    radial-gradient(1.5px 1.5px at 46% 34%, #ffe9b8 50%, transparent 51%),
-    radial-gradient(1px 1px at 63% 12%, #fff 50%, transparent 51%),
-    radial-gradient(2px 2px at 78% 58%, #fff 50%, transparent 51%),
-    radial-gradient(1px 1px at 88% 26%, #ffe9b8 50%, transparent 51%),
-    radial-gradient(1.5px 1.5px at 6% 86%, #fff 50%, transparent 51%),
-    radial-gradient(1px 1px at 54% 92%, #fff 50%, transparent 51%);
-  opacity: 0.7;
-  animation: twinkle 5s ease-in-out infinite alternate;
-}
-
-body::after {
-  transform: translate(37px, 53px);
-  animation-delay: -2.5s;
-  opacity: 0.4;
-}
-
-@keyframes twinkle {
-  from {
-    opacity: 0.25;
-  }
-  to {
-    opacity: 0.8;
-  }
+#app {
+  min-height: 100%;
 }
 
 button {
@@ -80,7 +46,7 @@ button {
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.4;
+  opacity: 0.38;
 }
 
 button:focus-visible {
@@ -88,23 +54,46 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+/* ── 3D 무대: 화면 전체를 채우는 바 ───────────────── */
+.stage3d {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+.stage3d canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 가장자리를 어둡게 눌러 가운데 잔에 시선이 가게 한다 */
+.stage3d::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 70% at 50% 55%, transparent 55%, rgba(6, 3, 16, 0.55) 100%),
+    linear-gradient(180deg, rgba(6, 3, 16, 0.55), transparent 18%, transparent 80%, rgba(6, 3, 16, 0.6));
+}
+
 /* ── 상단 바 ───────────────────────────── */
 .topbar {
   position: relative;
-  z-index: 1;
+  z-index: 2;
+  height: var(--topbar);
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--panel-line);
-  background: rgba(11, 8, 32, 0.5);
-  backdrop-filter: blur(6px);
+  padding: 0 24px;
 }
 
 .brand {
   font-weight: 800;
-  letter-spacing: 0.02em;
-  font-size: 18px;
+  letter-spacing: 0.03em;
+  font-size: 19px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
 }
 
 .brand small {
@@ -115,7 +104,7 @@ button:focus-visible {
 
 .logo {
   color: var(--gold);
-  text-shadow: 0 0 12px rgba(255, 211, 107, 0.8);
+  text-shadow: 0 0 14px rgba(255, 211, 107, 0.9);
 }
 
 .stats {
@@ -130,38 +119,83 @@ button:focus-visible {
 }
 
 .pill {
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(12, 8, 28, 0.6);
+  border: 1px solid var(--line);
   font-size: 13px;
   white-space: nowrap;
+  backdrop-filter: blur(6px);
 }
 
 .pill.gold {
   color: var(--gold);
-  background: rgba(255, 211, 107, 0.12);
 }
 
-/* ── 레이아웃 ───────────────────────────── */
+/* ── 배치: 3D 무대 위에 좌우 패널이 떠 있다 ───────── */
 .layout {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(240px, 300px) minmax(320px, 440px) minmax(300px, 420px);
-  justify-content: center;
-  gap: 20px;
-  padding: 20px;
-  align-items: start;
+  grid-template-columns: minmax(260px, 320px) 1fr minmax(320px, 410px);
+  gap: 24px;
+  height: calc(100vh - var(--topbar));
+  padding: 8px 24px 24px;
+  pointer-events: none;
+}
+
+.layout > * {
+  pointer-events: auto;
+  min-height: 0;
+}
+
+.layout > .center {
+  pointer-events: none;
 }
 
 .panel {
-  background: var(--panel);
-  border: 1px solid var(--panel-line);
+  position: relative;
+  align-self: start;
+  max-height: 100%;
+  overflow: auto;
+  padding: 20px;
   border-radius: var(--radius);
-  padding: 18px;
+  background: linear-gradient(180deg, rgba(36, 24, 74, 0.82), var(--panel));
+  border: 1px solid var(--line);
   box-shadow:
-    0 10px 40px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    0 24px 60px rgba(0, 0, 0, 0.55),
+    0 2px 0 rgba(255, 255, 255, 0.06) inset,
+    0 -12px 30px rgba(0, 0, 0, 0.25) inset;
+  backdrop-filter: blur(10px) saturate(1.2);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 214, 140, 0.3) transparent;
+}
+
+/* 금색 모서리 장식 */
+.panel::before,
+.panel::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--line-strong);
+  pointer-events: none;
+}
+
+.panel::before {
+  top: 7px;
+  left: 7px;
+  border-right: 0;
+  border-bottom: 0;
+  border-top-left-radius: 8px;
+}
+
+.panel::after {
+  bottom: 7px;
+  right: 7px;
+  border-left: 0;
+  border-top: 0;
+  border-bottom-right-radius: 8px;
 }
 
 /* ── 손님 ───────────────────────────── */
@@ -169,45 +203,36 @@ button:focus-visible {
   text-align: center;
 }
 
-.avatar {
-  width: 128px;
-  height: 128px;
+.portrait-wrap {
+  position: relative;
+  width: 176px;
+  height: 176px;
+  margin: 0 auto 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, rgba(255, 211, 107, 0.28), rgba(139, 107, 255, 0.18) 55%, rgba(12, 8, 28, 0.6) 72%);
+  box-shadow:
+    0 0 0 2px var(--line-strong),
+    0 0 0 6px rgba(12, 8, 28, 0.6),
+    0 0 0 7px var(--line),
+    0 12px 30px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.portrait-wrap canvas {
+  width: 100%;
+  height: 100%;
   display: block;
-  margin: 0 auto 6px;
-  animation: bob 4s ease-in-out infinite;
-}
-
-.avatar .eyes {
-  transform-origin: 60px 52px;
-  animation: blink 5s infinite;
-}
-
-@keyframes bob {
-  50% {
-    transform: translateY(-4px);
-  }
-}
-
-@keyframes blink {
-  0%,
-  94%,
-  100% {
-    transform: scaleY(1);
-  }
-  97% {
-    transform: scaleY(0.1);
-  }
 }
 
 .who {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-bottom: 12px;
+  margin: 10px 0 12px;
 }
 
 .who strong {
-  font-size: 20px;
+  font-size: 21px;
 }
 
 .who span {
@@ -218,13 +243,16 @@ button:focus-visible {
 .bubble {
   position: relative;
   margin: 0 0 16px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.92);
+  padding: 13px 15px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fffaf2, #f1e6ff);
   color: #2a2140;
   font-size: 15px;
   line-height: 1.55;
   text-align: left;
+  box-shadow:
+    0 6px 0 rgba(120, 90, 180, 0.35),
+    0 12px 24px rgba(0, 0, 0, 0.35);
 }
 
 .bubble::before {
@@ -235,22 +263,23 @@ button:focus-visible {
   margin-left: -8px;
   border: 8px solid transparent;
   border-top: 0;
-  border-bottom-color: rgba(255, 255, 255, 0.92);
+  border-bottom-color: #fffaf2;
 }
 
 .bubble.react.perfect {
-  background: #fff6d6;
+  background: linear-gradient(180deg, #fff8dc, #ffe9b0);
 }
 
 .bubble.react.fail {
-  background: #ffe1e5;
+  background: linear-gradient(180deg, #fff0f2, #ffd6dc);
 }
 
 .customer h3 {
   margin: 0 0 8px;
-  font-size: 13px;
-  color: var(--muted);
-  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  font-weight: 700;
   text-align: left;
 }
 
@@ -266,7 +295,7 @@ button:focus-visible {
 .chip {
   padding: 6px 10px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.14);
   font-size: 13px;
   transition:
@@ -290,36 +319,27 @@ button:focus-visible {
   margin: 0;
 }
 
-/* ── 무대(캔버스) ───────────────────────── */
-.stage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-
-#bar {
-  width: 100%;
-  max-width: 420px;
-  aspect-ratio: 420 / 520;
-  border-radius: var(--radius);
-  background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.04), transparent 70%);
-}
-
+/* ── 속성 게이지: 무대 아래쪽 가운데 ───────────── */
 .meters {
-  width: 100%;
-  max-width: 420px;
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  width: min(440px, calc(100vw - 32px));
   display: grid;
   gap: 8px;
-  padding: 12px 14px;
-  border-radius: var(--radius);
-  background: var(--panel);
-  border: 1px solid var(--panel-line);
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(14, 9, 32, 0.72);
+  border: 1px solid var(--line);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
 }
 
 .meter {
   display: grid;
-  grid-template-columns: 40px 1fr 32px;
+  grid-template-columns: 40px 1fr 34px;
   align-items: center;
   gap: 10px;
   font-size: 13px;
@@ -331,7 +351,7 @@ button:focus-visible {
 
 .meter .value {
   text-align: right;
-  font-weight: 700;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
@@ -347,7 +367,8 @@ button:focus-visible {
   position: relative;
   height: 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(255, 255, 255, 0.08));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
 .track .band {
@@ -356,7 +377,7 @@ button:focus-visible {
   bottom: -3px;
   border-radius: 6px;
   background: rgba(255, 211, 107, 0.16);
-  border: 1px dashed rgba(255, 211, 107, 0.7);
+  border: 1px dashed rgba(255, 211, 107, 0.75);
 }
 
 .track .fill {
@@ -367,18 +388,19 @@ button:focus-visible {
   transition:
     left 0.35s,
     width 0.35s;
+  box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.35);
 }
 
 .meter.sweet .fill {
-  background: var(--pink);
+  background: linear-gradient(180deg, #ffb3dc, var(--pink));
 }
 
 .meter.strength .fill {
-  background: var(--gold-deep);
+  background: linear-gradient(180deg, #ffd27a, var(--gold-deep));
 }
 
 .meter.body .fill {
-  background: var(--violet);
+  background: linear-gradient(180deg, #b6a2ff, var(--violet));
 }
 
 .track .zero {
@@ -392,12 +414,14 @@ button:focus-visible {
 .track .knob {
   position: absolute;
   top: 50%;
-  width: 14px;
-  height: 14px;
-  margin: -7px 0 0 -7px;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.7);
+  background: radial-gradient(circle at 35% 30%, #fff, #d9ccff 60%, #9c86e8);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.6),
+    0 0 10px rgba(255, 255, 255, 0.5);
   transition: left 0.35s;
 }
 
@@ -413,11 +437,12 @@ button:focus-visible {
 .cap {
   margin-left: auto;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--gold);
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 999px;
   background: rgba(255, 211, 107, 0.12);
+  border: 1px solid var(--line);
 }
 
 .stepper {
@@ -432,7 +457,7 @@ button:focus-visible {
   flex: 1;
   text-align: center;
   font-size: 12px;
-  padding: 5px 0;
+  padding: 6px 0;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.05);
   color: var(--muted);
@@ -443,9 +468,10 @@ button:focus-visible {
 }
 
 .stepper li.now {
-  background: linear-gradient(180deg, rgba(255, 211, 107, 0.3), rgba(255, 211, 107, 0.12));
+  background: linear-gradient(180deg, rgba(255, 211, 107, 0.45), rgba(217, 154, 43, 0.25));
   color: #fff;
   font-weight: 700;
+  box-shadow: 0 0 12px rgba(255, 211, 107, 0.35);
 }
 
 .grid {
@@ -461,38 +487,53 @@ button:focus-visible {
   grid-template-columns: repeat(3, 1fr);
 }
 
+/* 눌리는 입체 카드 버튼 */
 .option,
 .ingredient {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 12px 8px;
+  gap: 2px;
+  padding: 8px 6px 10px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(70, 52, 130, 0.65), rgba(32, 22, 66, 0.85));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 4px 0 rgba(8, 4, 20, 0.85),
+    0 10px 18px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
   transition:
-    transform 0.12s,
-    background 0.15s,
-    border-color 0.15s;
+    transform 0.1s,
+    box-shadow 0.1s,
+    border-color 0.15s,
+    background 0.15s;
   text-align: center;
 }
 
 .option:not(:disabled):hover,
 .ingredient:not(:disabled):hover {
   transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.11);
-  border-color: rgba(255, 211, 107, 0.6);
+  border-color: rgba(255, 211, 107, 0.7);
+  box-shadow:
+    0 6px 0 rgba(8, 4, 20, 0.85),
+    0 14px 24px rgba(0, 0, 0, 0.4),
+    0 0 18px rgba(255, 211, 107, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .option:not(:disabled):active,
 .ingredient:not(:disabled):active {
-  transform: translateY(0) scale(0.97);
+  transform: translateY(3px);
+  box-shadow:
+    0 1px 0 rgba(8, 4, 20, 0.85),
+    0 4px 10px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .option.selected {
   border-color: var(--gold);
-  background: rgba(255, 211, 107, 0.14);
+  background: linear-gradient(180deg, rgba(120, 90, 40, 0.65), rgba(50, 32, 20, 0.85));
 }
 
 .option strong,
@@ -506,59 +547,28 @@ button:focus-visible {
   color: var(--muted);
 }
 
-.glass-icon {
+.icon3d {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 6px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  user-select: none;
+}
+
+.ingredient .icon3d {
+  width: 62px;
+  height: 62px;
+}
+
+.icon3d.none {
+  display: block;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, 0.25);
   width: 44px;
   height: 44px;
-  fill: rgba(200, 225, 255, 0.15);
-  stroke: rgba(235, 245, 255, 0.85);
-  stroke-width: 2;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-}
-
-.cubes {
-  display: flex;
-  gap: 3px;
-  height: 22px;
-  align-items: center;
-}
-
-.cubes i {
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  background: rgba(230, 245, 255, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-}
-
-.cubes em {
-  color: var(--muted);
-  font-style: normal;
-}
-
-.ingredient {
-  padding: 10px 6px;
-}
-
-.bottle {
-  position: relative;
-  width: 22px;
-  height: 34px;
-  border-radius: 6px 6px 7px 7px;
-  margin-top: 8px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.25), transparent 40%), var(--c);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--c) 50%, transparent);
-}
-
-.bottle::before {
-  content: '';
-  position: absolute;
-  left: 7px;
-  top: -9px;
-  width: 8px;
-  height: 10px;
-  border-radius: 2px 2px 0 0;
-  background: rgba(255, 230, 180, 0.8);
+  margin: 14px 0;
+  filter: none;
 }
 
 .deltas {
@@ -566,7 +576,7 @@ button:focus-visible {
   flex-wrap: wrap;
   justify-content: center;
   gap: 3px;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .delta {
@@ -577,43 +587,13 @@ button:focus-visible {
 }
 
 .delta.up {
-  background: rgba(126, 226, 168, 0.15);
+  background: rgba(126, 226, 168, 0.16);
   color: #a6f0c4;
 }
 
 .delta.down {
-  background: rgba(255, 122, 138, 0.15);
+  background: rgba(255, 122, 138, 0.16);
   color: #ffb0ba;
-}
-
-.garnish-dot {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 1px dashed rgba(255, 255, 255, 0.35);
-}
-
-.garnish-dot.lemon {
-  border: 3px solid #ffd23a;
-  background: radial-gradient(circle, #fff6c4 55%, #ffe36b 56%);
-}
-
-.garnish-dot.mint {
-  border: none;
-  border-radius: 0 60% 0 60%;
-  background: #4fd27a;
-}
-
-.garnish-dot.cherry {
-  border: none;
-  background: radial-gradient(circle at 35% 35%, #ffb0bb 10%, #e8304a 30%);
-}
-
-.garnish-dot.star {
-  border: none;
-  border-radius: 0;
-  background: var(--gold);
-  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
 }
 
 .row {
@@ -637,37 +617,64 @@ button:focus-visible {
 .primary,
 .secondary,
 .ghost {
-  padding: 11px 18px;
-  border-radius: 10px;
-  font-weight: 700;
+  padding: 12px 18px;
+  border-radius: 12px;
+  font-weight: 800;
   transition:
     filter 0.15s,
-    transform 0.12s;
+    transform 0.1s,
+    box-shadow 0.1s;
 }
 
 .primary {
-  background: linear-gradient(180deg, var(--gold), var(--gold-deep));
-  color: #2a1a00;
-  box-shadow: 0 4px 18px rgba(255, 196, 80, 0.35);
+  background: linear-gradient(180deg, #ffe7a0, var(--gold) 45%, var(--gold-deep));
+  color: #3a2400;
+  box-shadow:
+    0 4px 0 #8a5a12,
+    0 10px 24px rgba(255, 196, 80, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .secondary {
-  background: rgba(139, 107, 255, 0.25);
-  border: 1px solid rgba(139, 107, 255, 0.7);
+  background: linear-gradient(180deg, #8f74ff, #5a3fd0);
+  box-shadow:
+    0 4px 0 #2c1a78,
+    0 10px 20px rgba(110, 80, 255, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .ghost {
-  padding: 8px 12px;
-  font-weight: 500;
+  padding: 9px 13px;
+  font-weight: 600;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 8, 28, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(6px);
 }
 
 .primary:not(:disabled):hover,
 .secondary:not(:disabled):hover,
 .ghost:not(:disabled):hover {
-  filter: brightness(1.12);
+  filter: brightness(1.1);
+}
+
+.primary:not(:disabled):active,
+.secondary:not(:disabled):active {
+  transform: translateY(3px);
+}
+
+.primary:not(:disabled):active {
+  box-shadow:
+    0 1px 0 #8a5a12,
+    0 4px 10px rgba(255, 196, 80, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.secondary:not(:disabled):active {
+  box-shadow:
+    0 1px 0 #2c1a78,
+    0 4px 10px rgba(110, 80, 255, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 /* ── 결과 ───────────────────────────── */
@@ -683,22 +690,24 @@ button:focus-visible {
 }
 
 .verdict.perfect {
-  background: linear-gradient(180deg, rgba(255, 211, 107, 0.3), rgba(255, 211, 107, 0.06));
+  background: linear-gradient(180deg, rgba(255, 211, 107, 0.35), rgba(255, 211, 107, 0.06));
 }
 
 .verdict.good {
-  background: rgba(139, 107, 255, 0.2);
+  background: rgba(139, 107, 255, 0.22);
 }
 
 .verdict.fail {
-  background: rgba(255, 122, 138, 0.15);
+  background: rgba(255, 122, 138, 0.16);
 }
 
 .verdict .stars {
-  font-size: 28px;
+  font-size: 30px;
   color: var(--gold);
   letter-spacing: 4px;
-  text-shadow: 0 0 14px rgba(255, 211, 107, 0.7);
+  text-shadow:
+    0 2px 0 #8a5a12,
+    0 0 16px rgba(255, 211, 107, 0.8);
 }
 
 .verdict strong {
@@ -762,8 +771,8 @@ button:focus-visible {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(8, 5, 24, 0.72);
-  backdrop-filter: blur(6px);
+  background: radial-gradient(ellipse at 50% 40%, rgba(12, 6, 30, 0.35), rgba(6, 3, 16, 0.8));
+  backdrop-filter: blur(3px);
 }
 
 .overlay[hidden] {
@@ -771,14 +780,18 @@ button:focus-visible {
 }
 
 .card {
+  position: relative;
   width: min(520px, 100%);
   max-height: calc(100vh - 32px);
   overflow: auto;
-  padding: 28px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #241a52, #150f33);
-  border: 1px solid var(--panel-line);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  padding: 30px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(44, 30, 92, 0.92), rgba(18, 12, 42, 0.94));
+  border: 1px solid var(--line-strong);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.6),
+    0 0 0 6px rgba(12, 8, 28, 0.5),
+    0 0 0 7px var(--line);
   animation: pop 0.35s ease-out;
 }
 
@@ -788,16 +801,17 @@ button:focus-visible {
 
 .title-card h1 {
   margin: 4px 0 6px;
-  font-size: 36px;
+  font-size: 40px;
   letter-spacing: 0.03em;
-  background: linear-gradient(180deg, #fff, var(--gold));
+  background: linear-gradient(180deg, #fff, var(--gold) 70%, var(--gold-deep));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  filter: drop-shadow(0 3px 0 rgba(90, 50, 10, 0.8));
 }
 
 .logo.big {
-  font-size: 40px;
+  font-size: 42px;
   color: var(--gold);
   text-shadow: 0 0 24px rgba(255, 211, 107, 0.9);
 }
@@ -908,15 +922,15 @@ button:focus-visible {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 24px;
+  top: 74px;
   z-index: 20;
-  transform: translate(-50%, 30px);
+  transform: translate(-50%, -20px);
   opacity: 0;
   padding: 12px 18px;
   border-radius: 12px;
   background: linear-gradient(180deg, #3a2a7a, #241a52);
   border: 1px solid var(--gold);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   pointer-events: none;
   transition:
     opacity 0.3s,
@@ -933,51 +947,38 @@ button:focus-visible {
   color: var(--gold);
 }
 
-/* ── 반응형 ───────────────────────────── */
-@media (max-width: 1100px) {
-  .layout {
-    grid-template-columns: minmax(300px, 420px) minmax(300px, 440px);
+/* ── 좁은 화면: 위쪽에 3D 무대를 고정하고 아래로 조작 ── */
+@media (max-width: 860px) {
+  #app {
+    display: flex;
+    flex-direction: column;
   }
 
-  .customer {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: 96px 1fr;
-    column-gap: 16px;
-    text-align: left;
-    align-items: center;
+  .topbar {
+    order: 0;
+    height: auto;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    padding: 8px 16px;
+    background: rgba(12, 7, 24, 0.95);
   }
 
-  .customer .avatar {
-    width: 96px;
-    height: 96px;
-    grid-row: span 2;
+  .brand {
+    font-size: 16px;
   }
 
-  .customer .who {
-    margin-bottom: 4px;
-  }
-
-  .customer .bubble {
-    margin-bottom: 0;
-  }
-
-  .customer .bubble::before {
+  .brand small {
     display: none;
   }
 
-  .customer h3,
-  .customer .chips,
-  .customer .hint-line {
-    grid-column: 1 / -1;
-    margin-top: 12px;
+  .topbar .ghost {
+    padding: 6px 10px;
+    font-size: 13px;
   }
-}
 
-@media (max-width: 720px) {
-  .topbar {
-    flex-wrap: wrap;
-    padding: 12px 16px;
+  .pill {
+    padding: 3px 10px;
+    font-size: 12px;
   }
 
   .stats {
@@ -990,49 +991,82 @@ button:focus-visible {
     margin-left: auto;
   }
 
-  .layout {
-    grid-template-columns: 1fr;
-    padding: 12px 16px;
-    gap: 12px;
-  }
-
-  .customer {
-    grid-template-columns: 64px 1fr;
-  }
-
-  .customer .avatar {
-    width: 64px;
-    height: 64px;
-  }
-
-  /* 재료를 고르는 동안에도 잔이 보이도록 무대를 화면 위에 고정한다. */
-  .stage {
+  .stage3d {
+    order: 1;
     position: sticky;
     top: 0;
-    z-index: 2;
-    gap: 6px;
-    margin: 0 -16px;
-    padding: 6px 16px 8px;
-    background: #17113a;
-    box-shadow: 0 10px 16px -6px #17113a;
-  }
-
-  #bar {
-    width: auto;
-    height: min(30vh, 280px);
+    height: 46vh;
+    min-height: 300px;
+    z-index: 3;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
   }
 
   .meters {
-    padding: 8px 12px;
-    gap: 6px;
+    bottom: 8px;
+    width: min(360px, calc(100vw - 32px));
+    padding: 6px 12px;
+    gap: 3px;
   }
 
-  .grid.three {
-    grid-template-columns: repeat(3, 1fr);
+  .meter {
+    grid-template-columns: 32px 1fr 26px;
+    gap: 8px;
+    font-size: 12px;
   }
 
-  .ingredient strong {
-    font-size: 13px;
+  .track {
+    height: 7px;
+  }
+
+  .layout {
+    order: 2;
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    padding: 12px 16px 24px;
+    gap: 12px;
+  }
+
+  .layout > .center {
+    display: none;
+  }
+
+  .panel {
+    align-self: stretch;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .customer {
+    display: grid;
+    grid-template-columns: 84px 1fr;
+    column-gap: 14px;
+    text-align: left;
+    align-items: start;
+  }
+
+  .portrait-wrap {
+    width: 84px;
+    height: 84px;
+    margin: 0;
+  }
+
+  .who {
+    margin-top: 0;
+  }
+
+  .bubble::before {
+    display: none;
+  }
+
+  .icon3d {
+    width: 60px;
+    height: 60px;
+  }
+
+  .ingredient .icon3d {
+    width: 52px;
+    height: 52px;
   }
 }
 

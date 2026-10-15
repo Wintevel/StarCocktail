@@ -32,7 +32,9 @@ import {
   stir,
   targetRanges,
 } from './mix';
-import { Renderer } from './render';
+import { renderIcons } from './three/icons';
+import { Portrait } from './three/portrait';
+import { Stage3D } from './three/stage';
 
 type Phase = 'glass' | 'ice' | 'mix' | 'garnish' | 'result';
 type Mode = 'shift' | 'free';
@@ -85,13 +87,16 @@ const state: State = {
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
+  <div class="stage3d" id="stage" aria-label="바 카운터 위의 칵테일 잔">
+    <div class="meters" id="meters"></div>
+  </div>
   <header class="topbar" id="topbar"></header>
   <main class="layout">
-    <section class="panel customer" id="customer"></section>
-    <section class="stage">
-      <canvas id="bar" aria-label="칵테일 잔"></canvas>
-      <div class="meters" id="meters"></div>
+    <section class="panel customer">
+      <div class="portrait-wrap" id="portrait"></div>
+      <div class="customer-info" id="customer"></div>
     </section>
+    <div class="center" aria-hidden="true"></div>
     <section class="panel controls" id="controls"></section>
   </main>
   <div class="overlay" id="overlay" hidden></div>
@@ -99,19 +104,25 @@ app.innerHTML = `
 `;
 
 const $ = (id: string) => document.getElementById(id)!;
-const renderer = new Renderer($('bar') as HTMLCanvasElement);
+const stage = new Stage3D($('stage'));
+stage.onIdle = () => renderControls();
+const portrait = new Portrait();
+$('portrait').appendChild(portrait.canvas);
+const icons = renderIcons();
+const icon = (key: string) => `<img class="icon3d" src="${icons[key] ?? ''}" alt="" draggable="false" />`;
 
 const customer = (): Customer | null => (state.mode === 'shift' ? CUSTOMERS[state.customerIdx] : null);
 
 // ── 화면 그리기 ─────────────────────────────────────────────
 
 function render() {
+  // 무대를 먼저 갱신해야 연출 중(busy) 여부가 버튼 상태에 반영된다.
+  stage.update(state.drink);
   renderTopbar();
   renderCustomer();
   renderMeters();
   renderControls();
   renderOverlay();
-  renderer.update(state.drink);
 }
 
 function renderTopbar() {
@@ -129,38 +140,21 @@ function renderTopbar() {
     </div>`;
 }
 
-function avatar(c: { color: string; accent: string }) {
-  return `
-    <svg class="avatar" viewBox="0 0 120 120" aria-hidden="true">
-      <defs>
-        <radialGradient id="av-bg" cx="50%" cy="40%" r="60%">
-          <stop offset="0%" stop-color="${c.color}" stop-opacity="0.55"/>
-          <stop offset="100%" stop-color="${c.color}" stop-opacity="0"/>
-        </radialGradient>
-      </defs>
-      <circle cx="60" cy="60" r="58" fill="url(#av-bg)"/>
-      <path d="M18 120 C22 88 40 78 60 78 C80 78 98 88 102 120 Z" fill="${c.color}" opacity="0.9"/>
-      <path d="M48 80 L60 98 L72 80 Z" fill="${c.accent}"/>
-      <circle cx="60" cy="50" r="24" fill="#f6e7da"/>
-      <path d="M35 48 C35 26 85 26 85 48 C80 36 40 36 35 48 Z" fill="${c.color}"/>
-      <g class="eyes"><ellipse cx="51" cy="52" rx="2.6" ry="3.4" fill="#2a2140"/><ellipse cx="69" cy="52" rx="2.6" ry="3.4" fill="#2a2140"/></g>
-      <path d="M54 62 Q60 66 66 62" stroke="#c46b7a" stroke-width="2" fill="none" stroke-linecap="round"/>
-      <path d="M86 24 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3 z" fill="${c.accent}"/>
-    </svg>`;
-}
-
 function renderCustomer() {
   const c = customer();
   const el = $('customer');
   if (!c) {
+    portrait.setLook({ color: '#6a4fd8', accent: '#ffd36b', hair: '#2d2350' });
+    portrait.setMood(state.phase === 'result' ? 'perfect' : 'idle');
     el.innerHTML = `
-      ${avatar({ color: '#7c5cff', accent: '#ffd36b' })}
       <div class="who"><strong>자유 제조</strong><span>주문 없이 실험하기</span></div>
       <p class="bubble">마음대로 섞어 보세요. 이름 있는 조합을 만들면 레시피북에 기록돼요.</p>
       <p class="hint-line">아직 못 찾은 레시피의 힌트는 레시피북에서 볼 수 있어요.</p>`;
     return;
   }
   const res = state.result;
+  portrait.setLook({ color: c.color, accent: c.accent, hair: c.hair, longHair: c.longHair });
+  portrait.setMood(res && state.phase === 'result' ? res.grade : 'idle');
   const line = res && state.phase === 'result' ? c.reactions[res.grade] : c.greeting;
   const attrs = computeAttrs(state.drink);
   const chips = c.order
@@ -170,7 +164,6 @@ function renderCustomer() {
     })
     .join('');
   el.innerHTML = `
-    ${avatar(c)}
     <div class="who"><strong>${c.name}</strong><span>${c.title}</span></div>
     <p class="bubble ${state.phase === 'result' ? 'react ' + res?.grade : ''}">${line}</p>
     <h3>주문</h3>
@@ -228,13 +221,6 @@ function stepper() {
   ).join('')}</ol>`;
 }
 
-const glassIcon: Record<GlassId, string> = {
-  rocks: '<path d="M10 10 L12 40 L36 40 L38 10 Z"/>',
-  coupe: '<path d="M6 12 Q24 34 42 12 Z M24 28 L24 42 M16 44 L32 44"/>',
-  wine: '<path d="M14 6 Q8 26 24 30 Q40 26 34 6 Z M24 30 L24 42 M16 44 L32 44"/>',
-  highball: '<path d="M14 4 L15 44 L33 44 L34 4 Z"/>',
-};
-
 function deltaChips(id: IngredientId) {
   const d = INGREDIENT_BY_ID[id].delta;
   return ATTR_KEYS.filter((k) => d[k] !== 0)
@@ -254,7 +240,7 @@ function renderControls() {
           ${GLASSES.map(
             (g) => `
             <button class="option" data-act="glass" data-id="${g.id}">
-              <svg viewBox="0 0 48 48" class="glass-icon">${glassIcon[g.id]}</svg>
+              ${icon(`glass:${g.id}`)}
               <strong>${g.name}</strong><small>재료 ${g.capacity}번까지</small>
             </button>`,
           ).join('')}
@@ -267,7 +253,7 @@ function renderControls() {
           ${ICES.map(
             (i) => `
             <button class="option" data-act="ice" data-id="${i.id}">
-              <span class="cubes">${'<i></i>'.repeat(i.cubes) || '<em>—</em>'}</span>
+              ${icon(`ice:${i.id}`)}
               <strong>${i.name}</strong><small>${i.note}</small>
             </button>`,
           ).join('')}
@@ -281,8 +267,8 @@ function renderControls() {
         <div class="grid three ingredients">
           ${INGREDIENTS.map(
             (i) => `
-            <button class="ingredient" data-act="pour" data-id="${i.id}" ${canPour(d) ? '' : 'disabled'}>
-              <span class="bottle" style="--c:${i.color}"></span>
+            <button class="ingredient" data-act="pour" data-id="${i.id}" ${canPour(d) && !stage.busy ? '' : 'disabled'}>
+              ${icon(`ing:${i.id}`)}
               <strong>${i.name}</strong>
               <small>${i.kind}</small>
               <span class="deltas">${deltaChips(i.id)}</span>
@@ -290,7 +276,7 @@ function renderControls() {
           ).join('')}
         </div>
         <div class="row">
-          <button class="secondary" data-act="stir" ${canStir(d) ? '' : 'disabled'}>
+          <button class="secondary" data-act="stir" ${canStir(d) && !stage.busy ? '' : 'disabled'}>
             ${d.stirAt === null ? '젓기 · 바디 -1' : '저었어요 ✓'}
           </button>
           <button class="primary" data-act="to-garnish" ${d.pours.length ? '' : 'disabled'}>장식으로 →</button>
@@ -305,7 +291,7 @@ function renderControls() {
           ${GARNISHES.map(
             (g) => `
             <button class="option ${d.garnish === g.id ? 'selected' : ''}" data-act="garnish" data-id="${g.id}">
-              <span class="garnish-dot ${g.id}"></span><strong>${g.name}</strong>
+              ${g.id === 'none' ? '<span class="icon3d none"></span>' : icon(`garnish:${g.id}`)}<strong>${g.name}</strong>
             </button>`,
           ).join('')}
         </div>
@@ -476,7 +462,7 @@ document.addEventListener('click', (e) => {
   const act = btn.dataset.act!;
   const id = btn.dataset.id;
   // 붓기·젓기 연출 중에는 술을 바꾸는 입력을 받지 않는다.
-  if (renderer.busy && ['pour', 'stir', 'to-garnish', 'restart'].includes(act)) return;
+  if (stage.busy && ['pour', 'stir', 'to-garnish', 'restart'].includes(act)) return;
 
   switch (act) {
     case 'glass':

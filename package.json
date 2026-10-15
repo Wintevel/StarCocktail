@@ -18,10 +18,14 @@
   },
   "homepage": "https://github.com/Wintevel/StarCocktail#readme",
   "devDependencies": {
+    "@types/three": "^0.186.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.4"
   },
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "three": "^0.186.1"
+  }
 }

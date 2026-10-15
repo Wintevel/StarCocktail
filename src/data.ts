@@ -122,6 +122,8 @@ export interface Customer {
   title: string;
   color: string;
   accent: string;
+  hair: string;
+  longHair?: boolean;
   greeting: string;
   order: Constraint[];
   reactions: { perfect: string; good: string; fail: string };
@@ -134,6 +136,7 @@ export const CUSTOMERS: Customer[] = [
     title: '졸린 열차 차장',
     color: '#6fa8ff',
     accent: '#ffe08a',
+    hair: '#3b4f8f',
     greeting: '야간 운행 끝났어요… 달달하고 순한 걸로 부탁해요. 내일 또 출근이라.',
     order: [
       { kind: 'attr', attr: 'sweet', op: '>=', value: 2 },
@@ -151,6 +154,7 @@ export const CUSTOMERS: Customer[] = [
     title: '비 오는 날의 탐정',
     color: '#8a8fa3',
     accent: '#c9782c',
+    hair: '#5a5d6b',
     greeting: '사건이 꼬였어. 쓰고 독한 걸로. 얼음은 잔뜩 넣어서 머리를 식혀 줘.',
     order: [
       { kind: 'attr', attr: 'sweet', op: '<=', value: -1 },
@@ -169,6 +173,8 @@ export const CUSTOMERS: Customer[] = [
     title: '무대 뒤의 가수',
     color: '#ff8fb8',
     accent: '#ffffff',
+    hair: '#ff6fa8',
+    longHair: true,
     greeting: '공연 전에 목을 부드럽게 감싸 줄 묵직한 한 잔이 필요해요. 와인 잔에 담아 주세요!',
     order: [
       { kind: 'attr', attr: 'body', op: '>=', value: 2 },
@@ -186,6 +192,7 @@ export const CUSTOMERS: Customer[] = [
     title: '떠돌이 시인',
     color: '#9c7cff',
     accent: '#9c1d45',
+    hair: '#4b3a7a',
     greeting: '노을이 겹겹이 쌓인 하늘 같은 술을 원해요. 와인을 넣고, 젓지 말고 층을 살려 주세요. 조금은 달콤하게.',
     order: [
       { kind: 'contains', ingredient: 'wine' },
@@ -204,6 +211,7 @@ export const CUSTOMERS: Customer[] = [
     title: '은퇴한 우주 해적',
     color: '#4fbf9a',
     accent: '#ffd84a',
+    hair: '#e6e6ee',
     greeting: '위스키! 하지만 텁텁한 건 질색이야. 가볍게, 그리고 레몬 한 조각 꽂아 주게.',
     order: [
       { kind: 'contains', ingredient: 'whisky' },
@@ -222,6 +230,8 @@ export const CUSTOMERS: Customer[] = [
     title: '꿈의 감독관',
     color: '#e0e6ff',
     accent: '#7c5cff',
+    hair: '#c9d2ff',
+    longHair: true,
     greeting: '정확함을 원합니다. 단맛 0, 도수 2, 바디 0. 반드시 저어서 완성할 것.',
     order: [
       { kind: 'attr', attr: 'sweet', op: '==', value: 0 },
@@ -241,6 +251,7 @@ export const CUSTOMERS: Customer[] = [
     title: '꼬마 손님',
     color: '#ffb36b',
     accent: '#e8304a',
+    hair: '#ff9a3c',
     greeting: '나도 어른들처럼 멋진 거 마실래! 술은 빼고, 엄청 달게! 체리도 올려 줘!',
     order: [
       { kind: 'attr', attr: 'strength', op: '<=', value: 0 },
@@ -259,6 +270,8 @@ export const CUSTOMERS: Customer[] = [
     title: '축제의 주인공',
     color: '#ffcf5c',
     accent: '#7c5cff',
+    hair: '#ffcf5c',
+    longHair: true,
     greeting: '오늘 밤은 축제야! 키 큰 하이볼 잔에 화끈하게, 그래도 살짝 달콤하게 부탁해!',
     order: [
       { kind: 'glass', glass: 'highball' },
