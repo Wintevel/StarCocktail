@@ -231,6 +231,8 @@ export const BOTTLE_KIND: Record<IngredientId, BottleKind> = {
   cream: 'cream',
   bitters: 'dasher',
   nebula: 'flask',
+  mead: 'jug',
+  espresso: 'dasher',
 };
 
 const V = (x: number, y: number) => new THREE.Vector2(x, y);
