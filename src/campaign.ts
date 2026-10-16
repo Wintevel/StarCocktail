@@ -181,6 +181,14 @@ export const rentFor = (day: number) => 20 + 10 * (day - 1);
 
 export const EARLY_PRICE = 40;
 
+/**
+ * day일차 영업 중(또는 마감 뒤) 서랍 상점에서 미리 주문할 수 있는 재료.
+ * 주문한 재료는 다음 날 아침에 도착하므로, 내일 원래 입고되는 재료는 팔지 않는다.
+ */
+export function earlyOffers(day: number, owned: ReadonlySet<IngredientId>): IngredientId[] {
+  return INGREDIENTS.filter((i) => INGREDIENT_DAY[i.id] > day + 1 && !owned.has(i.id)).map((i) => i.id);
+}
+
 export type UpgradeId = 'wholesale' | 'neon' | 'velvet' | 'jukebox';
 
 export interface Upgrade {

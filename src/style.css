@@ -13,7 +13,13 @@
   --bad: #ff7a8a;
   --radius: 16px;
   --topbar: 60px;
-  font-family: 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
+  --font-display: "Cinzel", "Do Hyeon", serif;
+  --font-title-ko: "Do Hyeon", "Pretendard", sans-serif;
+  --font-ui: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, monospace;
+  --font-speech: "Gaegu", "Pretendard", cursive;
+  --font-book: "Gowun Batang", "Nanum Myeongjo", serif;
+  font-family: var(--font-ui);
   color: var(--text);
 }
 
@@ -69,13 +75,23 @@ button:focus-visible {
 
 /* 가장자리를 어둡게 눌러 가운데 잔에 시선이 가게 한다 */
 .stage3d::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 60% 70% at 50% 55%, transparent 55%, rgba(6, 3, 16, 0.55) 100%),
-    linear-gradient(180deg, rgba(6, 3, 16, 0.55), transparent 18%, transparent 80%, rgba(6, 3, 16, 0.6));
+    radial-gradient(
+      ellipse 60% 70% at 50% 55%,
+      transparent 55%,
+      rgba(6, 3, 16, 0.55) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(6, 3, 16, 0.55),
+      transparent 18%,
+      transparent 80%,
+      rgba(6, 3, 16, 0.6)
+    );
 }
 
 /* ── 상단 바 ───────────────────────────── */
@@ -107,104 +123,6 @@ button:focus-visible {
   text-shadow: 0 0 14px rgba(255, 211, 107, 0.9);
 }
 
-.stats {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.actions {
-  display: flex;
-  gap: 6px;
-}
-
-.pill {
-  padding: 5px 12px;
-  border-radius: 999px;
-  background: rgba(12, 8, 28, 0.6);
-  border: 1px solid var(--line);
-  font-size: 13px;
-  white-space: nowrap;
-  backdrop-filter: blur(6px);
-}
-
-.pill.gold {
-  color: var(--gold);
-}
-
-/* ── 배치: 3D 무대 위에 좌우 패널이 떠 있다 ───────── */
-.layout {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: 1fr minmax(320px, 400px);
-  gap: 24px;
-  height: calc(100vh - var(--topbar));
-  padding: 8px 24px 24px;
-  pointer-events: none;
-}
-
-.layout > * {
-  pointer-events: auto;
-  min-height: 0;
-}
-
-.layout > .center {
-  pointer-events: none;
-}
-
-.panel {
-  position: relative;
-  align-self: start;
-  max-height: 100%;
-  overflow: auto;
-  padding: 20px;
-  border-radius: var(--radius);
-  background: linear-gradient(180deg, rgba(36, 24, 74, 0.82), var(--panel));
-  border: 1px solid var(--line);
-  box-shadow:
-    0 24px 60px rgba(0, 0, 0, 0.55),
-    0 2px 0 rgba(255, 255, 255, 0.06) inset,
-    0 -12px 30px rgba(0, 0, 0, 0.25) inset;
-  backdrop-filter: blur(10px) saturate(1.2);
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 214, 140, 0.3) transparent;
-}
-
-/* 금색 모서리 장식 */
-.panel::before,
-.panel::after {
-  content: '';
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--line-strong);
-  pointer-events: none;
-}
-
-.panel::before {
-  top: 7px;
-  left: 7px;
-  border-right: 0;
-  border-bottom: 0;
-  border-top-left-radius: 8px;
-}
-
-.panel::after {
-  bottom: 7px;
-  right: 7px;
-  border-left: 0;
-  border-top: 0;
-  border-bottom-right-radius: 8px;
-}
-
-/* ── 주문서: 오른쪽 패널 위쪽 ───────────────── */
-.order {
-  padding-bottom: 14px;
-  margin-bottom: 14px;
-  border-bottom: 1px solid var(--line);
-}
-
 .who {
   display: flex;
   align-items: baseline;
@@ -233,30 +151,6 @@ button:focus-visible {
   font-size: 13px;
 }
 
-.bubble {
-  position: relative;
-  margin: 0 0 12px;
-  padding: 11px 14px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #fffaf2, #f1e6ff);
-  color: #2a2140;
-  font-size: 14px;
-  line-height: 1.55;
-  text-align: left;
-  box-shadow:
-    0 5px 0 rgba(120, 90, 180, 0.35),
-    0 10px 20px rgba(0, 0, 0, 0.3);
-}
-
-.bubble.react.perfect {
-  background: linear-gradient(180deg, #fff8dc, #ffe9b0);
-}
-
-.bubble.react.fail {
-  background: linear-gradient(180deg, #fff0f2, #ffd6dc);
-}
-
-.order h3,
 .card h3 {
   margin: 0 0 8px;
   font-size: 12px;
@@ -292,32 +186,8 @@ button:focus-visible {
 }
 
 .chip.ok::before {
-  content: '✓ ';
+  content: "✓ ";
   color: var(--ok);
-}
-
-.hint-line {
-  color: var(--muted);
-  font-size: 13px;
-  margin: 0;
-}
-
-/* ── 속성 게이지: 무대 아래쪽 가운데 ───────────── */
-.meters {
-  position: absolute;
-  z-index: 1;
-  left: 50%;
-  bottom: 22px;
-  transform: translateX(-50%);
-  width: min(440px, calc(100vw - 32px));
-  display: grid;
-  gap: 8px;
-  padding: 12px 16px;
-  border-radius: 14px;
-  background: rgba(14, 9, 32, 0.72);
-  border: 1px solid var(--line);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px);
 }
 
 .meter {
@@ -350,7 +220,11 @@ button:focus-visible {
   position: relative;
   height: 10px;
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(255, 255, 255, 0.08));
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.45),
+    rgba(255, 255, 255, 0.08)
+  );
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
@@ -408,128 +282,6 @@ button:focus-visible {
   transition: left 0.35s;
 }
 
-/* ── 조작 패널 ───────────────────────────── */
-.controls h2 {
-  margin: 4px 0 14px;
-  font-size: 18px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.cap {
-  margin-left: auto;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--gold);
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(255, 211, 107, 0.12);
-  border: 1px solid var(--line);
-}
-
-.stepper {
-  list-style: none;
-  display: flex;
-  gap: 4px;
-  margin: 0 0 14px;
-  padding: 0;
-}
-
-.stepper li {
-  flex: 1;
-  text-align: center;
-  font-size: 12px;
-  padding: 6px 0;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--muted);
-}
-
-.stepper li.done {
-  color: var(--gold);
-}
-
-.stepper li.now {
-  background: linear-gradient(180deg, rgba(255, 211, 107, 0.45), rgba(217, 154, 43, 0.25));
-  color: #fff;
-  font-weight: 700;
-  box-shadow: 0 0 12px rgba(255, 211, 107, 0.35);
-}
-
-.grid {
-  display: grid;
-  gap: 8px;
-}
-
-.grid.two {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.grid.three {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-/* 눌리는 입체 카드 버튼 */
-.option,
-.ingredient {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 8px 6px 10px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(70, 52, 130, 0.65), rgba(32, 22, 66, 0.85));
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow:
-    0 4px 0 rgba(8, 4, 20, 0.85),
-    0 10px 18px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  transition:
-    transform 0.1s,
-    box-shadow 0.1s,
-    border-color 0.15s,
-    background 0.15s;
-  text-align: center;
-}
-
-.option:not(:disabled):hover,
-.ingredient:not(:disabled):hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 211, 107, 0.7);
-  box-shadow:
-    0 6px 0 rgba(8, 4, 20, 0.85),
-    0 14px 24px rgba(0, 0, 0, 0.4),
-    0 0 18px rgba(255, 211, 107, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
-.option:not(:disabled):active,
-.ingredient:not(:disabled):active {
-  transform: translateY(3px);
-  box-shadow:
-    0 1px 0 rgba(8, 4, 20, 0.85),
-    0 4px 10px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
-}
-
-.option.selected {
-  border-color: var(--gold);
-  background: linear-gradient(180deg, rgba(120, 90, 40, 0.65), rgba(50, 32, 20, 0.85));
-}
-
-.option strong,
-.ingredient strong {
-  font-size: 14px;
-}
-
-.option small,
-.ingredient small {
-  font-size: 12px;
-  color: var(--muted);
-}
-
 .icon3d {
   width: 72px;
   height: 72px;
@@ -537,11 +289,6 @@ button:focus-visible {
   filter: drop-shadow(0 6px 6px rgba(0, 0, 0, 0.45));
   pointer-events: none;
   user-select: none;
-}
-
-.ingredient .icon3d {
-  width: 62px;
-  height: 62px;
 }
 
 .icon3d.none {
@@ -610,7 +357,12 @@ button:focus-visible {
 }
 
 .primary {
-  background: linear-gradient(180deg, #ffe7a0, var(--gold) 45%, var(--gold-deep));
+  background: linear-gradient(
+    180deg,
+    #ffe7a0,
+    var(--gold) 45%,
+    var(--gold-deep)
+  );
   color: #3a2400;
   box-shadow:
     0 4px 0 #8a5a12,
@@ -673,7 +425,11 @@ button:focus-visible {
 }
 
 .verdict.perfect {
-  background: linear-gradient(180deg, rgba(255, 211, 107, 0.35), rgba(255, 211, 107, 0.06));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 211, 107, 0.35),
+    rgba(255, 211, 107, 0.06)
+  );
 }
 
 .verdict.good {
@@ -754,7 +510,11 @@ button:focus-visible {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: radial-gradient(ellipse at 50% 40%, rgba(12, 6, 30, 0.35), rgba(6, 3, 16, 0.8));
+  background: radial-gradient(
+    ellipse at 50% 40%,
+    rgba(12, 6, 30, 0.35),
+    rgba(6, 3, 16, 0.8)
+  );
   backdrop-filter: blur(3px);
 }
 
@@ -769,7 +529,11 @@ button:focus-visible {
   overflow: auto;
   padding: 30px;
   border-radius: 20px;
-  background: linear-gradient(180deg, rgba(44, 30, 92, 0.92), rgba(18, 12, 42, 0.94));
+  background: linear-gradient(
+    180deg,
+    rgba(44, 30, 92, 0.92),
+    rgba(18, 12, 42, 0.94)
+  );
   border: 1px solid var(--line-strong);
   box-shadow:
     0 30px 80px rgba(0, 0, 0, 0.6),
@@ -930,90 +694,9 @@ button:focus-visible {
   color: var(--gold);
 }
 
-/* ── 병 이름표: 진열대 병과 같은 동작 ───────────── */
-.bottle-list {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.bottle-chip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: linear-gradient(180deg, rgba(70, 52, 130, 0.55), rgba(32, 22, 66, 0.8));
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow:
-    0 3px 0 rgba(8, 4, 20, 0.85),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  font-size: 13px;
-  text-align: left;
-  transition:
-    transform 0.1s,
-    border-color 0.15s,
-    box-shadow 0.1s;
-}
-
-.bottle-chip i {
-  flex: none;
-  width: 10px;
-  height: 18px;
-  border-radius: 3px 3px 4px 4px;
-  background: var(--c, #555);
-  box-shadow:
-    0 0 8px var(--c, transparent),
-    inset 0 2px 0 rgba(255, 255, 255, 0.35);
-}
-
-.bottle-chip span {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bottle-chip small {
-  flex: none;
-  color: var(--gold);
-  font-size: 12px;
-}
-
-.bottle-chip:not(:disabled):hover {
-  transform: translateY(-1px);
-  border-color: var(--c, var(--gold));
-}
-
-.bottle-chip:not(:disabled):active {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 rgba(8, 4, 20, 0.85);
-}
-
-.bottle-chip.locked {
-  opacity: 0.55;
-  border-style: dashed;
-  box-shadow: none;
-}
-
-.bottle-chip.locked i {
-  background: rgba(255, 255, 255, 0.15);
-  box-shadow: none;
-}
-
-.bottle-chip.locked small,
 .lock {
   color: var(--muted);
   font-size: 11px;
-}
-
-.option .lock {
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
 }
 
 /* 진열대 병 위에 뜨는 이름표 */
@@ -1044,22 +727,7 @@ button:focus-visible {
   justify-content: flex-start;
 }
 
-/* ── 영업 일정·경영 ───────────────────────────── */
-.pill.day {
-  font-weight: 800;
-  color: #fff;
-  background: linear-gradient(180deg, rgba(139, 107, 255, 0.55), rgba(70, 40, 160, 0.6));
-  border-color: rgba(185, 165, 255, 0.6);
-}
-
-.money {
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  transition: transform 0.2s;
-}
-
-.debt,
-.pill.money.debt {
+.debt {
   color: var(--bad) !important;
 }
 
@@ -1234,27 +902,627 @@ button:focus-visible {
 }
 
 /* ── 좁은 화면: 위쪽에 3D 무대를 고정하고 아래로 조작 ── */
-@media (max-width: 860px) {
-  #app {
-    display: flex;
-    flex-direction: column;
-  }
+/* ── 글꼴 역할: 제목은 장식 세리프, 숫자는 고정폭, 대사는 손글씨, 레시피북은 명조 ── */
+.title-card h1,
+.brand-en {
+  font-family: var(--font-display);
+}
 
+.card h2,
+.result-card h2 {
+  font-family: var(--font-title-ko);
+  font-weight: 400;
+  font-size: 28px;
+  letter-spacing: 0.02em;
+}
+
+.num,
+.ledger,
+.clock {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.book,
+.book h2 {
+  font-family: var(--font-book);
+}
+
+/* ── 상단: 로고와 시계 하나 ───────────────── */
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  height: var(--topbar);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+  pointer-events: none;
+}
+
+.topbar > * {
+  pointer-events: auto;
+}
+
+.clock {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #1d1236, #120a24);
+  border: 1px solid var(--line-strong);
+  box-shadow:
+    0 0 0 3px rgba(0, 0, 0, 0.35),
+    0 6px 18px rgba(0, 0, 0, 0.5),
+    inset 0 0 12px rgba(139, 107, 255, 0.25);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.clock .c-icon {
+  color: var(--gold);
+}
+
+.clock .c-day {
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.clock .c-sep {
+  color: var(--muted);
+}
+
+/* ── 주문 말풍선: 화면 가운데 위 (장식 화면에선 왼쪽 위로 작게) ── */
+.order-bubble {
+  position: fixed;
+  z-index: 3;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(460px, calc(100vw - 32px));
+  padding: 12px 18px 14px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #fffaf2, #f1e6ff);
+  color: #2a2140;
+  box-shadow:
+    0 6px 0 rgba(120, 90, 180, 0.35),
+    0 14px 30px rgba(0, 0, 0, 0.45);
+  animation: bubble-in 0.35s ease-out both;
+}
+
+/* 손님 쪽(왼쪽 아래)을 가리키는 꼬리 */
+.order-bubble::after {
+  content: "";
+  position: absolute;
+  left: 22%;
+  bottom: -12px;
+  border: 12px solid transparent;
+  border-bottom: 0;
+  border-top-color: #f1e6ff;
+}
+
+.order-bubble[hidden] {
+  display: none;
+}
+
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px) scale(0.92);
+  }
+}
+
+.order-bubble .who {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin: 0 0 4px;
+}
+
+.order-bubble .who .dot {
+  align-self: center;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 8px var(--c);
+}
+
+.order-bubble .who strong {
+  font-size: 16px;
+}
+
+.order-bubble .who span {
+  color: #6c5f8c;
+  font-size: 12px;
+}
+
+.order-bubble .line {
+  margin: 0 0 8px;
+  font-family: var(--font-speech);
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.order-bubble .line.react.perfect {
+  color: #9a6400;
+}
+
+.order-bubble .line.react.fail {
+  color: #b23048;
+}
+
+.order-bubble .chip {
+  background: rgba(60, 40, 110, 0.08);
+  border-color: rgba(60, 40, 110, 0.22);
+  color: #2a2140;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.order-bubble .chip.ok {
+  background: rgba(40, 170, 100, 0.14);
+  border-color: rgba(40, 150, 90, 0.6);
+}
+
+.order-bubble.slim .line {
+  font-size: 17px;
+  margin-bottom: 6px;
+}
+
+.order-bubble.corner {
+  left: 16px;
+  transform: none;
+  width: min(300px, calc(100vw - 32px));
+  animation: none;
+  padding: 10px 14px 12px;
+}
+
+.order-bubble.corner::after {
+  display: none;
+}
+
+.order-bubble.corner .line {
+  display: none;
+}
+
+/* ── 잔 둘레 HUD: 위치는 main.ts가 잔의 화면 좌표로 정한다 ── */
+.hud > * {
+  position: fixed;
+  z-index: 3;
+}
+
+.hud > [hidden] {
+  display: none !important;
+}
+
+/* 맛 게이지: 잔 왼쪽, 불투명한 카드 */
+.meters {
+  width: 230px;
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #160e2c;
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55);
+}
+
+.meters h3 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+}
+
+.meters.docked {
+  left: 12px;
+  right: 84px;
+  bottom: 12px;
+  width: auto;
+  max-width: 420px;
+  gap: 4px;
+  padding: 8px 12px;
+}
+
+/* 장식 화면에서는 같은 게이지가 왼쪽에 작게 '현재 맛'으로 남는다 */
+.meters.compact {
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 190px;
+  gap: 5px;
+  padding: 10px 12px;
+}
+
+.meters.compact .meter {
+  grid-template-columns: 30px 1fr 26px;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.meters.compact .track {
+  height: 7px;
+}
+
+.meter {
+  display: grid;
+  grid-template-columns: 34px 1fr 30px;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.meter .label {
+  color: var(--muted);
+}
+
+.meter .value {
+  text-align: right;
+  font-weight: 700;
+}
+
+.meter.ok .value {
+  color: var(--ok);
+}
+
+.meter.off .value {
+  color: var(--bad);
+}
+
+/* 부은 횟수 바: 잔 오른쪽의 가는 세로 막대 */
+.pourbar {
+  width: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.pourbar .slots {
+  flex: 1;
+  width: 14px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #160e2c;
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+
+.pourbar .slots i {
+  flex: 1;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  transition: background 0.3s;
+}
+
+.pourbar .slots i.on {
+  background: linear-gradient(180deg, #ffe7a6, var(--gold-deep));
+  box-shadow: 0 0 8px rgba(255, 211, 107, 0.6);
+}
+
+.pourbar .num {
+  font-size: 11px;
+  color: var(--gold);
+  text-shadow: 0 1px 4px #000;
+}
+
+/* 잔 아래 작은 버튼 줄 */
+.glass-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.glass-actions button {
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
+.glass-actions small {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* 얼음 고르기: 잔 위에 작은 칩 세 개 */
+.ice-pick {
+  display: flex;
+  gap: 8px;
+}
+
+.ice-chip {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding: 6px 10px 8px;
+  border-radius: 12px;
+  background: #1a1133;
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  transition:
+    transform 0.15s,
+    border-color 0.15s;
+}
+
+.ice-chip:hover {
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
+}
+
+.ice-chip .icon3d {
+  width: 46px;
+  height: 46px;
+}
+
+.ice-chip small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* 장식 부채꼴: 카드마다 transform으로 자리를 잡는다 */
+.garnish-arc {
+  inset: 0;
+  pointer-events: none;
+}
+
+.g-card,
+.g-arrow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: auto;
+}
+
+.g-card {
+  width: 104px;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 8px 6px 10px;
+  border-radius: 14px;
+  background: #1a1133;
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.5);
+  font-size: 13px;
+  transform-origin: 50% 100%;
+  transition: opacity 0.3s;
+}
+
+.g-card.selected {
+  border-color: var(--gold);
+  box-shadow:
+    0 0 0 2px rgba(255, 211, 107, 0.4),
+    0 0 22px rgba(255, 211, 107, 0.35),
+    0 10px 22px rgba(0, 0, 0, 0.5);
+}
+
+.g-card .icon3d {
+  width: 64px;
+  height: 64px;
+}
+
+.g-card small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.g-arrow {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 26px;
+  line-height: 1;
+  background: #1a1133;
+  border: 1px solid var(--line-strong);
+  color: var(--gold);
+}
+
+.book-icon {
+  position: fixed;
+  z-index: 4;
+  top: 66px;
+  right: 24px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  font-size: 24px;
+  background: linear-gradient(180deg, #3a2470, #22144a);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+}
+
+.book-icon[hidden],
+.prompt[hidden],
+.result-card[hidden],
+.drawer[hidden] {
+  display: none;
+}
+
+/* 지금 할 일 한 줄 안내 */
+.prompt {
+  position: fixed;
+  z-index: 2;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(12, 8, 28, 0.75);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* 서빙 결과: 화면 아래 가운데 */
+.result-card {
+  position: fixed;
+  z-index: 3;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  width: min(400px, calc(100vw - 32px));
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  background: #160e2c;
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+  text-align: center;
+}
+
+.result-card .checks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+}
+
+/* ── 서랍: 카운터 오른쪽 아래, 나무 손잡이 ─────── */
+.drawer {
+  position: fixed;
+  z-index: 5;
+  right: 16px;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.drawer-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px 11px;
+  border-radius: 10px 10px 0 0;
+  background:
+    repeating-linear-gradient(
+      92deg,
+      rgba(0, 0, 0, 0.12) 0 3px,
+      transparent 3px 11px
+    ),
+    linear-gradient(180deg, #7a4a2c, #4f2c18);
+  border: 1px solid #a8743f;
+  border-bottom: 0;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 220, 170, 0.25),
+    0 -6px 18px rgba(0, 0, 0, 0.4);
+  color: #ffe9c8;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.drawer-tab .knob {
+  width: 18px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #ffe08a, #b8822a);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.drawer-tab b {
+  color: var(--gold);
+}
+
+.drawer-body {
+  width: min(300px, calc(100vw - 32px));
+  max-height: min(62vh, 520px);
+  overflow: auto;
+  padding: 12px 14px;
+  border-radius: 12px 0 0 0;
+  background:
+    linear-gradient(180deg, rgba(255, 230, 190, 0.05), transparent 30px),
+    #23140f;
+  border: 1px solid #a8743f;
+  border-bottom: 0;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.55);
+  animation: drawer-out 0.25s ease-out both;
+  scrollbar-width: thin;
+  font-size: 13px;
+}
+
+@keyframes drawer-out {
+  from {
+    transform: translateY(30px);
+  }
+}
+
+.drawer.open .drawer-tab {
+  border-radius: 0 0 0 0;
+}
+
+.drawer-body h3 {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+}
+
+.drawer-body h3 small,
+.shop h3 small {
+  color: var(--muted);
+  letter-spacing: 0;
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.drawer-body .total {
+  margin: 0;
+}
+
+.drawer-body .goods li {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.drawer-body .goods button {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.drawer-body .goods .icon3d {
+  width: 32px;
+  height: 32px;
+}
+
+.tip-card .how {
+  color: var(--gold);
+}
+
+.sub.small {
+  font-size: 12px;
+}
+
+/* ── 좁은 화면 ───────────────────────────── */
+@media (max-width: 860px) {
   .topbar {
-    order: 0;
-    height: auto;
-    flex-wrap: wrap;
-    gap: 6px 8px;
-    padding: 8px 16px;
-    background: rgba(12, 7, 24, 0.95);
+    padding: 0 12px;
+    gap: 8px;
   }
 
   .brand {
-    font-size: 16px;
+    font-size: 15px;
   }
 
   .brand small {
     display: none;
+  }
+
+  .clock {
+    font-size: 12px;
+    padding: 4px 10px;
   }
 
   .topbar .ghost {
@@ -1262,69 +1530,59 @@ button:focus-visible {
     font-size: 13px;
   }
 
-  .pill {
-    padding: 3px 10px;
-    font-size: 12px;
+  .order-bubble {
+    top: 56px;
+    padding: 8px 12px 10px;
   }
 
-  .stats {
-    margin-left: 0;
-    order: 3;
-    width: 100%;
+  .order-bubble .line {
+    font-size: 16px;
   }
 
-  .actions {
-    margin-left: auto;
-  }
-
-  .stage3d {
-    order: 1;
-    position: sticky;
-    top: 0;
-    height: 46vh;
-    min-height: 300px;
-    z-index: 3;
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
-  }
-
-  .meters {
-    bottom: 8px;
-    width: min(360px, calc(100vw - 32px));
-    padding: 6px 12px;
-    gap: 3px;
-  }
-
-  .meter {
-    grid-template-columns: 32px 1fr 26px;
-    gap: 8px;
-    font-size: 12px;
-  }
-
-  .track {
-    height: 7px;
-  }
-
-  .layout {
-    order: 2;
-    display: flex;
-    flex-direction: column;
-    height: auto;
-    padding: 12px 16px 24px;
-    gap: 12px;
-  }
-
-  .layout > .center {
+  .order-bubble.slim .line {
     display: none;
   }
 
-  .panel {
-    align-self: stretch;
-    max-height: none;
-    overflow: visible;
+  .order-bubble.corner {
+    width: calc(100vw - 32px);
   }
 
-  .bottle-list {
-    grid-template-columns: repeat(2, 1fr);
+  .meters.compact {
+    top: auto;
+    bottom: 64px;
+    transform: none;
+  }
+
+  .g-card {
+    width: 84px;
+  }
+
+  .g-card .icon3d {
+    width: 48px;
+    height: 48px;
+  }
+
+  body[data-phase="ice"] .prompt,
+  body[data-phase="mix"] .prompt {
+    display: none;
+  }
+
+  body[data-phase="garnish"] .prompt {
+    display: none;
+  }
+
+  .prompt {
+    bottom: 56px;
+    white-space: normal;
+    text-align: center;
+    width: max-content;
+    max-width: calc(100vw - 32px);
+  }
+
+  .book-icon {
+    top: auto;
+    bottom: 64px;
+    right: 12px;
   }
 
   .card {
@@ -1334,11 +1592,6 @@ button:focus-visible {
   .icon3d {
     width: 60px;
     height: 60px;
-  }
-
-  .ingredient .icon3d {
-    width: 52px;
-    height: 52px;
   }
 }
 
