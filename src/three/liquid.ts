@@ -145,7 +145,9 @@ float lqNoise(vec2 p) {
 
 const SIDE_FRAGMENT = /* glsl */ `
 float lqRim = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 2.0);
-totalEmissiveRadiance += vColor.rgb * (0.22 + 0.6 * lqRim);
+// 크림처럼 하얀 술은 자체 발광이 더해지면 하얗게 날아가므로 줄인다.
+float lqLuma = dot(vColor.rgb, vec3(0.299, 0.587, 0.114));
+totalEmissiveRadiance += vColor.rgb * (0.22 + 0.6 * lqRim) * (1.0 - 0.65 * smoothstep(0.6, 0.95, lqLuma));
 {
   float lqR = max(0.02, length(vLq.xz));
   float lqA = fract(vLqU + uLqSpin);
@@ -205,8 +207,11 @@ totalEmissiveRadiance += vColor.rgb * (0.22 + 0.6 * lqRim);
     float streak = smoothstep(0.35, 0.95, sw);
     float dark = smoothstep(-0.4, -0.95, sw);
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.97, 0.9), streak * 0.55 * vFx.z);
-    diffuseColor.rgb *= 1.0 - dark * 0.18 * vFx.z;
-    totalEmissiveRadiance += vec3(1.0, 0.95, 0.88) * streak * 0.14 * vFx.z;
+    // 어두운 결은 캐러멜빛으로 물들여 하얀 크림에서도 소용돌이가 보이게 한다.
+    vec3 caramel = vec3(0.78, 0.6, 0.46);
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * caramel, dark * 0.6 * vFx.z);
+    totalEmissiveRadiance = mix(totalEmissiveRadiance, totalEmissiveRadiance * caramel * 0.7, dark * 0.7 * vFx.z);
+    totalEmissiveRadiance += vec3(1.0, 0.95, 0.88) * streak * 0.1 * vFx.z;
   }
 
   // 금빛: 천천히 떠오르며 반짝이는 금가루
@@ -279,8 +284,12 @@ const CAP_FRAGMENT = /* glsl */ `
   if (uCapFx.z > 0.01) {
     float sp = sin(ca * 2.0 - log(cr + 0.04) * 5.0 + t * 0.2);
     float streak = smoothstep(0.3, 0.95, sp) * (1.0 - smoothstep(0.6, 1.0, cr) * 0.6);
+    float dark = smoothstep(-0.3, -0.95, sp) * (1.0 - smoothstep(0.7, 1.0, cr) * 0.5);
+    vec3 caramel = vec3(0.78, 0.6, 0.46);
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.97, 0.9), streak * 0.6 * uCapFx.z);
-    totalEmissiveRadiance += vec3(1.0, 0.95, 0.88) * streak * 0.16 * uCapFx.z;
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * caramel, dark * 0.6 * uCapFx.z);
+    totalEmissiveRadiance = mix(totalEmissiveRadiance, totalEmissiveRadiance * caramel * 0.7, dark * 0.7 * uCapFx.z);
+    totalEmissiveRadiance += vec3(1.0, 0.95, 0.88) * streak * 0.1 * uCapFx.z;
   }
 
   // 금빛: 수면 아래 맴도는 금가루
@@ -383,8 +392,11 @@ export function liquidMaterials(): LiquidMaterials {
 
 /** 수면 재질에 맨 위 층의 색·효과와 수면 반지름을 넣는다. */
 export function setCap(mat: THREE.MeshPhysicalMaterial, top: LiquidBand, radius: number) {
-  mat.color.copy(top.color).multiplyScalar(0.7);
-  mat.emissive.copy(top.color).multiplyScalar(0.28);
+  // 하얀 술(크림 등)은 조명과 발광이 겹쳐 하얗게 날아가지 않도록 조금 낮춘다.
+  const luma = top.color.r * 0.299 + top.color.g * 0.587 + top.color.b * 0.114;
+  const bright = THREE.MathUtils.smoothstep(luma, 0.6, 0.95);
+  mat.color.copy(top.color).multiplyScalar(0.7 - 0.2 * bright);
+  mat.emissive.copy(top.color).multiplyScalar(0.28 - 0.18 * bright);
   const u = mat.userData.cap as { uCapFx: { value: THREE.Vector4 }; uCapR: { value: number } };
   u.uCapFx.value.copy(top.fx);
   u.uCapR.value = radius;
