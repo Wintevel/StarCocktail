@@ -3,31 +3,20 @@
 
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { type GarnishId, GLASS_BY_ID, type GlassId, ICE_BY_ID, INGREDIENT_BY_ID, type IngredientId } from '../data';
 import { type Drink, type Grade, visibleLayers } from '../mix';
 import { buildBar, buildEnvScene } from './bar';
 import { animateFigure, buildFigure, disposeFigure, type Figure, type FigureLook, type Mood, setMood } from './figure';
-import {
-  fillDepth,
-  GLASS_SHAPES,
-  type GlassShape,
-  goldMaterial,
-  iceMaterial,
-  type LiquidBand,
-  liquidGeometry,
-  liquidMaterials,
-  makeBottle,
-  makeGarnish,
-  makeGlass,
-  makeIce,
-  rimY,
-} from './models';
+import { fxTime, makeGlass } from './glassware';
+import { capMaterial, fxOf, type LiquidBand, liquidGeometry, liquidMaterials, setCap, SurfaceSpray } from './liquid';
+import { fillDepth, GLASS_SHAPES, type GlassShape, goldMaterial, iceMaterial, makeBottle, makeGarnish, makeIce, rimY } from './models';
+import { GradedOutputPass } from './post';
 import { GlassShelf, makeRecipeBook } from './props';
+import { onQuality, quality, setQuality } from './quality';
 import { BOTTLE_SCALE, BottleRack, type RackBottle } from './rack';
-import { shadowTexture, sparkleTexture } from './textures';
+import { shadowTexture } from './textures';
 
 const POUR_MS = 1500;
 /** 잔은 손님·병과 어울리는 크기로 줄여 둔다. 모양 치수(models.ts)는 잔 기준 단위 그대로 쓴다. */
@@ -105,6 +94,8 @@ interface IceCube {
 
 interface Layer {
   color: THREE.Color;
+  /** 재료 효과 세기 (liquid.ts의 fxOf) */
+  fx: THREE.Vector4;
   amount: number;
 }
 
@@ -126,22 +117,7 @@ function liquidColor(ids: IngredientId[]) {
 }
 
 function layerOf(ids: IngredientId[]): Layer {
-  return { color: liquidColor(ids), amount: ids.length };
-}
-
-/**
- * 정점 색을 은은한 자체 발광으로도 써서 술이 안에서 빛나는 느낌을 준다.
- * 가장자리(시선과 비스듬한 면)는 더 밝혀 빛이 얇은 술을 통과하는 듯한 반투명감을 낸다.
- */
-function glowFromVertexColor(mat: THREE.Material, amount: number, rim: number) {
-  mat.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <emissivemap_fragment>',
-      `#include <emissivemap_fragment>
-	float liquidRim = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 2.0);
-	totalEmissiveRadiance += vColor.rgb * (${amount.toFixed(2)} + ${rim.toFixed(2)} * liquidRim);`,
-    );
-  };
+  return { color: liquidColor(ids), fx: fxOf(ids), amount: ids.length };
 }
 
 export class Stage3D {
@@ -149,6 +125,7 @@ export class Stage3D {
   private renderer: THREE.WebGLRenderer;
   private composer: EffectComposer;
   private bloom: UnrealBloomPass;
+  private output: GradedOutputPass;
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(36, 1, 0.05, 60);
   private camTarget = VIEWS.greet.target.clone();
@@ -209,12 +186,10 @@ export class Stage3D {
     spoon: THREE.Group;
   } | null = null;
 
-  private bubbles: THREE.InstancedMesh;
-  private bubbleState: { a: number; t: number; v: number }[] = [];
-  private sparkles: THREE.Points;
-  private sparkleState: { a: number; t: number; r: number; v: number }[] = [];
+  /** 수면 위로 튀는 물방울·별가루·금가루 */
+  private spray = new SurfaceSpray(28);
+  private capRadius = 0;
   private shadow: THREE.Mesh;
-  private dummy = new THREE.Object3D();
   private container: HTMLElement;
   private lastFrame = 0;
   private lastTick = 0;
@@ -238,6 +213,7 @@ export class Stage3D {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.92;
+    this.fitTransmission();
     this.canvas = this.renderer.domElement;
     container.prepend(this.canvas);
 
@@ -250,7 +226,6 @@ export class Stage3D {
     coaster.scale.setScalar(GLASS_SCALE * 1.05);
     this.scene.add(this.bar.group, this.glassRoot, coaster, this.rack.group, this.shelf.group, this.book.root);
     this.addLights();
-    glowFromVertexColor(this.liquidMats.side, 0.22, 0.6);
 
     this.shadow = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
@@ -265,56 +240,16 @@ export class Stage3D {
     this.shadow.position.y = 0.014;
     this.glassRoot.add(this.shadow);
 
-    this.bubbles = new THREE.InstancedMesh(
-      new THREE.SphereGeometry(1, 8, 6),
-      new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.55,
-        depthWrite: false,
-      }),
-      70,
-    );
-    this.bubbles.count = 0;
-    this.bubbles.renderOrder = 4;
-    for (let i = 0; i < 70; i++)
-      this.bubbleState.push({
-        a: 0,
-        t: Math.random(),
-        v: 0.15 + Math.random() * 0.25,
-      });
-    this.glassRoot.add(this.bubbles);
-
-    const sparkGeo = new THREE.BufferGeometry();
-    sparkGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(40 * 3), 3));
-    this.sparkles = new THREE.Points(
-      sparkGeo,
-      new THREE.PointsMaterial({
-        map: sparkleTexture(),
-        size: 0.07,
-        color: 0xe6d8ff,
-        transparent: true,
-        depthTest: false,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      }),
-    );
-    this.sparkles.visible = false;
-    this.sparkles.renderOrder = 5;
-    for (let i = 0; i < 40; i++)
-      this.sparkleState.push({
-        a: Math.random() * Math.PI * 2,
-        t: Math.random(),
-        r: Math.random(),
-        v: 0.02 + Math.random() * 0.05,
-      });
-    this.glassRoot.add(this.sparkles);
+    this.glassRoot.add(this.spray.group);
+    // 품질이 바뀌면 술을 다시 만들어 수면 위 입자 수를 맞춘다.
+    onQuality(() => (this.liquidKey = ''));
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.5, 0.9);
     this.composer.addPass(this.bloom);
-    this.composer.addPass(new OutputPass());
+    this.output = new GradedOutputPass();
+    this.composer.addPass(this.output);
 
     const ro = new ResizeObserver(() => this.resize(container));
     ro.observe(container);
@@ -572,10 +507,10 @@ export class Stage3D {
     let cap: THREE.Material | null = null;
     this.glassRoot.children.forEach((c, i) => {
       const copy = cup.children[i];
-      if (c === this.bubbles || c === this.sparkles) copy.visible = false;
+      if (c === this.spray.group) copy.visible = false;
       if (c === this.liquidCap) {
-        // 수면 재질은 다음 잔과 함께 쓰므로 색이 바뀌지 않게 따로 떼어 둔다.
-        cap = this.liquidMats.cap.clone();
+        // 수면 재질은 다음 잔과 함께 쓰므로 색·효과가 바뀌지 않게 값을 복사한 새 재질로 떼어 둔다.
+        cap = capMaterial({ value: this.liquidMats.spin.value }, { value: 0 }, this.liquidMats.cap);
         (copy as THREE.Mesh).material = cap;
       }
     });
@@ -591,7 +526,11 @@ export class Stage3D {
     const t = p.takeaway;
     if (!t) return;
     this.scene.remove(t.cup);
-    const shared = new Set<THREE.BufferGeometry>([this.bubbles.geometry, this.sparkles.geometry, this.shadow.geometry]);
+    const shared = new Set<THREE.BufferGeometry>([this.shadow.geometry]);
+    this.spray.group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.geometry) shared.add(m.geometry);
+    });
     t.cup.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.geometry && !shared.has(m.geometry)) m.geometry.dispose();
@@ -681,9 +620,11 @@ export class Stage3D {
     const w = Math.max(1, container.clientWidth);
     const h = Math.max(1, container.clientHeight);
     this.renderer.setSize(w, h, false);
+    this.fitTransmission();
     this.composer.setPixelRatio(this.renderer.getPixelRatio());
     this.composer.setSize(w, h);
     this.bloom.resolution.set(w / 2, h / 2);
+    this.output.setAspect(w / h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.lastAnchor = '';
@@ -893,6 +834,7 @@ export class Stage3D {
         m.geometry.dispose();
       }
     }
+    if (this.liquidSide) this.spray.setFx(null, 1);
     this.liquidSide = this.liquidCap = null;
     this.liquidKey = '';
     this.surfaceY = this.shape ? this.shape.floor : 0;
@@ -904,6 +846,7 @@ export class Stage3D {
     // 탭을 오래 비웠다 돌아와도 한꺼번에 튀지 않도록 한 프레임의 시간을 제한한다.
     const dt = Math.min(0.25, Math.max(0, (now - (this.lastTick || now)) / 1000));
     this.lastTick = now;
+    fxTime.value = now / 1000;
     this.adaptResolution(now);
     this.bar.update(now);
     this.rack.update(now, dt);
@@ -918,11 +861,10 @@ export class Stage3D {
       this.updatePour(now);
       this.updateStir(now, dt);
       this.updateGarnish(now);
-      this.updateFx(now);
+      this.updateFx(now, dt);
     } else {
       this.removeLiquid();
-      this.bubbles.count = 0;
-      this.sparkles.visible = false;
+      this.spray.update(dt, 0, 0, false);
     }
     this.composer.render();
     this.emitLayout();
@@ -941,17 +883,30 @@ export class Stage3D {
     this.glassRoot.position.copy(off);
   }
 
-  /** 프레임이 계속 느리면 해상도를 낮춰 저사양 기기에서도 부드럽게 돌게 한다. */
+  /**
+   * 프레임이 계속 느리면 저사양 기기에서도 부드럽게 돌도록 단계적으로 가볍게 한다.
+   * 먼저 품질을 낮추고(유리 굴절·빛줄기 끄기, 입자 절반), 그래도 느리면 해상도를 낮춘다.
+   */
   private adaptResolution(now: number) {
     const dt = now - this.lastFrame;
     this.lastFrame = now;
     if (dt > 0 && dt < 1000) this.slowFrames = dt > 34 ? this.slowFrames + 1 : Math.max(0, this.slowFrames - 1);
+    if (this.slowFrames <= 90) return;
+    this.slowFrames = 0;
+    if (quality.level === 'high' && !quality.forced) {
+      setQuality('low');
+      return;
+    }
     const ratio = this.renderer.getPixelRatio();
-    if (this.slowFrames > 90 && ratio > 0.75) {
-      this.slowFrames = 0;
+    if (ratio > 0.75) {
       this.renderer.setPixelRatio(Math.max(0.75, ratio - 0.5));
       this.resize(this.container);
     }
+  }
+
+  /** 굴절용 화면 복사본은 CSS 해상도 안팎이면 충분하다(화소 밀도가 높은 화면에서 비용을 줄인다). */
+  private fitTransmission() {
+    this.renderer.transmissionResolutionScale = Math.min(1, 1.1 / this.renderer.getPixelRatio());
   }
 
   /** 단계별 시선으로 부드럽게 옮겨 간다. 마우스에 따라 흔들리지 않는다. */
@@ -981,13 +936,15 @@ export class Stage3D {
     const d = this.drink!;
     let layers = visibleLayers(d).map(layerOf);
     if (this.stirAnim && layers.length) {
+      // 저으면 섞이기 전 층들의 색과 효과가 섞인 한 층으로 서서히 모인다.
       const p = clamp01((now - this.stirAnim.start) / STIR_MS);
       const k = easeInOut(clamp01(p * 1.3));
-      const target = layers[0].color;
+      const target = layers[0];
       layers = [
         ...this.stirAnim.from.map((l) => ({
           amount: l.amount,
-          color: l.color.clone().lerp(target, k),
+          color: l.color.clone().lerp(target.color, k),
+          fx: l.fx.clone().lerp(target.fx, k),
         })),
         ...layers.slice(1),
       ];
@@ -1014,12 +971,13 @@ export class Stage3D {
       u += l.amount;
       return {
         color: l.color,
+        fx: l.fx,
         top: s.floor + fillDepth(s, u / cap) * s.height,
       };
     });
     // 회전 중이거나 붓는 중이면 수면이 살짝 출렁인다.
     const wobble = this.pourAnim || this.stirAnim ? Math.sin(now / 60) * 0.012 : 0;
-    const key = bands.map((b) => b.top.toFixed(4) + b.color.getHexString()).join('|');
+    const key = bands.map((b) => b.top.toFixed(4) + b.color.getHexString() + b.fx.toArray().map((v) => v.toFixed(2)).join(',')).join('|');
     if (key === this.liquidKey && this.liquidCap) {
       this.liquidCap.rotation.z = wobble;
       return;
@@ -1029,14 +987,15 @@ export class Stage3D {
     const side = new THREE.Mesh(geo.side, this.liquidMats.side);
     const capMesh = new THREE.Mesh(geo.cap, this.liquidMats.cap);
     capMesh.rotation.z = wobble;
-    const topColor = bands[bands.length - 1].color;
-    this.liquidMats.cap.color.copy(topColor).multiplyScalar(0.7);
-    this.liquidMats.cap.emissive.copy(topColor).multiplyScalar(0.28);
+    const top = bands[bands.length - 1];
+    setCap(this.liquidMats.cap, top, geo.capRadius);
+    this.spray.setFx(top.fx, quality.particles);
     this.removeLiquid();
     this.glassRoot.add(side, capMesh);
     this.liquidSide = side;
     this.liquidCap = capMesh;
     this.surfaceY = geo.yTop;
+    this.capRadius = geo.capRadius;
   }
 
   private updateIce(now: number, dt: number) {
@@ -1180,51 +1139,15 @@ export class Stage3D {
     if (spin) spin.rotation.y = Math.sin(now / 900) * 0.5;
   }
 
-  private updateFx(now: number) {
-    const d = this.drink!;
+  /** 술 셰이더의 회전·소용돌이 값과 수면 위 입자 */
+  private updateFx(now: number, dt: number) {
     const s = this.shape!;
-    const fizzy = d.pours.some((p) => INGREDIENT_BY_ID[p].fx === 'fizz');
-    const sparkly = d.pours.some((p) => INGREDIENT_BY_ID[p].fx === 'sparkle');
-    const depth = this.surfaceY - s.floor;
-    const hasLiquid = !!this.liquidSide && depth > 0.05;
-
-    // 탄산 방울: 잔 벽 안쪽(카메라 쪽)을 타고 올라간다.
-    if (fizzy && hasLiquid) {
-      this.bubbles.count = this.bubbleState.length;
-      const camAngle = Math.atan2(this.camera.position.z, this.camera.position.x);
-      this.bubbleState.forEach((b, i) => {
-        b.t += (b.v * 0.016) / Math.max(0.2, depth);
-        if (b.t > 1) {
-          b.t = 0;
-          b.a = camAngle + (Math.random() - 0.5) * 2.6;
-        }
-        const y = s.floor + 0.02 + b.t * (depth - 0.03);
-        const r = s.r((y - s.floor) / s.height) - 0.008;
-        const wob = Math.sin(now / 200 + i) * 0.03;
-        this.dummy.position.set(Math.cos(b.a + wob) * r, y, Math.sin(b.a + wob) * r);
-        this.dummy.scale.setScalar(0.006 + (i % 4) * 0.003);
-        this.dummy.updateMatrix();
-        this.bubbles.setMatrixAt(i, this.dummy.matrix);
-      });
-      this.bubbles.instanceMatrix.needsUpdate = true;
-    } else {
-      this.bubbles.count = 0;
-    }
-
-    // 성운 리큐르: 술 속에서 별가루가 천천히 맴돈다.
-    this.sparkles.visible = sparkly && hasLiquid;
-    if (this.sparkles.visible) {
-      const pos = this.sparkles.geometry.getAttribute('position') as THREE.BufferAttribute;
-      this.sparkleState.forEach((sp, i) => {
-        sp.a += sp.v * 0.05;
-        sp.t = (sp.t + sp.v * 0.004) % 1;
-        const y = s.floor + 0.03 + sp.t * (depth - 0.06);
-        const r = (s.r((y - s.floor) / s.height) - 0.03) * Math.sqrt(sp.r);
-        pos.setXYZ(i, Math.cos(sp.a) * r, y, Math.sin(sp.a) * r);
-      });
-      pos.needsUpdate = true;
-      (this.sparkles.material as THREE.PointsMaterial).opacity = 0.6 + 0.4 * Math.sin(now / 250);
-    }
+    const hasLiquid = !!this.liquidSide && this.surfaceY - s.floor > 0.05;
+    // 얼음과 같은 각도로 술 속 기포·별·무늬가 함께 돈다(바퀴 수).
+    this.liquidMats.spin.value = this.iceSpin / (Math.PI * 2);
+    const stirring = this.stirAnim ? clamp01((now - this.stirAnim.start) / STIR_MS) : 1;
+    this.liquidMats.stir.value = this.stirAnim ? Math.sin(Math.PI * stirring) : 0;
+    this.spray.update(dt, this.surfaceY, this.capRadius, hasLiquid && !this.pourAnim?.stream.visible);
   }
 }
 
@@ -1253,7 +1176,7 @@ function disposeDeep(obj: THREE.Object3D, materials = false) {
     if (m.geometry) m.geometry.dispose();
     if (materials && m.material) {
       const mats = Array.isArray(m.material) ? m.material : [m.material];
-      for (const mat of mats) if (mat !== goldMaterial) mat.dispose();
+      for (const mat of mats) if (mat !== goldMaterial && !mat.userData.shared) mat.dispose();
     }
   });
 }

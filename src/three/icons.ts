@@ -3,7 +3,8 @@
 import * as THREE from 'three';
 import { GARNISHES, GLASSES, ICES, INGREDIENTS } from '../data';
 import { buildEnvScene } from './bar';
-import { GLASS_SHAPES, iceMaterial, makeBottle, makeGarnish, makeGlass, makeIce } from './models';
+import { makeGlass } from './glassware';
+import { GLASS_SHAPES, iceMaterial, makeBottle, makeGarnish, makeIce } from './models';
 
 export type IconMap = Record<string, string>;
 

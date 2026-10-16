@@ -191,3 +191,144 @@ export function toonGradient() {
   tex.needsUpdate = true;
   return tex;
 }
+
+/**
+ * 유리 겉면에 새긴 무늬(에칭) 한 칸. 흰 곳이 서리처럼 깎인 곳이다.
+ * 잔을 한 바퀴 도는 동안 이 칸을 여러 번 되풀이해 붙인다(가로 반복).
+ */
+export function etchTexture(kind: 'deco' | 'fan' | 'garland' | 'sparkle') {
+  const [w, h] = kind === 'sparkle' ? [256, 160] : [512, 128];
+  const tex = canvasTexture(
+    w,
+    h,
+    (ctx) => {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = '#fff';
+      ctx.fillStyle = '#fff';
+      ctx.lineCap = 'round';
+      const line = (y: number, width: number) => {
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      };
+      const star = (x: number, y: number, outer: number, inner: number, points = 5) => {
+        ctx.beginPath();
+        for (let i = 0; i < points * 2; i++) {
+          const r = i % 2 === 0 ? outer : inner;
+          const a = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
+          ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+        }
+        ctx.closePath();
+        ctx.fill();
+      };
+      switch (kind) {
+        case 'deco': {
+          // 위아래 두 줄 사이에 마름모와 점을 번갈아 새긴 아르데코 띠
+          line(12, 6);
+          line(26, 3);
+          line(h - 26, 3);
+          line(h - 12, 6);
+          ctx.lineWidth = 5;
+          for (let i = 0; i < 4; i++) {
+            const x = 64 + i * 128;
+            ctx.beginPath();
+            ctx.moveTo(x, 38);
+            ctx.lineTo(x + 30, 64);
+            ctx.lineTo(x, 90);
+            ctx.lineTo(x - 30, 64);
+            ctx.closePath();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(x, 64, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(x + 64, 64, 5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          break;
+        }
+        case 'fan': {
+          // 부채꼴 햇살 무늬 두 개
+          line(10, 5);
+          ctx.lineWidth = 5;
+          for (const cx of [128, 384]) {
+            for (const r of [34, 66, 98]) {
+              ctx.beginPath();
+              ctx.arc(cx, h - 6, r, Math.PI, 0);
+              ctx.stroke();
+            }
+            for (let k = 1; k < 8; k++) {
+              const a = Math.PI + (k / 8) * Math.PI;
+              ctx.beginPath();
+              ctx.moveTo(cx + Math.cos(a) * 34, h - 6 + Math.sin(a) * 34);
+              ctx.lineTo(cx + Math.cos(a) * 98, h - 6 + Math.sin(a) * 98);
+              ctx.stroke();
+            }
+            star(cx, h - 10, 16, 7, 4);
+          }
+          star(256, 40, 12, 5, 4);
+          star(0, 40, 12, 5, 4);
+          star(512, 40, 12, 5, 4);
+          break;
+        }
+        case 'garland': {
+          // 늘어진 꽃줄과 별
+          line(10, 4);
+          ctx.lineWidth = 5;
+          for (const x0 of [0, 256]) {
+            ctx.beginPath();
+            ctx.moveTo(x0, 26);
+            ctx.quadraticCurveTo(x0 + 128, 128, x0 + 256, 26);
+            ctx.stroke();
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(x0 + 24, 26);
+            ctx.quadraticCurveTo(x0 + 128, 100, x0 + 232, 26);
+            ctx.stroke();
+            ctx.lineWidth = 5;
+            star(x0 + 128, 100, 17, 7);
+            for (const dx of [70, 186]) {
+              ctx.beginPath();
+              ctx.arc(x0 + dx, 92, 4, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+          for (const x of [0, 256, 512]) star(x, 26, 14, 6);
+          break;
+        }
+        case 'sparkle': {
+          // 네 갈래 반짝임과 세로줄
+          line(8, 5);
+          line(h - 8, 5);
+          ctx.lineWidth = 4;
+          for (const x of [6, w - 6]) {
+            ctx.beginPath();
+            ctx.moveTo(x, 20);
+            ctx.lineTo(x, h - 20);
+            ctx.stroke();
+          }
+          star(128, 80, 40, 9, 4);
+          star(128, 80, 16, 6, 4);
+          for (const [x, y, r] of [
+            [64, 36, 4],
+            [192, 36, 4],
+            [64, 124, 4],
+            [192, 124, 4],
+            [128, 22, 3],
+            [128, 138, 3],
+          ])
+            star(x, y, r * 2.4, r, 4);
+          break;
+        }
+      }
+    },
+    false,
+  );
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.colorSpace = THREE.NoColorSpace;
+  return tex;
+}
