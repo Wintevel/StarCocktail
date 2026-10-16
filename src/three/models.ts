@@ -344,6 +344,12 @@ export function makeBottle(id: IngredientId | BottleKind, color: string, opts: B
     group.add(cap);
   }
   group.userData.mouthY = top;
+  // 술이 차는 높이: 바닥부터 몸통이 목으로 좁아지기 시작하는 곳까지 (진열대 잔량 표시용)
+  const maxR = Math.max(...prof.pts.map((p) => p.x));
+  const widest = prof.pts.findIndex((p) => p.x === maxR);
+  const neck = prof.pts.slice(widest).find((p) => p.x < maxR * 0.7);
+  group.userData.fillFloor = 0.01;
+  group.userData.fillTop = neck ? neck.y : top * 0.8;
   return group;
 }
 

@@ -11,6 +11,9 @@
   --pink: #ff8fc8;
   --ok: #7ee2a8;
   --bad: #ff7a8a;
+  /* 주문 속 조건 표현·맛 키워드 강조 */
+  --orange: #ff9f43;
+  --orange-deep: #e8711a;
   --radius: 16px;
   --topbar: 60px;
   --font-display: "Cinzel", "Do Hyeon", serif;
@@ -1505,6 +1508,383 @@ button:focus-visible {
   font-size: 12px;
 }
 
+/* ── 영업 시계와 마감 버튼 ───────────────── */
+.clock .c-time {
+  font-weight: 700;
+  min-width: 5ch;
+  letter-spacing: 0.04em;
+}
+
+.clock .c-time.over {
+  color: var(--bad);
+}
+
+.clock .inf {
+  margin-left: 3px;
+  font-size: 12px;
+  color: var(--pink);
+}
+
+/* 자유 제조: 시계 대신 모드 이름만 */
+.clock.free {
+  font-family: inherit;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.clock.free .c-day {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.close-btn {
+  padding: 8px 14px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.close-btn.pulse {
+  animation: pulse-glow 1.3s ease-in-out infinite;
+}
+
+.close-btn.pulse.soft {
+  animation-duration: 2.2s;
+}
+
+.close-btn:disabled {
+  animation: none;
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    filter: brightness(1);
+    box-shadow:
+      0 4px 0 #8a5a12,
+      0 0 0 0 rgba(255, 211, 107, 0.7);
+  }
+  50% {
+    filter: brightness(1.18);
+    box-shadow:
+      0 4px 0 #8a5a12,
+      0 0 0 8px rgba(255, 211, 107, 0);
+  }
+}
+
+.prompt.loud {
+  color: var(--gold);
+  border-color: var(--gold);
+  font-weight: 700;
+}
+
+/* ── 주문 표현: 강조 대사·레시피 이름·모호한 말 ── */
+.order-bubble mark.cond {
+  color: var(--orange-deep);
+  background: linear-gradient(180deg, transparent 58%, rgba(255, 159, 67, 0.28) 58%);
+  font-weight: 700;
+  padding: 0 1px;
+  border-radius: 2px;
+  cursor: help;
+  transition:
+    color 0.2s,
+    background 0.2s;
+}
+
+.order-bubble mark.cond.ok {
+  color: #1f8f57;
+  background: linear-gradient(180deg, transparent 58%, rgba(40, 170, 100, 0.25) 58%);
+}
+
+.order-bubble mark.cond.ok::after {
+  content: "✓";
+  font-size: 0.7em;
+  margin-left: 1px;
+  vertical-align: super;
+}
+
+.order-extra {
+  margin: 0;
+}
+
+.order-bubble .book-chip {
+  display: inline-flex;
+  gap: 4px;
+  border: 1px solid rgba(232, 113, 26, 0.55);
+  background: rgba(255, 159, 67, 0.14);
+  color: #8a3f00;
+  font-weight: 700;
+}
+
+.order-bubble .book-chip:hover {
+  background: rgba(255, 159, 67, 0.26);
+}
+
+.order-bubble .vague-note {
+  font-size: 12px;
+  color: #7a6a9a;
+}
+
+.order-bubble .vague-note::before {
+  content: "💭 ";
+}
+
+.order-bubble .chip.kw {
+  border-color: rgba(232, 113, 26, 0.6);
+  color: #8a3f00;
+  font-weight: 700;
+  background: rgba(255, 159, 67, 0.14);
+}
+
+.order-bubble .away-btn {
+  position: absolute;
+  right: 14px;
+  top: 10px;
+  font-size: 11px;
+  color: #8d7fae;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.order-bubble .away-btn:hover {
+  color: #b23048;
+}
+
+/* 장식 화면의 왼쪽 위 작은 주문: 칩 없는 주문은 대사가 곧 주문이라 작게 남긴다 */
+.order-bubble.corner.style-speech .line,
+.order-bubble.corner.style-recipe .line,
+.order-bubble.corner.style-vague .line {
+  display: block;
+  font-size: 15px;
+  margin: 0 0 4px;
+}
+
+.order-bubble.corner .away-btn {
+  display: none;
+}
+
+/* ── 맛 게이지: 끝 단계 키워드 ───────────── */
+.meters h3 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+
+.kw-pill {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: #2a1400;
+  background: linear-gradient(180deg, #ffc58a, var(--orange));
+  box-shadow: 0 0 10px rgba(255, 159, 67, 0.55);
+}
+
+.meter {
+  padding-bottom: 11px;
+}
+
+.track .kz {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: rgba(255, 159, 67, 0.12);
+}
+
+.track .kw {
+  position: absolute;
+  top: calc(100% + 2px);
+  font-size: 10px;
+  line-height: 1;
+  color: rgba(185, 173, 214, 0.55);
+  white-space: nowrap;
+  transition:
+    color 0.25s,
+    text-shadow 0.25s;
+}
+
+.track .kw.low {
+  left: 0;
+}
+
+.track .kw.high {
+  right: 0;
+}
+
+.track .kw.on {
+  color: var(--orange);
+  font-weight: 800;
+  text-shadow: 0 0 8px rgba(255, 159, 67, 0.8);
+}
+
+.meter.kw-on .knob {
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.6),
+    0 0 14px rgba(255, 159, 67, 0.9);
+}
+
+.meter.tone .fill {
+  background: linear-gradient(180deg, #8ff0e0, #2fb5a0);
+}
+
+.meters.compact .meter {
+  padding-bottom: 0;
+}
+
+/* 작은 게이지에서는 제목 줄의 키워드 알약과 빛나는 손잡이로만 알린다(글자가 겹치지 않게). */
+.meters.compact .track .kw {
+  display: none;
+}
+
+.meters.docked .meter {
+  padding-bottom: 9px;
+}
+
+.delta.tone.up,
+.delta.tone.down {
+  background: rgba(47, 181, 160, 0.2);
+  color: #9cf0e2;
+}
+
+/* ── 재료 잔량 ───────────────────────────── */
+.pips {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.pips i {
+  width: 9px;
+  height: 6px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.pips i.on {
+  background: linear-gradient(180deg, #ffe7a6, var(--gold-deep));
+}
+
+.stock-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stock-line.low .pips i.on {
+  background: linear-gradient(180deg, #ffc58a, var(--orange-deep));
+}
+
+.stock-line.empty small,
+.stock-line.empty b {
+  color: var(--bad);
+}
+
+.tip-card .stock-line small b {
+  color: var(--text);
+}
+
+.tip-card .empty-note {
+  color: var(--bad);
+}
+
+.refill-all {
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.goods.refills li {
+  padding: 4px 8px;
+}
+
+.goods.refills .icon3d {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.goods.refills li.empty {
+  border-color: rgba(255, 122, 138, 0.45);
+}
+
+.goods button.credit {
+  background: linear-gradient(180deg, #a06a6a, #6b3a48);
+}
+
+.tab-alert {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--bad);
+  color: #2a0010;
+}
+
+.low-stock {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.low-stock li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px 2px 2px;
+  border-radius: 999px;
+  background: rgba(255, 159, 67, 0.1);
+  border: 1px solid rgba(255, 159, 67, 0.4);
+  font-size: 13px;
+}
+
+.low-stock li.empty {
+  border-color: rgba(255, 122, 138, 0.6);
+  background: rgba(255, 122, 138, 0.1);
+}
+
+.low-stock .icon3d {
+  width: 30px;
+  height: 30px;
+}
+
+.low-stock small {
+  color: var(--orange);
+}
+
+/* ── 레시피북·마감 요약 ───────────────────── */
+.recipes li.focus {
+  border: 1px solid var(--orange);
+  box-shadow: 0 0 0 2px rgba(255, 159, 67, 0.25);
+}
+
+.recipes li.focus em {
+  font-style: normal;
+  font-size: 11px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: #2a1400;
+  background: var(--orange);
+}
+
+.chips.mini {
+  margin-top: 4px;
+  gap: 4px;
+}
+
+.chips.mini .chip {
+  font-size: 11px;
+  padding: 2px 6px;
+  font-family: var(--font-ui);
+}
+
+.summary li.missed span {
+  color: var(--muted) !important;
+  letter-spacing: 0 !important;
+}
+
 /* ── 좁은 화면 ───────────────────────────── */
 @media (max-width: 860px) {
   .topbar {
@@ -1541,6 +1921,22 @@ button:focus-visible {
 
   .order-bubble.slim .line {
     display: none;
+  }
+
+  .order-bubble.slim.style-speech .line,
+  .order-bubble.slim.style-recipe .line,
+  .order-bubble.slim.style-vague .line {
+    display: block;
+    font-size: 14px;
+  }
+
+  .brand-en {
+    display: none;
+  }
+
+  .close-btn {
+    padding: 6px 10px;
+    font-size: 12px;
   }
 
   .order-bubble.corner {

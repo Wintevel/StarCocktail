@@ -350,6 +350,11 @@ export class Stage3D {
     this.rack.setAvailable(ids, performance.now(), animate);
   }
 
+  /** 재료별 남은 양(0~1). 병 몸통의 수면 높이로 보이고, 빈 병은 끌 수 없다. null이면 모두 가득. */
+  setStock(levels: Partial<Record<IngredientId, number>> | null) {
+    this.rack.setLevels(levels);
+  }
+
   /** 지금 병을 끌어 부을 수 있는지 (재료 단계이고 잔에 자리가 있을 때) */
   setPourable(on: boolean) {
     this.rack.enabled = on;
@@ -384,7 +389,7 @@ export class Stage3D {
 
   private canUse(t: Target | null) {
     if (!t) return false;
-    if (t.kind === 'bottle') return this.rack.enabled && !this.busy;
+    if (t.kind === 'bottle') return this.rack.enabled && !this.busy && !this.rack.isEmpty(t.id);
     if (t.kind === 'glass') return this.shelf.enabled;
     return this.bookEnabled;
   }
@@ -519,16 +524,19 @@ export class Stage3D {
     if (key && look) this.spawnPatron(key, look, now);
   }
 
-  /** 서빙: 손님 표정이 바뀌고, 잔이 손님 앞으로 미끄러진 뒤 손님이 잔을 들고 나간다. */
-  servePatron(grade: Grade) {
+  /**
+   * 서빙: 손님 표정이 바뀌고, 잔이 손님 앞으로 미끄러진 뒤 손님이 잔을 들고 나간다.
+   * withGlass가 false면(돌려보내기) 잔 없이 표정만 바뀌고 나간다.
+   */
+  servePatron(grade: Grade, withGlass = true) {
     const p = this.patron;
     if (!p) return;
     const now = performance.now();
     p.mood = grade;
     p.moodAt = now;
     setMood(p.fig, grade);
-    this.serveAnim = { start: now, to: SERVE_SPOT.clone() };
-    p.leaveAt = now + 2600;
+    if (withGlass) this.serveAnim = { start: now, to: SERVE_SPOT.clone() };
+    p.leaveAt = now + (withGlass ? 2600 : 1800);
   }
 
   private spawnPatron(key: string, look: FigureLook, now: number) {
@@ -803,6 +811,9 @@ export class Stage3D {
         lift: 0,
         appearAt: 0,
         lent: true,
+        level: { value: 1 },
+        amount: 1,
+        fill: [0, 1],
       };
       temp = true;
     }
