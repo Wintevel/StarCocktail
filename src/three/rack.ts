@@ -1,4 +1,5 @@
 // 카운터 위 계단식 병 진열대. 입고된 재료의 병이 한 칸씩 채워지고, 병을 눌러 잔에 붓는다.
+// 병 몸통은 남은 양만큼만 술 색으로 빛나고, 그 위는 빈 유리처럼 어둡다(잔량 표시).
 
 import * as THREE from 'three';
 import { INGREDIENT_DAY } from '../campaign';
@@ -31,6 +32,36 @@ export interface RackBottle {
   shell?: THREE.Mesh;
   /** 끌다가 놓아 제자리로 날아가는 중 */
   returning?: boolean;
+  /** 셰이더가 읽는 수면 높이(병 기준 좌표) */
+  level: { value: number };
+  /** 남은 양 0~1. 수면은 이 값으로 부드럽게 내려간다. */
+  amount: number;
+  fill: [number, number];
+}
+
+/** 병 몸통 재질에 수면을 넣는다: 수면 위는 빈 유리처럼 어둡고, 수면에는 가는 빛줄이 생긴다. */
+function addLiquidLevel(mat: THREE.MeshPhysicalMaterial, level: { value: number }) {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uLevel = level;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vLocalY;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLocalY = position.y;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uLevel;\nvarying float vLocalY;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        float scAir = smoothstep(uLevel - 0.006, uLevel + 0.006, vLocalY);
+        diffuseColor.rgb *= mix(1.0, 0.14, scAir);`,
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        totalEmissiveRadiance *= mix(1.0, 0.06, scAir);
+        totalEmissiveRadiance += vec3(1.0, 0.9, 0.72) * 0.55 * step(0.0, uLevel) * (1.0 - smoothstep(0.0, 0.014, abs(vLocalY - uLevel)));`,
+      );
+  };
+  mat.customProgramCacheKey = () => 'rack-bottle-level';
 }
 
 const RIM_MAT = new THREE.MeshBasicMaterial({
@@ -56,6 +87,8 @@ export class BottleRack {
   private bottles = new Map<IngredientId, RackBottle>();
   private hits: THREE.Mesh[] = [];
   private hovered: IngredientId | null = null;
+  /** 재료별 남은 양(0~1). null이면 모두 가득(자유 제조). */
+  private levels: Partial<Record<IngredientId, number>> | null = null;
   enabled = false;
 
   constructor() {
@@ -110,6 +143,10 @@ export class BottleRack {
         const home = slotOf(index).add(new THREE.Vector3(0, mouth, 0));
         pivot.position.copy(home);
         const body = bottle.children[0] as THREE.Mesh;
+        const fill: [number, number] = [bottle.userData.fillFloor, bottle.userData.fillTop];
+        const amount = this.amountOf(ing.id);
+        const level = { value: amount > 0 ? fill[0] + (fill[1] - fill[0]) * amount : -1 };
+        addLiquidLevel(body.material as THREE.MeshPhysicalMaterial, level);
         // 병 몸통을 조금 키운 뒷면 껍질: 앞면에 가려지고 가장자리만 빛나 윤곽선처럼 보인다.
         const shell = new THREE.Mesh(body.geometry, RIM_MAT.clone());
         shell.scale.setScalar(1.09);
@@ -126,6 +163,9 @@ export class BottleRack {
           appearAt: animate ? now + index * 70 : -1e9,
           lent: false,
           shell,
+          level,
+          amount,
+          fill,
         };
         this.bottles.set(ing.id, entry);
         this.hits.push(hit);
@@ -140,6 +180,20 @@ export class BottleRack {
 
   get(id: IngredientId) {
     return this.bottles.get(id) ?? null;
+  }
+
+  private amountOf(id: IngredientId) {
+    return this.levels ? Math.max(0, Math.min(1, this.levels[id] ?? 1)) : 1;
+  }
+
+  /** 재료별 남은 양(0~1)을 알려 준다. null이면 모든 병이 가득 찬 것으로 본다. */
+  setLevels(levels: Partial<Record<IngredientId, number>> | null) {
+    this.levels = levels;
+  }
+
+  /** 다 써서 부을 수 없는 병 */
+  isEmpty(id: IngredientId) {
+    return this.amountOf(id) <= 0;
   }
 
   pick(ray: THREE.Raycaster): IngredientId | null {
@@ -175,10 +229,16 @@ export class BottleRack {
   update(now: number, dt: number) {
     const k = Math.min(1, dt * 12);
     for (const b of this.bottles.values()) {
+      // 수면은 부은 만큼 천천히 내려간다(붓는 동안 병을 빌려 가도 계속).
+      const want = this.amountOf(b.id);
+      b.amount += (want - b.amount) * Math.min(1, dt * 3);
+      if (Math.abs(want - b.amount) < 0.002) b.amount = want;
+      b.level.value = b.amount > 0.001 ? b.fill[0] + (b.fill[1] - b.fill[0]) * b.amount : -1;
       if (b.lent) continue;
-      const hot = this.enabled && this.hovered === b.id;
+      const empty = want <= 0;
+      const hot = this.enabled && this.hovered === b.id && !empty;
       b.lift += ((hot ? 0.07 : 0) - b.lift) * k;
-      const targetGlow = this.hovered === b.id ? 0.6 : 0.2;
+      const targetGlow = this.hovered === b.id ? (empty ? 0.3 : 0.6) : empty ? 0.05 : 0.2;
       b.glow += (targetGlow - b.glow) * k;
       b.body.emissiveIntensity = b.glow;
       if (b.shell) (b.shell.material as THREE.MeshBasicMaterial).opacity = Math.max(0, (b.glow - 0.2) / 0.35) * 0.55;

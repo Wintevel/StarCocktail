@@ -1,20 +1,37 @@
 // 게임에 등장하는 재료·잔·얼음·장식·손님·레시피 정의.
-// 수치는 모두 정수이며, 세 가지 속성(단맛/도수/바디)의 합으로 완성된 술의 성격이 정해진다.
+// 수치는 모두 정수이며, 네 가지 속성(단맛/도수/바디/경향)의 합으로 완성된 술의 성격이 정해진다.
+// 경향(완곡함 ↔ 직설적)은 Day 4부터 손님 주문에 등장한다.
 
-export type AttrKey = 'sweet' | 'strength' | 'body';
+export type AttrKey = 'sweet' | 'strength' | 'body' | 'tone';
 
 export interface Attrs {
   sweet: number;
   strength: number;
   body: number;
+  tone: number;
 }
 
-export const ATTR_KEYS: AttrKey[] = ['sweet', 'strength', 'body'];
+export const ATTR_KEYS: AttrKey[] = ['sweet', 'strength', 'body', 'tone'];
 
 export const ATTR_LABEL: Record<AttrKey, string> = {
   sweet: '단맛',
   strength: '도수',
   body: '바디',
+  tone: '경향',
+};
+
+/** 경향 축이 처음 등장하는 날 */
+export const TONE_DAY = 4;
+
+/** 맛 수치가 이 값 이상(또는 -이 값 이하)이면 끝 단계 키워드가 붙는다. */
+export const KEYWORD_AT = 4;
+
+/** 속성별 끝 단계 키워드: [낮은 쪽, 높은 쪽] */
+export const KEYWORDS: Record<AttrKey, [string, string]> = {
+  sweet: ['씁쓸함', '달콤함'],
+  strength: ['순함', '독함'],
+  body: ['산뜻함', '묵직함'],
+  tone: ['완곡함', '직설적'],
 };
 
 export type IngredientId =
@@ -41,17 +58,17 @@ export interface Ingredient {
 }
 
 export const INGREDIENTS: Ingredient[] = [
-  { id: 'gin', name: '별빛 진', kind: '증류주', color: '#bfe3ff', alpha: 0.55, delta: { sweet: 0, strength: 2, body: 0 } },
-  { id: 'whisky', name: '황혼 위스키', kind: '위스키', color: '#c9782c', alpha: 0.85, delta: { sweet: -1, strength: 2, body: 1 } },
-  { id: 'wine', name: '루비 와인', kind: '와인', color: '#9c1d45', alpha: 0.9, delta: { sweet: 1, strength: 1, body: 1 } },
-  { id: 'syrup', name: '꿈결 시럽', kind: '시럽', color: '#ff86c8', alpha: 0.85, delta: { sweet: 2, strength: 0, body: 1 } },
-  { id: 'citrus', name: '햇살 시트러스', kind: '주스', color: '#ffd84a', alpha: 0.8, delta: { sweet: -1, strength: 0, body: -1 } },
-  { id: 'soda', name: '별똥 소다', kind: '탄산', color: '#dff4ff', alpha: 0.4, delta: { sweet: 0, strength: -1, body: -1 }, fx: 'fizz' },
-  { id: 'cream', name: '구름 크림', kind: '크림', color: '#fff3e2', alpha: 0.95, delta: { sweet: 1, strength: 0, body: 2 } },
-  { id: 'bitters', name: '그림자 비터스', kind: '비터스', color: '#4b2a33', alpha: 0.92, delta: { sweet: -2, strength: 1, body: 0 } },
-  { id: 'nebula', name: '성운 리큐르', kind: '리큐르', color: '#7c5cff', alpha: 0.8, delta: { sweet: 1, strength: 1, body: 0 }, fx: 'sparkle' },
-  { id: 'mead', name: '꿀빛 미드', kind: '벌꿀주', color: '#f0b23a', alpha: 0.85, delta: { sweet: 2, strength: 1, body: 1 } },
-  { id: 'espresso', name: '혜성 에스프레소', kind: '커피', color: '#4a2a1a', alpha: 0.95, delta: { sweet: -1, strength: 0, body: 2 } },
+  { id: 'gin', name: '별빛 진', kind: '증류주', color: '#bfe3ff', alpha: 0.55, delta: { sweet: 0, strength: 2, body: 0, tone: 1 } },
+  { id: 'whisky', name: '황혼 위스키', kind: '위스키', color: '#c9782c', alpha: 0.85, delta: { sweet: -1, strength: 2, body: 1, tone: 2 } },
+  { id: 'wine', name: '루비 와인', kind: '와인', color: '#9c1d45', alpha: 0.9, delta: { sweet: 1, strength: 1, body: 1, tone: -1 } },
+  { id: 'syrup', name: '꿈결 시럽', kind: '시럽', color: '#ff86c8', alpha: 0.85, delta: { sweet: 2, strength: 0, body: 1, tone: -2 } },
+  { id: 'citrus', name: '햇살 시트러스', kind: '주스', color: '#ffd84a', alpha: 0.8, delta: { sweet: -1, strength: 0, body: -1, tone: 1 } },
+  { id: 'soda', name: '별똥 소다', kind: '탄산', color: '#dff4ff', alpha: 0.4, delta: { sweet: 0, strength: -1, body: -1, tone: 1 }, fx: 'fizz' },
+  { id: 'cream', name: '구름 크림', kind: '크림', color: '#fff3e2', alpha: 0.95, delta: { sweet: 1, strength: 0, body: 2, tone: -2 } },
+  { id: 'bitters', name: '그림자 비터스', kind: '비터스', color: '#4b2a33', alpha: 0.92, delta: { sweet: -2, strength: 1, body: 0, tone: 2 } },
+  { id: 'nebula', name: '성운 리큐르', kind: '리큐르', color: '#7c5cff', alpha: 0.8, delta: { sweet: 1, strength: 1, body: 0, tone: -2 }, fx: 'sparkle' },
+  { id: 'mead', name: '꿀빛 미드', kind: '벌꿀주', color: '#f0b23a', alpha: 0.85, delta: { sweet: 2, strength: 1, body: 1, tone: -1 } },
+  { id: 'espresso', name: '혜성 에스프레소', kind: '커피', color: '#4a2a1a', alpha: 0.95, delta: { sweet: -1, strength: 0, body: 2, tone: 2 } },
 ];
 
 export const INGREDIENT_BY_ID = Object.fromEntries(INGREDIENTS.map((i) => [i.id, i])) as Record<IngredientId, Ingredient>;
@@ -113,6 +130,8 @@ export const STIR_BODY = -1;
 
 export type Constraint =
   | { kind: 'attr'; attr: AttrKey; op: '>=' | '<=' | '=='; value: number }
+  /** 끝 단계 키워드: low면 수치 -4 이하, high면 +4 이상 */
+  | { kind: 'keyword'; attr: AttrKey; side: 'low' | 'high' }
   | { kind: 'glass'; glass: GlassId }
   | { kind: 'ice'; ice: IceId }
   | { kind: 'garnish'; garnish: GarnishId }
