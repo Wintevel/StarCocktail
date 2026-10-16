@@ -54,7 +54,8 @@ export interface Ingredient {
   color: string;
   alpha: number;
   delta: Attrs;
-  fx?: 'fizz' | 'sparkle';
+  /** 잔 속 효과(보이는 것만): 탄산 기포, 성운 반짝이, 크림 소용돌이, 금빛 입자 */
+  fx?: 'fizz' | 'sparkle' | 'swirl' | 'gold';
 }
 
 export const INGREDIENTS: Ingredient[] = [
@@ -64,10 +65,10 @@ export const INGREDIENTS: Ingredient[] = [
   { id: 'syrup', name: '꿈결 시럽', kind: '시럽', color: '#ff86c8', alpha: 0.85, delta: { sweet: 2, strength: 0, body: 1, tone: -2 } },
   { id: 'citrus', name: '햇살 시트러스', kind: '주스', color: '#ffd84a', alpha: 0.8, delta: { sweet: -1, strength: 0, body: -1, tone: 1 } },
   { id: 'soda', name: '별똥 소다', kind: '탄산', color: '#dff4ff', alpha: 0.4, delta: { sweet: 0, strength: -1, body: -1, tone: 1 }, fx: 'fizz' },
-  { id: 'cream', name: '구름 크림', kind: '크림', color: '#fff3e2', alpha: 0.95, delta: { sweet: 1, strength: 0, body: 2, tone: -2 } },
+  { id: 'cream', name: '구름 크림', kind: '크림', color: '#fff3e2', alpha: 0.95, delta: { sweet: 1, strength: 0, body: 2, tone: -2 }, fx: 'swirl' },
   { id: 'bitters', name: '그림자 비터스', kind: '비터스', color: '#4b2a33', alpha: 0.92, delta: { sweet: -2, strength: 1, body: 0, tone: 2 } },
   { id: 'nebula', name: '성운 리큐르', kind: '리큐르', color: '#7c5cff', alpha: 0.8, delta: { sweet: 1, strength: 1, body: 0, tone: -2 }, fx: 'sparkle' },
-  { id: 'mead', name: '꿀빛 미드', kind: '벌꿀주', color: '#f0b23a', alpha: 0.85, delta: { sweet: 2, strength: 1, body: 1, tone: -1 } },
+  { id: 'mead', name: '꿀빛 미드', kind: '벌꿀주', color: '#f0b23a', alpha: 0.85, delta: { sweet: 2, strength: 1, body: 1, tone: -1 }, fx: 'gold' },
   { id: 'espresso', name: '혜성 에스프레소', kind: '커피', color: '#4a2a1a', alpha: 0.95, delta: { sweet: -1, strength: 0, body: 2, tone: 2 } },
 ];
 

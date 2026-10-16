@@ -2,7 +2,9 @@
 
 import * as THREE from 'three';
 import { INGREDIENTS } from '../data';
+import { fxTime } from './glassware';
 import { goldMaterial, makeBottle, makeStar } from './models';
+import { onQuality } from './quality';
 import { backlightTexture, neonTexture, sparkleTexture, wallTexture, woodTexture } from './textures';
 
 export interface Bar {
@@ -104,6 +106,12 @@ export function buildBar(): Bar {
 
   // 선반과 병
   const shelfMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.05, transmission: 0.9, thickness: 0.05, transparent: true, opacity: 0.6 });
+  // 낮은 품질에서는 유리 선반도 굴절을 끄고 반투명으로만 그린다(화면 복사 패스가 통째로 빠진다).
+  onQuality((q) => {
+    shelfMat.transmission = q === 'high' ? 0.9 : 0;
+    shelfMat.opacity = q === 'high' ? 0.6 : 0.35;
+    shelfMat.needsUpdate = true;
+  });
   const ledMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 2.2, 1.1), toneMapped: false });
   const palette = [...INGREDIENTS.map((i) => i.color), '#3fbfa0', '#e8a23a', '#5aa0ff', '#d64a7a'];
   const kinds = ['tall', 'wine', 'decanter', 'flask', 'jug', 'soda', 'cream', 'dasher'] as const;
@@ -145,6 +153,7 @@ export function buildBar(): Bar {
   }
 
   // 펜던트 조명
+  const shafts: THREE.Mesh[] = [];
   const shadeMat = new THREE.MeshStandardMaterial({ color: 0xd8a94e, metalness: 1, roughness: 0.3, side: THREE.DoubleSide });
   const bulbMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 3, 1.8), toneMapped: false });
   const lamps: THREE.PointLight[] = [];
@@ -162,7 +171,19 @@ export function buildBar(): Bar {
     lamp.add(cord, shade, bulb, light);
     lamp.position.set(x, 2.75, -0.9);
     group.add(lamp);
+    // 전등 아래로 떨어지는 옅은 빛줄기
+    const beam = lightBeam(0.95, 2.6, new THREE.Color(1.0, 0.78, 0.5), 0.085);
+    beam.position.set(x, 2.75 - 0.2 - 1.3, -0.9);
+    shafts.push(beam);
+    group.add(beam);
   }
+  // 왼쪽 위 높은 창에서 비스듬히 들어오는 넓은 빛줄기(손님 쪽)
+  const skyBeam = lightBeam(1.5, 5.5, new THREE.Color(0.75, 0.62, 1.0), 0.05, 0.25);
+  skyBeam.position.set(-2.4, 2.3, -2.6);
+  skyBeam.rotation.z = -0.42;
+  shafts.push(skyBeam);
+  group.add(skyBeam);
+  onQuality((q) => shafts.forEach((b) => (b.visible = q === 'high')));
 
   // 공중에 떠다니는 별가루
   const count = 260;
@@ -223,5 +244,67 @@ export function buildEnvScene(): THREE.Scene {
   panel(4, 6, new THREE.Color(0.9, 0.5, 1.8), [-9.5, 1, 0], Math.PI / 2);
   panel(4, 6, new THREE.Color(1.8, 0.6, 1.1), [9.5, 1, 0], -Math.PI / 2);
   panel(8, 2, new THREE.Color(0.8, 0.7, 1.2), [0, 0, 9.5], Math.PI);
+  // 앞쪽 양옆의 길쭉한 조명판: 유리와 금테에 세로로 긴 하이라이트가 또렷하게 맺힌다.
+  panel(0.7, 7, new THREE.Color(2.4, 2.2, 2.0), [-6.5, 1.5, 6.5], -Math.PI * 0.75);
+  panel(0.7, 7, new THREE.Color(2.2, 2.0, 2.3), [6.5, 1.5, 6.5], Math.PI * 0.75);
+  // 뒤쪽 네온 띠(분홍·하늘빛): 가장자리 반사에 은은한 색을 얹는다.
+  panel(12, 0.25, new THREE.Color(2.2, 0.6, 1.6), [0, 3.2, -9.4]);
+  panel(0.25, 6, new THREE.Color(0.5, 1.4, 2.2), [-9.4, 1.5, -5], Math.PI / 2);
   return env;
+}
+
+const BEAM_VERTEX = /* glsl */ `
+varying vec2 vUv;
+varying vec3 vN;
+varying vec3 vV;
+void main() {
+  vUv = uv;
+  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  vN = normalize(normalMatrix * normal);
+  vV = normalize(-mvPosition.xyz);
+  gl_Position = projectionMatrix * mvPosition;
+}
+`;
+
+const BEAM_FRAGMENT = /* glsl */ `
+uniform vec3 uColor;
+uniform float uOpacity;
+uniform float uTime;
+uniform float uTop;
+varying vec2 vUv;
+varying vec3 vN;
+varying vec3 vV;
+void main() {
+  // 위(전등)에서 밝고 아래로 옅어지며, 시선과 나란한 가장자리는 사라져 부피감이 난다.
+  float along = vUv.y;
+  float fall = smoothstep(0.0, 0.75, along) * (1.0 - smoothstep(1.0 - uTop, 1.0, along) * 0.85);
+  float edge = pow(abs(dot(normalize(vN), normalize(vV))), 1.6);
+  float drift = 0.9 + 0.1 * sin(uTime * 0.7 + along * 6.0);
+  gl_FragColor = vec4(uColor * uOpacity * fall * edge * drift, 1.0);
+}
+`;
+
+/**
+ * 가짜 빛줄기(갓 레이): 끝이 열린 원뿔에 덧셈 혼합으로 옅은 빛을 칠한다.
+ * 화면을 더 그리지 않는 값싼 방법이라 낮은 품질에서만 끈다.
+ */
+function lightBeam(radius: number, height: number, color: THREE.Color, opacity: number, top = 0.08) {
+  const geo = new THREE.CylinderGeometry(radius * 0.12, radius, height, 32, 1, true);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: color },
+      uOpacity: { value: opacity },
+      uTime: fxTime,
+      uTop: { value: top },
+    },
+    vertexShader: BEAM_VERTEX,
+    fragmentShader: BEAM_FRAGMENT,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.renderOrder = 6;
+  return mesh;
 }

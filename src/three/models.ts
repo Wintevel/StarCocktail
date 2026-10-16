@@ -1,4 +1,5 @@
-// 잔·병·얼음·장식의 3D 모델. 모두 회전체(Lathe)와 기본 도형으로 만든다.
+// 잔 모양 치수와 병·얼음·장식의 3D 모델. 모두 회전체(Lathe)와 기본 도형으로 만든다.
+// 잔 모델(크리스털 컷·금테)은 glassware.ts, 잔 속 술은 liquid.ts에 있다.
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -74,149 +75,6 @@ export function fillDepth(s: GlassShape, frac: number): number {
   return ((lo + (f - table[lo]) / span) / (table.length - 1)) * s.maxFill;
 }
 
-export function glassProfile(s: GlassShape): THREE.Vector2[] {
-  const pts: THREE.Vector2[] = [];
-  const steps = 28;
-  const top = rimY(s);
-  if (s.stem) {
-    const f = s.stem.footR;
-    pts.push(
-      new THREE.Vector2(0.0001, 0),
-      new THREE.Vector2(f, 0),
-      new THREE.Vector2(f, 0.018),
-      new THREE.Vector2(f * 0.55, 0.04),
-      new THREE.Vector2(0.06, 0.09),
-      new THREE.Vector2(0.032, 0.18),
-      new THREE.Vector2(0.03, s.floor * 0.6),
-      new THREE.Vector2(0.034, s.floor - 0.12),
-      new THREE.Vector2(0.06, s.floor - 0.05),
-    );
-  } else {
-    pts.push(new THREE.Vector2(0.0001, 0), new THREE.Vector2(s.r(0) + s.wall - 0.02, 0), new THREE.Vector2(s.r(0) + s.wall, 0.02));
-  }
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    pts.push(new THREE.Vector2(s.r(t) + s.wall, s.floor + t * s.height));
-  }
-  pts.push(new THREE.Vector2(s.r(1) + s.wall * 0.5, top + 0.008));
-  for (let i = steps; i >= 0; i--) {
-    const t = i / steps;
-    pts.push(new THREE.Vector2(s.r(t), s.floor + t * s.height));
-  }
-  pts.push(new THREE.Vector2(0.0001, s.floor));
-  return pts;
-}
-
-export function glassMaterial(forIcon = false): THREE.MeshPhysicalMaterial {
-  if (forIcon) {
-    return new THREE.MeshPhysicalMaterial({
-      color: 0xdfe9ff,
-      roughness: 0.05,
-      metalness: 0,
-      transparent: true,
-      opacity: 0.35,
-      clearcoat: 1,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-  }
-  return new THREE.MeshPhysicalMaterial({
-    color: 0xffffff,
-    roughness: 0.04,
-    metalness: 0,
-    transmission: 1,
-    thickness: 0.08,
-    ior: 1.45,
-    specularIntensity: 0.6,
-    envMapIntensity: 1.0,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-  });
-}
-
-export function makeGlass(id: GlassId, forIcon = false): THREE.Mesh {
-  const geo = new THREE.LatheGeometry(glassProfile(GLASS_SHAPES[id]), 72);
-  const mesh = new THREE.Mesh(geo, glassMaterial(forIcon));
-  mesh.renderOrder = 2;
-  return mesh;
-}
-
-// ── 술 ────────────────────────────────────────────────
-
-export interface LiquidBand {
-  color: THREE.Color;
-  /** 바닥부터 이 밴드 위쪽까지의 높이(월드 단위) */
-  top: number;
-}
-
-/** 층별 색을 정점 색으로 칠한 술 옆면과 수면 원판을 만든다. */
-export function liquidGeometry(s: GlassShape, bands: LiquidBand[], inset = 0.006) {
-  const yTop = bands[bands.length - 1].top;
-  const tTop = (yTop - s.floor) / s.height;
-  const rings = Math.max(4, Math.ceil(tTop * 48));
-  const pts: THREE.Vector2[] = [new THREE.Vector2(0.0001, s.floor + 0.002)];
-  for (let i = 0; i <= rings; i++) {
-    const t = (i / rings) * tTop;
-    pts.push(new THREE.Vector2(Math.max(0.001, s.r(t) - inset), s.floor + t * s.height));
-  }
-  const side = new THREE.LatheGeometry(pts, 64);
-  const pos = side.getAttribute('position');
-  const colors = new Float32Array(pos.count * 3);
-  const c = new THREE.Color();
-  const depth = Math.max(0.05, yTop - s.floor);
-  for (let i = 0; i < pos.count; i++) {
-    const y = pos.getY(i);
-    colorAt(bands, y, c);
-    // 깊은 바닥 쪽은 조금 어둡게 해서 술에 깊이감을 준다.
-    c.multiplyScalar(0.72 + 0.28 * Math.min(1, (y - s.floor) / depth));
-    colors.set([c.r, c.g, c.b], i * 3);
-  }
-  side.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-  const cap = new THREE.CircleGeometry(Math.max(0.001, s.r(tTop) - inset), 64);
-  cap.rotateX(-Math.PI / 2);
-  cap.translate(0, yTop, 0);
-  return { side, cap, yTop, capRadius: s.r(tTop) - inset };
-}
-
-const BLEND = 0.035;
-function colorAt(bands: LiquidBand[], y: number, out: THREE.Color) {
-  let i = bands.findIndex((b) => y <= b.top + 1e-6);
-  if (i < 0) i = bands.length - 1;
-  out.copy(bands[i].color);
-  // 경계 근처에서는 아래·위 층 색을 부드럽게 섞는다.
-  if (i > 0) {
-    const d = y - bands[i - 1].top;
-    if (d < BLEND) out.lerpColors(bands[i - 1].color, bands[i].color, 0.5 + (d / BLEND) * 0.5);
-  }
-  if (i < bands.length - 1) {
-    const d = bands[i].top - y;
-    if (d < BLEND) out.lerpColors(bands[i + 1].color, bands[i].color, 0.5 + (d / BLEND) * 0.5);
-  }
-  return out;
-}
-
-export function liquidMaterials() {
-  const side = new THREE.MeshPhysicalMaterial({
-    vertexColors: true,
-    // 조명에 하얗게 바래지 않도록 난반사는 낮추고, 색은 자체 발광(stage의 glowFromVertexColor)으로 살린다.
-    color: 0x999999,
-    roughness: 0.3,
-    clearcoat: 0.4,
-    clearcoatRoughness: 0.15,
-    envMapIntensity: 0.45,
-  });
-  // 수면은 백바 조명을 정면으로 비추는 각도라 반사가 강하면 하얗게 날아간다.
-  // 정반사를 약하게 퍼뜨려 술 색이 보이게 한다.
-  const cap = new THREE.MeshPhysicalMaterial({
-    color: 0xffffff,
-    roughness: 0.42,
-    specularIntensity: 0.3,
-    envMapIntensity: 0.2,
-  });
-  return { side, cap };
-}
-
 // ── 병 ────────────────────────────────────────────────
 
 type BottleKind = 'tall' | 'decanter' | 'wine' | 'flask' | 'jug' | 'soda' | 'cream' | 'dasher';
@@ -281,6 +139,7 @@ const BOTTLE_PROFILES: Record<BottleKind, { pts: THREE.Vector2[]; label: [number
 };
 
 const GOLD = new THREE.MeshStandardMaterial({ color: 0xe0b45a, metalness: 1, roughness: 0.28 });
+GOLD.userData.shared = true;
 const CORK = new THREE.MeshStandardMaterial({ color: 0x9a6b44, roughness: 0.8 });
 const labelMaterials = new Map<string, THREE.MeshStandardMaterial>();
 
