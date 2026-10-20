@@ -26,8 +26,8 @@ export function defs() {
       <rect width="120" height="80" fill="#1d1c1b"/>
       <path d="M60,0 L120,40 L60,80 L0,40 Z" fill="#2a2928"/>
     </pattern>
-    <pattern id="pat-band" width="40" height="40" patternUnits="userSpaceOnUse">
-      <rect width="40" height="40" fill="${INK}"/><path d="M20,0 L40,20 L20,40 L0,20 Z" fill="${RED}"/>
+    <pattern id="pat-band" width="40" height="36" y="668" patternUnits="userSpaceOnUse">
+      <rect width="40" height="36" fill="${INK}"/><path d="M20,3 L36,18 L20,33 L4,18 Z" fill="#e2dccf"/>
     </pattern>
     <pattern id="pat-hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
       <rect width="10" height="10" fill="none"/><rect width="3" height="10" fill="#3d3b39"/>
@@ -193,7 +193,7 @@ function counter() {
   return `<g class="counter">
     <rect x="520" y="660" width="1640" height="240" fill="#232221"/>
     <rect x="520" y="660" width="1640" height="240" fill="url(#pat-hatch)" opacity="0.6"/>
-    <rect x="520" y="684" width="1640" height="40" fill="url(#pat-band)" stroke="${INK}" stroke-width="3"/>
+    <rect x="520" y="668" width="1640" height="36" fill="url(#pat-band)" stroke="${INK}" stroke-width="3"/>
     ${panels}
     <path d="M520,862 L2160,862" stroke="${LGRAY}" stroke-width="8"/>
     <path d="M500,632 L2160,632 L2160,662 L500,662 Z" fill="#e2dccf" stroke="${INK}" stroke-width="5"/>
@@ -202,14 +202,16 @@ function counter() {
 }
 
 function stool(x: number) {
-  // 방석을 손님 엉덩이보다 넓게 그려, 앉은 손님 양옆으로 빨간 방석이 보이게 한다.
+  // 방석을 손님 엉덩이보다 넓고 두껍게 그려, 앉은 손님 양옆과 무릎 아래로 빨간 방석이 보이게 한다.
+  // 카운터 앞 띠는 방석보다 위에 두고 종이색 마름모로 칠해 빨간 방석과 섞이지 않게 했다.
   return `<g class="stool" data-seat-x="${x}">
     <path d="M${x - 6},${SEAT_Y + 10} L${x - 6},${FLOOR_Y - 8} L${x + 6},${FLOOR_Y - 8} L${x + 6},${SEAT_Y + 10} Z" fill="${INK}" stroke="${LGRAY}" stroke-width="3"/>
     <ellipse cx="${x}" cy="840" rx="46" ry="10" fill="none" stroke="${LGRAY}" stroke-width="6"/>
     <ellipse cx="${x}" cy="${FLOOR_Y - 4}" rx="52" ry="11" fill="${INK}" stroke="${LGRAY}" stroke-width="4"/>
-    <path d="M${x - 84},${SEAT_Y} L${x - 79},${SEAT_Y + 18} Q${x},${SEAT_Y + 40} ${x + 79},${SEAT_Y + 18} L${x + 84},${SEAT_Y} Z" fill="#8e1218" stroke="${INK}" stroke-width="4"/>
-    <ellipse cx="${x}" cy="${SEAT_Y}" rx="84" ry="18" fill="${RED}" stroke="${INK}" stroke-width="4"/>
-    <path d="M${x - 56},${SEAT_Y - 4} Q${x},${SEAT_Y - 12} ${x + 50},${SEAT_Y - 5}" fill="none" stroke="#ff7a7f" stroke-width="3"/>
+    <path d="M${x - 98},${SEAT_Y} L${x - 92},${SEAT_Y + 26} Q${x},${SEAT_Y + 56} ${x + 92},${SEAT_Y + 26} L${x + 98},${SEAT_Y} Z" fill="#8e1218" stroke="${INK}" stroke-width="4"/>
+    <path d="M${x - 94},${SEAT_Y + 14} Q${x},${SEAT_Y + 42} ${x + 94},${SEAT_Y + 14}" fill="none" stroke="${INK}" stroke-width="2.5" stroke-dasharray="6 6"/>
+    <ellipse cx="${x}" cy="${SEAT_Y}" rx="98" ry="20" fill="${RED}" stroke="${INK}" stroke-width="4"/>
+    <path d="M${x - 66},${SEAT_Y - 5} Q${x},${SEAT_Y - 14} ${x + 58},${SEAT_Y - 6}" fill="none" stroke="#ff7a7f" stroke-width="3"/>
   </g>`;
 }
 

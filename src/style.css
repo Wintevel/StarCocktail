@@ -427,13 +427,16 @@ button:disabled {
   filter: url(#sticker-hot);
 }
 
-/* 서 있는 다리 / 앉은 다리 */
+/* 서 있는 다리 / 앉은 다리 (긴 옷자락도 앉으면 짧은 벌로 바꾼다) */
 .patron .legs-sit,
-.patron.seated .legs-stand {
+.patron .sit-only,
+.patron.seated .legs-stand,
+.patron.seated .stand-only {
   display: none;
 }
 
-.patron.seated .legs-sit {
+.patron.seated .legs-sit,
+.patron.seated .sit-only {
   display: inline;
 }
 
@@ -2727,6 +2730,13 @@ body[data-view="mix"] .wipe-edge {
 
   .clip .checks {
     font-size: 12px;
+  }
+
+  /* 좁은 화면에서는 위쪽 결과 기사와 겹치지 않게 아래(안내 띠 위)에서 올라온다 */
+  .toast {
+    top: auto;
+    bottom: 132px;
+    transform: translate(-50%, 10px) rotate(-1deg);
   }
 
   .clip-line {

@@ -22,6 +22,8 @@ export interface Rig {
   top: number;
   /** 들고 나가는 잔을 쥐는 손 위치 */
   hand: [number, number];
+  /** 앉았을 때 방석 윗면에 닿는 높이 (그림 좌표): 엉덩이 기준점을 이만큼 올려 앉힌다 */
+  seat: number;
   svg: string;
 }
 
@@ -106,7 +108,7 @@ interface LegOpts {
   top?: number;
   len: number;
   gap?: number;
-  /** 앉았을 때 발끝까지(스툴 발판에 닿게) */
+  /** 앉았을 때 발끝까지(기본은 스툴 발판에 닿는 길이, 작은 손님은 짧게 해 발이 뜨게) */
   sitLen?: number;
   w?: number;
   socks?: string;
@@ -117,6 +119,8 @@ interface LegOpts {
   lapHalf?: number;
   /** 앉았을 때 허벅지가 시작하는 높이(기본은 top) */
   sitTop?: number;
+  /** 치마처럼 무릎 아래로 늘어지는 길이 */
+  lapDrop?: number;
 }
 
 /** 선 다리 두 짝(걸을 때 따로 흔든다)과 앉은 다리(앞으로 나온 무릎 + 스툴 발판까지 내려온 정강이) */
@@ -139,8 +143,8 @@ function legs(o: LegOpts) {
     return `${path(`M${x0},${t} L${x0 + 1},${bottom - 8} L${x1 - 1},${bottom - 8} L${x1},${t} Z`, o.pants, out, 3.5)}${sockAt(x0, x1, bottom)}${shoeAt(x0, x1, side, bottom)}`;
   };
   // 앉은 다리: 허벅지는 앞으로 나와 무릎 덩어리로 보이고, 정강이는 조금 벌어져 스툴 발판까지 내려온다.
-  const sitLen = o.sitLen ?? 118;
   const st = o.sitTop ?? top;
+  const sitLen = o.sitLen ?? st + 112;
   const kneeY = st + 30;
   const half = o.lapHalf ?? g + w + 5;
   const lapFill = o.lap ?? o.pants;
@@ -153,8 +157,10 @@ function legs(o: LegOpts) {
     return `${path(`M${kx - w / 2},${kneeY - 2} L${x0 + 1},${sitLen - 8} L${x1 - 1},${sitLen - 8} L${kx + w / 2},${kneeY - 2} Z`, o.pants, out, 3.5)}${sockAt(x0, x1, sitLen)}${shoeAt(x0, x1, side, sitLen)}`;
   };
   // 무릎 덩어리: 위쪽 가장자리는 선을 긋지 않아 옷자락과 이어져 보인다.
-  const lapShape = `M${-half},${st - 10} L${half},${st - 10} C${half + 7},${kneeY - 14} ${half + 5},${kneeY + 4} ${half - 9},${kneeY + 7} L${-half + 9},${kneeY + 7} C${-half - 5},${kneeY + 4} ${-half - 7},${kneeY - 14} ${-half},${st - 10} Z`;
-  const lapEdge = `M${half},${st - 10} C${half + 7},${kneeY - 14} ${half + 5},${kneeY + 4} ${half - 9},${kneeY + 7} L${-half + 9},${kneeY + 7} C${-half - 5},${kneeY + 4} ${-half - 7},${kneeY - 14} ${-half},${st - 10}`;
+  const hem = kneeY + 7 + (o.lapDrop ?? 0);
+  const flare = o.lapDrop ? 6 : 0;
+  const lapEdge = `M${half},${st - 10} C${half + 7 + flare},${kneeY - 14} ${half + 5 + flare},${hem - 3} ${half - 9 + flare},${hem} L${-half + 9 - flare},${hem} C${-half - 5 - flare},${hem - 3} ${-half - 7 - flare},${kneeY - 14} ${-half},${st - 10}`;
+  const lapShape = `${lapEdge} Z`;
   const lap =
     `<path d="${lapShape}" fill="${lapFill}"/>` +
     line(lapEdge, lapOut, 3.5) +
@@ -163,12 +169,16 @@ function legs(o: LegOpts) {
   return {
     stand: `<g class="legs-stand"><g class="leg leg-l">${one(-1, L, top)}</g><g class="leg leg-r">${one(1, L, top)}</g></g>`,
     sit: `<g class="legs-sit"><g class="leg leg-l">${shin(-1)}</g><g class="leg leg-r">${shin(1)}</g>${lap}</g>`,
+    seat: st,
   };
 }
 
 /** 뒤에서 앞으로: 뒷머리 → 선 다리 → 몸(팔·몸통·머리·소품) → 앉은 무릎(앉으면 앞으로 나와 옷자락을 덮는다) */
-function assemble(parts: { legs: { stand: string; sit: string }; back?: string; body: string; head: string; front?: string; arms: { l: string; r: string } }) {
-  return `${parts.back ?? ''}${parts.legs.stand}<g class="p-body">${parts.arms.l}${parts.body}${parts.arms.r}${parts.head}${parts.front ?? ''}</g>${parts.legs.sit}`;
+function assemble(parts: { legs: { stand: string; sit: string; seat: number }; back?: string; body: string; head: string; front?: string; arms: { l: string; r: string } }) {
+  return {
+    svg: `${parts.back ?? ''}${parts.legs.stand}<g class="p-body">${parts.arms.l}${parts.body}${parts.arms.r}${parts.head}${parts.front ?? ''}</g>${parts.legs.sit}`,
+    seat: parts.legs.seat,
+  };
 }
 
 // ── 단골 여덟 명 ───────────────────────────────────
@@ -203,7 +213,7 @@ function mio(): Rig {
     leg: 160,
     top: -262,
     hand: [40, 12],
-    svg: assemble({ back, body, arms: a, head: head('', front, { eye: 'sleepy' }), legs: legs({ pants: INK, outline: INK, shoe: RED, len: 160, top: 28, lap: CREAM, lapOutline: RED, lapHalf: 50 }) }),
+    ...assemble({ back, body, arms: a, head: head('', front, { eye: 'sleepy' }), legs: legs({ pants: INK, outline: INK, shoe: RED, len: 160, top: 28, lap: INK, lapOutline: INK, lapHalf: 44 }) }),
   };
 }
 
@@ -232,7 +242,7 @@ function grey(): Rig {
     leg: 166,
     top: -252,
     hand: [-42, 12],
-    svg: assemble({
+    ...assemble({
       back,
       body,
       front: umbrella,
@@ -257,10 +267,12 @@ function serena(): Rig {
     circle(18, -150, 1.8, INK, INK, 0);
   const skin = path('M-42,-118 C-20,-124 20,-124 42,-118 L44,-98 L-44,-98 Z', CREAM, RED, 4);
   const dress = 'M-44,-100 L44,-100 C48,-60 46,-20 52,10 C62,60 62,100 58,114 L-58,114 C-62,100 -62,60 -52,10 C-46,-20 -48,-60 -44,-100 Z';
+  // 앉으면 긴 치맛자락은 무릎 위로 덮이므로(앉은 무릎이 치마 모양으로 늘어진다) 허리 아래를 짧게 끊은 옷으로 바꾼다.
+  const dressSit = 'M-44,-100 L44,-100 C48,-60 46,-20 52,10 L54,26 L-54,26 L-52,10 C-46,-20 -48,-60 -44,-100 Z';
   const body =
     skin +
-    path(dress, CREAM, RED, 4) +
-    line('M-30,-92 C-26,-40 -32,20 -40,108 M30,-92 C26,-40 32,20 40,108', RED, 2.5, ' stroke-dasharray="7 6"') +
+    `<g class="stand-only">${path(dress, CREAM, RED, 4)}${line('M-30,-92 C-26,-40 -32,20 -40,108 M30,-92 C26,-40 32,20 40,108', RED, 2.5, ' stroke-dasharray="7 6"')}</g>` +
+    `<g class="sit-only">${path(dressSit, CREAM, RED, 4)}${line('M-30,-92 C-26,-40 -32,0 -34,22 M30,-92 C26,-40 32,0 34,22', RED, 2.5, ' stroke-dasharray="7 6"')}</g>` +
     path('M0,-104 L9,-92 L0,-80 L-9,-92 Z', RED, INK, 2.5);
   // 어깨는 드러나고 팔꿈치부터 검은 장갑
   const a = arms(CREAM, RED, INK, 38, 42);
@@ -272,12 +284,12 @@ function serena(): Rig {
     leg: 162,
     top: -224,
     hand: [38, 12],
-    svg: assemble({
+    ...assemble({
       back: backHair,
       body,
       arms: a,
       head: head('', front, { eye: 'round', lashes: true, lips: true }),
-      legs: legs({ pants: CREAM, outline: RED, shoe: RED, len: 162, top: 90, w: 12, gap: 6, sitLen: 122, lapHalf: 54, sitTop: 22 }),
+      legs: legs({ pants: CREAM, outline: RED, shoe: RED, len: 162, top: 90, w: 12, gap: 6, lapHalf: 54, sitTop: 22, lapDrop: 26 }),
     }),
   };
 }
@@ -311,7 +323,7 @@ function evan(): Rig {
     leg: 166,
     top: -250,
     hand: [40, 12],
-    svg: assemble({
+    ...assemble({
       back,
       body,
       arms: arms(LGRAY, INK, CREAM),
@@ -352,7 +364,7 @@ function bolt(): Rig {
     leg: 160,
     top: -242,
     hand: [48, 12],
-    svg: assemble({
+    ...assemble({
       back,
       body,
       arms: a,
@@ -392,7 +404,7 @@ function norma(): Rig {
     leg: 168,
     top: -244,
     hand: [34, 12],
-    svg: assemble({
+    ...assemble({
       back,
       body,
       front: clip,
@@ -434,12 +446,12 @@ function pipi(): Rig {
     leg: 116,
     top: -246,
     hand: [36, 12],
-    svg: assemble({
+    ...assemble({
       back,
       body,
       arms: arms(RED, INK, CREAM, 36, 40),
       head: head('', front, { eye: 'big' }),
-      legs: legs({ pants: CREAM, outline: RED, shoe: INK, len: 116, top: 18, w: 15, gap: 5, sitLen: 92, socks: 'url(#pat-stripe)', lapHalf: 34 }),
+      legs: legs({ pants: CREAM, outline: RED, shoe: INK, len: 116, top: 18, w: 15, gap: 5, sitLen: 84, socks: 'url(#pat-stripe)', lapHalf: 34 }),
     }),
   };
 }
@@ -464,7 +476,7 @@ function leila(): Rig {
     leg: 166,
     top: -262,
     hand: [-40, 12],
-    svg: assemble({
+    ...assemble({
       back,
       body,
       front: baton,

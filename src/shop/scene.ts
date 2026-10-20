@@ -19,7 +19,7 @@ const SAY_MS = 3200;
 /** 화면에 꼭 보여야 하는 영역: 가로 화면은 문·창·스툴 전부, 세로 화면은 스툴 넷과 카운터 */
 const ESSENTIAL = {
   wide: { x: -150, y: 40, w: 1800, h: 940 },
-  tall: { x: 540, y: 330, w: 960, h: 660 },
+  tall: { x: 566, y: 330, w: 908, h: 660 },
 };
 
 type ModeName = 'enter' | 'hop' | 'sit' | 'hopdown' | 'leave';
@@ -318,7 +318,8 @@ export class ShopScene {
 
   private step(v: Vis, now: number) {
     const t = now - v.t0;
-    const seatHip = SEAT_Y - 2;
+    // 엉덩이 아래(허벅지 시작)가 방석 윗면에 살짝 묻히게
+    const seatHip = SEAT_Y + 4 - v.rig.seat * v.rig.scale;
     const stand = this.standHip(v);
     switch (v.mode) {
       case 'enter': {
