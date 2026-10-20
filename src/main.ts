@@ -84,16 +84,27 @@ import {
   arrivalsFor,
   clockLabel,
   DAY_MINUTES,
+  drainPatience,
+  IMPATIENT_AT,
+  pickSeat,
   REAL_MS_PER_MINUTE,
+  SEATS,
   shiftStage,
 } from './shift';
-import { renderIcons } from './three/icons';
-import { type GlassAnchor, Stage3D, type Target, type View } from './three/stage';
+import { type Mood, rigFor } from './shop/art';
+import { ShopScene } from './shop/scene';
+import { type GlassAnchor, Stage3D, type Target, type View as StageView } from './three/stage';
+import { icons } from './ui/icons2d';
+import { ransom } from './ui/ransom';
 
-/** wait: 가게는 열려 있지만 카운터에 손님이 없다. */
-type Phase = 'wait' | 'glass' | 'ice' | 'mix' | 'garnish' | 'result';
+/** 가게 안(손님이 스툴에 앉는 2D 화면) / 제조대(3D) */
+type View = 'shop' | 'mix';
+/** 제조 단계. result는 자유 제조에서만 쓴다(영업 중에는 서빙하면 곧바로 가게로 돌아간다). */
+type Phase = 'glass' | 'ice' | 'mix' | 'garnish' | 'result';
 type Mode = 'shift' | 'free';
 type Overlay = 'title' | 'book' | 'dayStart' | 'dayEnd' | 'shop' | 'final' | null;
+/** 오늘 손님 한 명의 결과: 판정 / 돌려보냄 / 기다리다 떠남 */
+type Outcome = Grade | 'away' | 'left';
 
 interface ServeResult extends Judgement {
   recipeName: string | null;
@@ -103,24 +114,49 @@ interface ServeResult extends Judgement {
   away?: boolean;
 }
 
+/** 스툴 하나에 앉은 손님 */
+interface Seat {
+  /** 오늘 손님 순번 */
+  idx: number;
+  key: string;
+  /** 남은 인내(1 → 0) */
+  patience: number;
+  status: 'waiting' | 'leaving';
+  /** 아직 잔을 내준 적 없는 손님 */
+  first: boolean;
+  /** 초조하다는 말을 이미 했다 */
+  grumbled: boolean;
+  /** 떠나는 손님이 스툴을 비우는 시각(performance.now) */
+  freeAt: number;
+}
+
+/** 서빙한 뒤 가게 화면에 남는 결과 오려 붙이기 */
+interface Clip extends ServeResult {
+  name: string;
+  line: string;
+  n: number;
+}
+
 interface State {
   mode: Mode;
   overlay: Overlay;
+  view: View;
   phase: Phase;
   day: number;
   /** 오늘 손님 일정 */
   plan: DayPlan;
-  /** 지금(또는 다음에 올) 손님의 순번 */
-  visitIdx: number;
-  /** 카운터에 손님이 서 있다(주문 중이거나 막 서빙받음) */
-  present: boolean;
   /** 오늘 영업 중(영업 시작 ~ 마감) */
   open: boolean;
   /** 영업을 시작하고 흐른 실제 시간(ms). 오버레이가 열려 있거나 탭을 떠나 있으면 멈춘다. */
   clockMs: number;
   arrivals: Arrivals;
-  /** 다음 손님이 들어올 게임 시각(분) */
-  nextAt: number;
+  /** 다음에 들어올 손님 순번 */
+  nextVisit: number;
+  /** 앞 손님이 들어온 게임 시각(분) */
+  lastArrivalMin: number;
+  seats: (Seat | null)[];
+  /** 지금 잔을 만들어 주는 손님 순번(만드는 잔은 이 손님 것) */
+  active: number | null;
   money: number;
   upgrades: Set<UpgradeId>;
   early: Set<IngredientId>;
@@ -130,26 +166,30 @@ interface State {
   refills: Set<IngredientId>;
   stock: Stock;
   ledger: Ledger;
-  dayGrades: (Grade | undefined)[];
+  outcomes: (Outcome | undefined)[];
   perfectTotal: number;
+  /** 잔을 내준 적 있는 단골(세계관 2단계에서 이야기 진행에 쓴다) */
+  met: Set<string>;
   drink: Drink;
+  /** 자유 제조 결과 */
   result: ServeResult | null;
+  clip: Clip | null;
   discovered: Set<string>;
   started: boolean;
   drawer: boolean;
   /** 장식 화면에서 가운데에 놓인 장식 카드 */
   garnishSel: number;
-  /** 손님이 자리에 도착해 말풍선을 띄울 시각 */
-  bubbleAt: number;
   /** 레시피북을 열 때 강조할 레시피(레시피 이름 주문) */
   bookFocus: string | null;
 }
 
 const RECIPE_KEY = 'starcocktail.recipes';
-/** 손님이 걸어 들어와 자리에 설 때까지 걸리는 시간(ms). 그 뒤에 주문 말풍선이 뜬다. */
-const ARRIVE_MS = 2900;
 /** 돌려보낸 손님이 남기는 말 */
 const AWAY_LINE = '아쉽네요… 다음에 다시 올게요.';
+/** 가게 ↔ 제조대 화면 넘김 시간(ms, style.css의 --wipe와 같게) */
+const WIPE_MS = 420;
+/** 반응을 마친 손님이 스툴에서 내려와 자리가 빌 때까지(ms) */
+const SEAT_FREE_MS = 2900;
 
 function loadDiscovered(): Set<string> {
   try {
@@ -168,18 +208,22 @@ function saveDiscovered(set: Set<string>) {
   }
 }
 
+const emptySeats = () => Array.from<Seat | null>({ length: SEATS }).fill(null);
+
 const state: State = {
   mode: 'shift',
   overlay: 'title',
-  phase: 'wait',
+  view: 'shop',
+  phase: 'glass',
   day: 1,
   plan: planFor(1),
-  visitIdx: 0,
-  present: false,
   open: false,
   clockMs: 0,
   arrivals: arrivalsFor(1, planFor(1).visits.length),
-  nextAt: Infinity,
+  nextVisit: 0,
+  lastArrivalMin: 0,
+  seats: emptySeats(),
+  active: null,
   money: START_MONEY,
   upgrades: new Set(),
   early: new Set(),
@@ -187,23 +231,39 @@ const state: State = {
   refills: new Set(),
   stock: {},
   ledger: emptyLedger(),
-  dayGrades: [],
+  outcomes: [],
   perfectTotal: 0,
+  met: new Set(),
   drink: emptyDrink(),
   result: null,
+  clip: null,
   discovered: loadDiscovered(),
   started: false,
   drawer: false,
   garnishSel: 0,
-  bubbleAt: 0,
   bookFocus: null,
 };
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
-  <div class="stage3d" id="stage" aria-label="바 카운터: 왼쪽 잔 쟁반, 가운데 잔, 오른쪽 병 진열대와 레시피북"></div>
+  <div class="shop-view" id="shop" aria-label="별빛 바 가게 안: 스툴 네 개에 손님이 앉는다"></div>
+  <section class="mix-view" id="mixView" aria-label="제조대: 왼쪽 잔 쟁반, 가운데 잔, 오른쪽 병 진열대">
+    <div class="mix-bg" aria-hidden="true">
+      <div class="mb-paper"></div>
+      <div class="mb-slab"></div>
+      <div class="mb-dots"></div>
+      <div class="mb-shard s1"></div>
+      <div class="mb-shard s2"></div>
+      <div class="mb-shard s3"></div>
+      <div class="mb-type">STAR<br />COCKTAIL</div>
+      <div class="mb-strip"><span>LAST TRAIN · NOCTURNE 7 · 별빛 바 · OPEN 18:00 — 04:00 · </span><span>LAST TRAIN · NOCTURNE 7 · 별빛 바 · OPEN 18:00 — 04:00 · </span></div>
+    </div>
+    <div class="stage3d" id="stage"></div>
+  </section>
+  <div class="wipe-edge" aria-hidden="true"></div>
   <header class="topbar" id="topbar"></header>
-  <section class="order-bubble" id="order" aria-live="polite"></section>
+  <nav class="seat-strip" id="seats" aria-label="스툴의 손님"></nav>
+  <section class="order-card" id="order" aria-live="polite"></section>
   <div class="hud" id="hud">
     <div class="meters" id="meters"></div>
     <div class="pourbar" id="pourbar"></div>
@@ -213,7 +273,7 @@ app.innerHTML = `
   </div>
   <p class="prompt" id="prompt"></p>
   <section class="result-card" id="result"></section>
-  <button class="book-icon" id="bookIcon" data-act="book" aria-label="레시피북 열기">📖</button>
+  <section class="clip" id="clip" aria-live="polite"></section>
   <aside class="drawer" id="drawer"></aside>
   <div class="tip-card" id="tip" hidden></div>
   <div class="overlay" id="overlay" hidden></div>
@@ -221,17 +281,19 @@ app.innerHTML = `
 `;
 
 const $ = (id: string) => document.getElementById(id)!;
+const shop = new ShopScene($('shop'));
 const stage = new Stage3D($('stage'));
-const icons = renderIcons();
-const icon = (key: string) => `<img class="icon3d" src="${icons[key] ?? ''}" alt="" draggable="false" />`;
+stage.setActive(false);
+const ICONS = icons();
+const icon = (key: string) => `<span class="icon2d">${ICONS[key] ?? ''}</span>`;
 const coin = (n: number) => `<span class="num">✦ ${n}</span>`;
 
 const shift = () => state.mode === 'shift';
-const visit = (): Visit | null => (shift() && state.present ? (state.plan.visits[state.visitIdx] ?? null) : null);
-const customer = (): Customer | null => {
-  const v = visit();
-  return v ? CUSTOMER_BY_ID[v.customer] : null;
-};
+const visitAt = (idx: number): Visit => state.plan.visits[idx];
+const customerAt = (idx: number): Customer => CUSTOMER_BY_ID[visitAt(idx).customer];
+/** 지금 잔을 만들어 주는 손님의 주문 */
+const activeVisit = (): Visit | null => (shift() && state.active !== null ? (visitAt(state.active) ?? null) : null);
+const seatOfVisit = (idx: number | null) => (idx === null ? null : (state.seats.find((s) => s?.idx === idx) ?? null));
 const unlocked = (): Unlocks => unlocksFor(state.day, state.early);
 const isMobile = () => window.matchMedia('(max-width: 860px)').matches;
 /** 오늘 게임 시각(18:00부터 흐른 분) */
@@ -240,30 +302,62 @@ const minute = () => Math.min(DAY_MINUTES, state.clockMs / REAL_MS_PER_MINUTE);
 const toneOn = () => state.day >= TONE_DAY;
 /** 자유 제조에서는 병이 줄지 않는다. */
 const stockOf = (id: IngredientId) => (shift() ? stockLeft(state.stock, id) : STOCK_MAX);
-/** 아직 오지 않은 오늘 손님 수 */
-const comingCount = () => state.plan.visits.length - state.visitIdx - (state.present ? 1 : 0);
+/** 아직 들어오지 않은 오늘 손님 수 */
+const comingCount = () => state.plan.visits.length - state.nextVisit;
+/** 스툴에서 주문을 기다리는 손님들 */
+const waitingSeats = () => state.seats.filter((s): s is Seat => !!s && s.status === 'waiting');
 
-// ── 3D 무대와 연결 ─────────────────────────────────────────
+/** 손님 상반신(주문 카드)·얼굴(스툴 목록) 그림. 가게 그림과 같은 SVG를 잘라 쓴다. */
+function portrait(id: string, mood: Mood = 'idle', crop: 'bust' | 'head' = 'bust') {
+  const rig = rigFor(id);
+  const top = rig.top - 6;
+  const box = crop === 'bust' ? `-84 ${top} 168 ${-top - 40}` : `-62 ${top + 4} 124 ${Math.min(124, -top - 110)}`;
+  return `<svg class="portrait ${crop}" viewBox="${box}" data-mood="${mood}" aria-hidden="true" focusable="false">${rig.svg}</svg>`;
+}
+
+// ── 3D 제조대와 연결 ─────────────────────────────────────────
 
 stage.onIdle = () => render();
 stage.onBottleDrop = (id) => {
-  if (state.phase !== 'mix' || state.overlay || stage.busy || !canPour(state.drink) || stockOf(id) <= 0) return false;
+  if (state.view !== 'mix' || state.phase !== 'mix' || state.overlay || stage.busy || !canPour(state.drink) || stockOf(id) <= 0) return false;
   showTip(null, 0, 0);
   doPour(id);
   render();
   return true;
 };
 stage.onGlassPick = (id) => {
-  if (state.phase !== 'glass' || state.overlay) return;
+  if (state.view !== 'mix' || state.phase !== 'glass' || state.overlay) return;
   if (!unlocked().glasses.has(id)) return;
   state.drink = { ...emptyDrink(), glass: id };
   state.phase = 'ice';
   showTip(null, 0, 0);
   render();
 };
-stage.onBookOpen = () => openBook();
 stage.onHover = (t, x, y) => showTip(t, x, y);
 stage.onLayout = (a) => layoutHud(a);
+
+// ── 가게 화면과 연결 ─────────────────────────────────────────
+
+shop.hooks.onPick = (key) => {
+  const i = state.seats.findIndex((s) => s?.key === key);
+  if (i >= 0) pickPatron(i);
+};
+
+let viewTimer = 0;
+/** 가게 ↔ 제조대. 넘기는 동안 두 화면이 함께 보이고, 다 덮인 쪽은 그리기를 멈춘다. */
+function goView(v: View) {
+  if (state.view === v) return;
+  state.view = v;
+  showTip(null, 0, 0);
+  clearTimeout(viewTimer);
+  if (v === 'mix') {
+    stage.setActive(true);
+    viewTimer = window.setTimeout(() => state.view === 'mix' && shop.setVisible(false), WIPE_MS + 80);
+  } else {
+    shop.setVisible(true);
+    viewTimer = window.setTimeout(() => state.view === 'shop' && stage.setActive(false), WIPE_MS + 80);
+  }
+}
 
 function stockPips(id: IngredientId) {
   const left = stockOf(id);
@@ -272,7 +366,7 @@ function stockPips(id: IngredientId) {
 
 function showTip(t: Target | null, x: number, y: number) {
   const el = $('tip');
-  if (!t || state.overlay) {
+  if (!t || state.overlay || state.view !== 'mix') {
     el.hidden = true;
     return;
   }
@@ -292,12 +386,10 @@ function showTip(t: Target | null, x: number, y: number) {
       <strong>${ing.name}</strong><small>${ing.kind}</small>
       <span class="deltas">${deltaChips(t.id)}</span>
       ${stockLine}${how}`;
-  } else if (t.kind === 'glass') {
+  } else {
     const g = GLASS_BY_ID[t.id];
     const open = unlocked().glasses.has(t.id);
     el.innerHTML = `<strong>${g.name}</strong><small>${open ? `재료 ${g.capacity}번까지` : `<span class="lock">Day ${GLASS_DAY[t.id]} 입고</span>`}</small>`;
-  } else {
-    el.innerHTML = `<strong>레시피북</strong><small>${state.discovered.size} / ${RECIPES.length} 기록 · 눌러서 펼치기</small>`;
   }
   el.hidden = false;
   const w = el.offsetWidth;
@@ -305,20 +397,24 @@ function showTip(t: Target | null, x: number, y: number) {
   el.style.top = `${Math.max(8, y - el.offsetHeight - 12)}px`;
 }
 
-/** 지금 단계에 맞는 카메라 시선 */
-function viewFor(): View {
-  if (state.overlay || state.phase === 'wait' || state.phase === 'glass' || state.phase === 'result') return 'greet';
-  return state.phase === 'garnish' ? 'garnish' : 'mix';
+/** 지금 단계에 맞는 3D 카메라 시선 */
+function stageView(): StageView {
+  if (state.phase === 'glass') return 'pick';
+  return state.phase === 'garnish' || state.phase === 'result' ? 'garnish' : 'mix';
 }
 
 /** 병 진열대·잔 쟁반·카메라처럼 DOM 밖(3D)에 반영할 것들 */
 function syncStage() {
-  const free = !state.overlay;
+  const free = !state.overlay && state.view === 'mix';
   stage.setStock(shift() ? Object.fromEntries([...unlocked().ingredients].map((id) => [id, stockOf(id) / STOCK_MAX])) : null);
   stage.setPourable(state.phase === 'mix' && free && canPour(state.drink) && !stage.busy);
   stage.setGlassShelf(unlocked().glasses, state.drink.glass, state.phase === 'glass' && free);
-  stage.bookEnabled = free;
-  stage.setView(viewFor());
+  stage.setView(stageView());
+}
+
+function syncShop() {
+  shop.interactive = !state.overlay && state.view === 'shop' && shift() && state.open;
+  shop.setSelected(seatOfVisit(state.active)?.key ?? null);
 }
 
 let anchor: GlassAnchor | null = null;
@@ -344,7 +440,7 @@ function layoutHud(a: GlassAnchor | null = anchor) {
     if (docked) {
       meters.style.left = meters.style.top = '';
     } else {
-      place(meters, room - w, midY - meters.offsetHeight / 2);
+      place(meters, room - w, Math.max(midY - meters.offsetHeight / 2, 250));
     }
   }
 
@@ -361,26 +457,26 @@ function layoutHud(a: GlassAnchor | null = anchor) {
   );
 
   const ice = $('ice');
-  place(ice, clampX(a.x - ice.offsetWidth / 2, ice.offsetWidth), Math.max(70, a.top - ice.offsetHeight - 24));
+  place(ice, clampX(a.x - ice.offsetWidth / 2, ice.offsetWidth), Math.max(isMobile() ? 230 : 120, a.top - ice.offsetHeight - 24));
 
   // 장식 카드는 잔 위에 부채꼴로 펼친다. 가운데 카드가 가장 높고 크다.
   const arc = $('garnish');
   const cards = [...arc.querySelectorAll<HTMLElement>('.g-card')];
   const R = Math.min(300, window.innerWidth * 0.36);
-  const cy = Math.max(170, a.top - 30);
+  const cy = Math.max(isMobile() ? 300 : 190, a.top - 30);
   cards.forEach((c, i) => {
     const k = i - state.garnishSel;
     const th = k * 0.42;
     const x = a.x + Math.sin(th) * R;
     const y = cy - Math.cos(th) * 70;
     c.style.transform = `translate(${Math.round(x - c.offsetWidth / 2)}px, ${Math.round(y - c.offsetHeight)}px) scale(${k === 0 ? 1 : 0.8}) rotate(${th * 14}deg)`;
-    c.style.opacity = Math.abs(k) > 2 ? '0' : k === 0 ? '1' : '0.75';
+    c.style.opacity = Math.abs(k) > 2 ? '0' : k === 0 ? '1' : '0.8';
     c.style.pointerEvents = Math.abs(k) > 2 ? 'none' : '';
   });
   const arrows = arc.querySelectorAll<HTMLElement>('.g-arrow');
   if (arrows.length === 2) {
-    place(arrows[0], a.x - R - 70, cy - 70);
-    place(arrows[1], a.x + R + 26, cy - 70);
+    place(arrows[0], Math.max(8, a.x - R - 70), cy - 70);
+    place(arrows[1], Math.min(window.innerWidth - 52, a.x + R + 26), cy - 70);
   }
 }
 window.addEventListener('resize', () => layoutHud());
@@ -389,17 +485,22 @@ window.addEventListener('resize', () => layoutHud());
 
 function render() {
   // 무대를 먼저 갱신해야 연출 중(busy) 여부가 버튼 상태에 반영된다.
-  stage.update(state.drink);
+  // 가게 화면에 있는 동안에는 3D 잔을 바꾸지 않는다(서빙한 잔이 미끄러져 나가는 연출을 지킨다).
+  if (state.view === 'mix') stage.update(state.drink);
   renderTopbar();
+  renderSeatStrip();
   renderOrder();
   renderMeters();
   renderHud();
   renderResult();
+  renderClip();
   renderDrawer();
   renderOverlay();
   syncStage();
-  document.body.dataset.phase = state.overlay ? 'overlay' : state.phase;
-  document.body.dataset.view = viewFor();
+  syncShop();
+  document.body.dataset.phase = state.phase;
+  document.body.dataset.view = state.view;
+  document.body.dataset.overlay = state.overlay ?? '';
   layoutHud();
 }
 
@@ -410,14 +511,14 @@ function closeKind(): 'none' | 'early' | 'next' {
   return st === 'over' ? 'next' : st === 'closable' ? 'early' : 'none';
 }
 
-/** 지금 마감할 수 있는가: 주문을 받는 중인 손님이 있으면 그 손님을 보낸 뒤에 */
-const canCloseNow = () => !state.present || state.phase === 'result';
+/** 지금 마감할 수 있는가: 스툴에서 기다리는 손님을 모두 보낸 뒤에 */
+const canCloseNow = () => waitingSeats().length === 0;
 
 function closeButton() {
   const kind = closeKind();
   if (kind === 'none') return '';
   const can = canCloseNow();
-  const title = can ? '' : 'title="지금 손님을 보낸 뒤 마감할 수 있어요"';
+  const title = can ? '' : 'title="스툴에서 기다리는 손님을 모두 보낸 뒤 마감할 수 있어요"';
   if (kind === 'next') {
     return `<button class="primary close-btn pulse" data-act="close-day" ${can ? '' : 'disabled'} ${title}>다음 날로 →</button>`;
   }
@@ -428,24 +529,26 @@ function closeButton() {
 /** 시계가 한 칸 갈 때마다 전부 다시 그리지 않도록, 바뀐 부분만 고친다. */
 let topbarKey = '';
 function topbarState() {
-  return [state.mode, state.open, state.day, closeKind(), canCloseNow(), comingCount() === 0].join('|');
+  return [state.mode, state.open, state.day, state.started, closeKind(), canCloseNow(), comingCount() === 0, state.discovered.size, shiftStage(minute()) === 'over'].join('|');
 }
 
 function renderTopbar() {
   topbarKey = topbarState();
   const infinite = state.day > LAST_DAY;
-  const day = `<span class="c-day">Day ${state.day}${infinite ? '<small class="inf">∞</small>' : ''}</span>`;
   const over = shift() && state.open && shiftStage(minute()) === 'over';
   // 자유 제조에는 시계가 없다: 같은 자리에 모드 이름만 둔다.
   const clock =
     shift() && state.started
-      ? `<div class="clock" aria-label="영업 시계"><span class="c-icon">◷</span>${day}<span class="c-sep">·</span><span class="c-time ${over ? 'over' : ''}" id="clockTime">${clockLabel(minute())}</span></div>`
+      ? `<div class="clock" aria-label="영업 시계"><span class="c-day">DAY<b>${state.day}</b>${infinite ? '<small class="inf">∞</small>' : ''}</span><span class="c-time ${over ? 'over' : ''}" id="clockTime">${clockLabel(minute())}</span></div>`
       : `<div class="clock free" aria-label="자유 제조 중"><span class="c-day">자유 제조</span></div>`;
   $('topbar').innerHTML = `
-    <div class="brand"><span class="logo">✦</span> <span class="brand-en">StarCocktail</span> <small>별빛 바</small></div>
+    <div class="brand">${ransom('별빛 바', { seed: 5, cls: 'brand-rn' })}<span class="brand-en">STARCOCKTAIL</span></div>
     ${clock}
-    ${closeButton()}
-    <button class="ghost" data-act="menu">메뉴</button>`;
+    <div class="top-actions">
+      ${closeButton()}
+      ${state.started ? `<button class="secondary book-btn" data-act="book" aria-label="레시피북 열기"><span class="bk-ic" aria-hidden="true"></span><span class="bk-label">레시피북</span> <small class="num">${state.discovered.size}/${RECIPES.length}</small></button>` : ''}
+      <button class="ghost" data-act="menu">메뉴</button>
+    </div>`;
 }
 
 function updateClock() {
@@ -457,7 +560,7 @@ function updateClock() {
   if (el) el.textContent = clockLabel(minute());
 }
 
-const orange = (text: string, ok: boolean, title: string) => `<mark class="cond ${ok ? 'ok' : ''}" title="${title}">${text}</mark>`;
+const mark = (text: string, ok: boolean, title: string) => `<mark class="cond ${ok ? 'ok' : ''}" title="${title}">${text}</mark>`;
 
 /** 주문 표현에 따라 대사(line)와 그 아래 덧붙일 것(extra)을 만든다. */
 function orderView(v: Visit, attrs: ReturnType<typeof computeAttrs>) {
@@ -467,7 +570,7 @@ function orderView(v: Visit, attrs: ReturnType<typeof computeAttrs>) {
     case 'speech':
       return {
         line: speechParts(v.greeting)
-          .map((p) => (p.cond === null ? p.text : orange(p.text, ok(p.cond), describe(v.order[p.cond], true))))
+          .map((p) => (p.cond === null ? p.text : mark(p.text, ok(p.cond), describe(v.order[p.cond], true))))
           .join(''),
         extra: '',
       };
@@ -475,8 +578,8 @@ function orderView(v: Visit, attrs: ReturnType<typeof computeAttrs>) {
       const r = RECIPES.find((x) => x.id === v.recipe)!;
       const all = started && v.order.every((_, i) => ok(i));
       return {
-        line: v.greeting.replace(`「${r.name}」`, orange(`「${r.name}」`, all, '레시피북에서 조건을 확인하세요')),
-        extra: `<div class="order-extra"><button class="chip book-chip" data-act="book" data-id="${r.id}">📖 레시피북에서 「${r.name}」 보기</button></div>`,
+        line: v.greeting.replace(`「${r.name}」`, mark(`「${r.name}」`, all, '레시피북에서 조건을 확인하세요')),
+        extra: `<div class="order-extra"><button class="chip book-chip" data-act="book" data-id="${r.id}">레시피북에서 「${r.name}」 보기</button></div>`,
       };
     }
     case 'vague':
@@ -490,44 +593,70 @@ function orderView(v: Visit, attrs: ReturnType<typeof computeAttrs>) {
   }
 }
 
-/** 손님이 걸어 들어오는 중이라 말풍선을 아직 띄우지 않았다 */
-let bubbleWaiting = false;
-
+/** 제조대 위 주문 카드: 손님 얼굴·이름·칭호와 주문 */
 function renderOrder() {
-  bubbleWaiting = false;
   const el = $('order');
-  const c = customer();
-  const v = visit();
+  const v = activeVisit();
   const corner = state.phase === 'garnish';
-  el.className = `order-bubble ${corner ? 'corner' : ''} ${state.phase === 'mix' || state.phase === 'ice' ? 'slim' : ''} style-${v?.style ?? 'free'}`;
-  if (state.overlay) {
-    el.hidden = true;
-    return;
-  }
-  if (!c || !v) {
-    el.hidden = shift() || state.phase !== 'glass';
-    el.innerHTML = `
-      <div class="who"><strong>자유 제조</strong><span>주문 없이 실험하기</span></div>
-      <p class="line">마음대로 섞어 보세요. 이름 있는 조합을 만들면 레시피북에 기록돼요. 병은 줄지 않고 시계도 흐르지 않아요.</p>`;
-    return;
-  }
-  // 손님이 자리에 서기 전에는 말풍선을 띄우지 않는다(시계가 도착을 확인해 다시 그린다).
-  bubbleWaiting = state.bubbleAt > performance.now();
-  if (bubbleWaiting) {
+  el.className = `order-card ${corner ? 'corner' : ''} ${state.phase === 'mix' || state.phase === 'ice' ? 'slim' : ''} style-${v?.style ?? 'free'}`;
+  if (state.overlay || state.view !== 'mix' || state.phase === 'result') {
     el.hidden = true;
     return;
   }
   el.hidden = false;
-  const res = state.result;
-  const attrs = computeAttrs(state.drink);
-  const view = orderView(v, attrs);
-  const reacting = !!res && state.phase === 'result';
-  const line = reacting ? (res.away ? AWAY_LINE : c.reactions[res.grade]) : view.line;
+  if (!v) {
+    el.innerHTML = `
+      <div class="oc-main">
+        <div class="who">${ransom('자유 제조', { seed: 9 })}<span class="oc-title">주문 없이 실험하기</span></div>
+        <p class="line">마음대로 섞어 보세요. 이름 있는 조합을 만들면 레시피북에 기록돼요. 병은 줄지 않고 시계도 흐르지 않아요.</p>
+      </div>`;
+    return;
+  }
+  const c = CUSTOMER_BY_ID[v.customer];
+  const seat = seatOfVisit(state.active);
+  const view = orderView(v, computeAttrs(state.drink));
   el.innerHTML = `
-    <div class="who"><span class="dot" style="--c:${c.color}"></span><strong>${c.name}</strong><span>${c.title}</span></div>
-    <p class="line ${reacting ? 'react ' + res?.grade : ''}">${line}</p>
-    ${reacting && v.style !== 'chips' ? '' : view.extra}
-    ${state.phase !== 'result' ? '<button class="away-btn" data-act="turn-away" title="만들 수 없는 주문이면 사과하고 돌려보내요 (실패로 기록)">돌려보내기</button>' : ''}`;
+    <div class="oc-face">${portrait(c.id)}</div>
+    <div class="oc-main">
+      <div class="who">${ransom(c.name, { seed: c.id.charCodeAt(0) })}<span class="oc-title">${c.title}</span>${seat?.first ? '<span class="stamp">첫 손님</span>' : ''}</div>
+      <p class="line">${view.line}</p>
+      ${view.extra}
+    </div>
+    <div class="oc-actions">
+      <button class="ghost back-btn" data-act="to-shop-view" title="만들던 잔은 그대로 두고 가게를 둘러봐요">← 가게로</button>
+      <button class="away-btn" data-act="turn-away" title="만들 수 없는 주문이면 사과하고 돌려보내요 (수입 없음)">돌려보내기</button>
+    </div>`;
+}
+
+/** 제조대 위쪽의 스툴 네 칸: 누가 앉아 있고 얼마나 참고 있는지. 눌러서 다른 손님으로 바꿀 수 있다. */
+function renderSeatStrip() {
+  const el = $('seats');
+  el.hidden = !shift() || !state.open || state.view !== 'mix' || !!state.overlay;
+  if (el.hidden) return;
+  el.innerHTML = state.seats
+    .map((s, i) => {
+      if (!s) return `<span class="ss empty" aria-label="${i + 1}번 스툴 빈자리"><span class="ss-n num">${i + 1}</span></span>`;
+      const c = customerAt(s.idx);
+      const active = state.active === s.idx;
+      const gone = s.status !== 'waiting';
+      return `<button class="ss ${active ? 'active' : ''} ${gone ? 'gone' : ''} ${s.patience < IMPATIENT_AT ? 'low' : ''}" data-act="pick-seat" data-id="${i}" ${gone || active ? 'disabled' : ''}
+        aria-label="${i + 1}번 스툴 ${c.name}${active ? ', 지금 만드는 중' : gone ? ', 떠나는 중' : ', 눌러서 이 손님 주문 받기'}">
+        <span class="ss-face">${portrait(c.id, 'idle', 'head')}</span>
+        <span class="ss-name">${c.name}${active ? '<small>제조 중</small>' : ''}</span>
+        <span class="ss-pat"><i style="transform:scaleX(${s.patience.toFixed(3)})"></i></span>
+      </button>`;
+    })
+    .join('');
+}
+
+/** 매 틱: 인내 막대만 고친다(가게 이름표와 스툴 목록). */
+function updatePatienceUi() {
+  state.seats.forEach((s, i) => {
+    if (!s || s.status !== 'waiting') return;
+    shop.setPatience(s.key, s.patience, s.patience < IMPATIENT_AT);
+    const bar = document.querySelector<HTMLElement>(`#seats .ss[data-id="${i}"] .ss-pat i`);
+    if (bar) bar.style.transform = `scaleX(${s.patience.toFixed(3)})`;
+  });
 }
 
 const METER_MIN = -5;
@@ -536,20 +665,20 @@ const METER_MAX = 5;
 /** 게이지에 보일 맛 축. 경향 주문에서는 도수 대신 경향이 나온다. 자유 제조에서는 경향이 나온 뒤 네 축 모두. */
 function meterKeys(): AttrKey[] {
   if (!shift()) return toneOn() ? ATTR_KEYS : ['sweet', 'strength', 'body'];
-  const v = visit();
+  const v = activeVisit();
   return v && usesTone(v.order) ? ['sweet', 'tone', 'body'] : ['sweet', 'strength', 'body'];
 }
 
 function renderMeters() {
   const el = $('meters');
-  const show = !state.overlay && ['ice', 'mix', 'garnish'].includes(state.phase);
+  const show = !state.overlay && state.view === 'mix' && ['ice', 'mix', 'garnish'].includes(state.phase);
   el.hidden = !show;
   el.classList.toggle('compact', state.phase === 'garnish');
   if (state.phase === 'garnish') el.classList.remove('docked');
   if (state.phase === 'garnish') el.style.left = el.style.top = '';
   if (!show) return;
   const attrs = computeAttrs(state.drink);
-  const v = visit();
+  const v = activeVisit();
   // 모호한 주문은 게이지에도 목표 구간을 보여 주지 않는다.
   const ranges = v && v.style !== 'vague' ? targetRanges(v.order) : {};
   const keys = meterKeys();
@@ -612,35 +741,40 @@ const PROMPTS: Partial<Record<Phase, string>> = {
 };
 
 function promptText(): string {
-  if (state.phase !== 'wait') return PROMPTS[state.phase] ?? '';
+  if (state.view === 'mix') return PROMPTS[state.phase] ?? '';
   if (!shift() || !state.open) return '';
   const st = shiftStage(minute());
-  if (st === 'over') return '04:00, 영업 시간이 끝났어요 · 오른쪽 위 「다음 날로」를 눌러 마감하세요';
+  const waiting = waitingSeats().length;
+  if (st === 'over') {
+    return waiting ? '04:00 · 새 손님은 오지 않아요 · 남은 손님을 모두 보내면 「다음 날로」' : '04:00, 영업 시간이 끝났어요 · 오른쪽 위 「다음 날로」를 눌러 마감하세요';
+  }
+  if (waiting) return '스툴에 앉은 손님을 눌러 주문을 받으세요';
   if (comingCount() === 0) {
     return st === 'closable' ? '오늘 손님은 모두 다녀갔어요 · 오른쪽 위에서 조기 마감할 수 있어요' : '오늘 손님은 모두 다녀갔어요 · 01:00부터 마감할 수 있어요';
   }
-  return '다음 손님을 기다리는 중… 그동안 서랍에서 리필을 주문해 둘 수 있어요';
+  return '손님을 기다리는 중… 그동안 서랍에서 리필을 주문해 둘 수 있어요';
 }
 
 /** 잔 둘레에 붙는 조작: 얼음 고르기, 부은 횟수 바, 제조 완료·젓기, 장식 부채꼴 */
 function renderHud() {
   const d = state.drink;
   const free = !state.overlay;
+  const mix = free && state.view === 'mix';
   const phase = state.phase;
   const text = free ? promptText() : '';
-  $('prompt').textContent = text;
-  $('prompt').hidden = !text;
-  $('prompt').classList.toggle('loud', phase === 'wait' && closeKind() === 'next');
+  const prompt = $('prompt');
+  prompt.innerHTML = text && state.view === 'shop' && shift() && state.open ? `${text}<small class="num">남은 손님 ${comingCount()} · 앉은 손님 ${waitingSeats().length}/${SEATS}</small>` : text;
+  prompt.hidden = !text;
+  prompt.classList.toggle('loud', state.view === 'shop' && closeKind() === 'next' && canCloseNow());
 
   const ice = $('ice');
-  ice.hidden = !free || phase !== 'ice';
+  ice.hidden = !mix || phase !== 'ice';
   ice.innerHTML = ICES.map(
-    (i) =>
-      `<button class="ice-chip" data-act="ice" data-id="${i.id}">${icon(`ice:${i.id}`)}<strong>${i.name}</strong><small>${i.note}</small></button>`,
+    (i) => `<button class="ice-chip" data-act="ice" data-id="${i.id}">${icon(`ice:${i.id}`)}<strong>${i.name}</strong><small>${i.note}</small></button>`,
   ).join('');
 
   const bar = $('pourbar');
-  bar.hidden = !free || !['ice', 'mix'].includes(phase);
+  bar.hidden = !mix || !['ice', 'mix'].includes(phase);
   const cap = d.glass ? capacityOf(d) : 0;
   bar.innerHTML = `
     <div class="slots">${Array.from({ length: cap }, (_, i) => `<i class="${i < d.pours.length ? 'on' : ''}"></i>`).join('')}</div>
@@ -648,13 +782,13 @@ function renderHud() {
   bar.setAttribute('aria-label', `부은 횟수 ${d.pours.length} / ${cap}`);
 
   const actions = $('actions');
-  actions.hidden = !free || !['ice', 'mix', 'garnish'].includes(phase);
+  actions.hidden = !mix || !['ice', 'mix', 'garnish'].includes(phase);
   if (phase === 'garnish') {
     const g = GARNISHES[state.garnishSel];
     const cost = shift() ? garnishCost(g.id, state.upgrades) : 0;
     actions.innerHTML = `
       <button class="ghost" data-act="back-mix">← 재료로</button>
-      <button class="primary" data-act="serve">${shift() ? '서빙 ✦' : '완성 ✦'}${cost ? ` <small>${coin(cost)}</small>` : ''}</button>`;
+      <button class="primary" data-act="serve">${shift() ? '서빙' : '완성'}${cost ? ` <small>${coin(cost)}</small>` : ''}</button>`;
   } else {
     const busy = stage.busy;
     actions.innerHTML = `
@@ -664,7 +798,7 @@ function renderHud() {
   }
 
   const arc = $('garnish');
-  arc.hidden = !free || phase !== 'garnish';
+  arc.hidden = !mix || phase !== 'garnish';
   if (phase === 'garnish') {
     const u = unlocked();
     arc.innerHTML =
@@ -673,12 +807,11 @@ function renderHud() {
         const open = u.garnishes.has(g.id);
         const cost = garnishCost(g.id, state.upgrades);
         return `<button class="g-card ${i === state.garnishSel ? 'selected' : ''}" data-act="garnish" data-id="${g.id}" ${open ? '' : 'disabled'}>
-          ${g.id === 'none' ? '<span class="icon3d none"></span>' : icon(`garnish:${g.id}`)}<strong>${g.name}</strong>
+          ${icon(`garnish:${g.id}`)}<strong>${g.name}</strong>
           ${open ? (shift() && cost ? `<small>${coin(cost)}</small>` : '<small>&nbsp;</small>') : `<small class="lock">Day ${GARNISH_DAY[g.id]} 입고</small>`}
         </button>`;
       }).join('');
   }
-  $('bookIcon').hidden = !free || phase !== 'garnish';
 }
 
 const GRADE_VIEW: Record<Grade, { label: string; stars: string }> = {
@@ -687,37 +820,47 @@ const GRADE_VIEW: Record<Grade, { label: string; stars: string }> = {
   fail: { label: '실패…', stars: '★☆☆' },
 };
 
+/** 자유 제조 결과(제조대 위) */
 function renderResult() {
   const el = $('result');
-  el.hidden = state.phase !== 'result' || !!state.overlay;
+  el.hidden = state.phase !== 'result' || !!state.overlay || state.view !== 'mix';
   if (el.hidden) return;
   const r = state.result!;
-  const named = r.recipeName ? `<p class="named">이 잔의 이름은 <strong>「${r.recipeName}」</strong></p>` : '';
-  if (!shift()) {
-    el.innerHTML = `
-      <h2>완성!</h2>
-      ${named || '<p class="named muted">아직 이름 없는 조합이에요.</p>'}
-      <div class="row center"><button class="primary" data-act="next">새로 만들기</button></div>`;
-    return;
-  }
-  const g = r.away ? { label: '돌려보냈어요', stars: '☆☆☆' } : GRADE_VIEW[r.grade];
-  const more = comingCount() > 0 && shiftStage(minute()) !== 'over';
   el.innerHTML = `
-    <div class="verdict ${r.grade}"><span class="stars">${g.stars}</span><strong>${g.label}</strong>
-      <span class="tip num">판매가 +${r.sale} · 팁 +${r.tip}${r.cost ? ` · 장식 -${r.cost}` : ''}</span></div>
-    <ul class="checks">${r.checks.map((c) => `<li class="${c.pass ? 'pass' : 'miss'}">${c.pass ? '✓' : '✗'} ${c.label}</li>`).join('')}</ul>
-    ${named}
-    <div class="row center"><button class="primary" data-act="next">${more ? '확인 · 다음 손님 기다리기' : '확인'}</button></div>`;
+    <h2>${ransom('완성!', { seed: 2 })}</h2>
+    ${r.recipeName ? `<p class="named">이 잔의 이름은 <strong>「${r.recipeName}」</strong></p>` : '<p class="named muted">아직 이름 없는 조합이에요.</p>'}
+    <div class="row center"><button class="primary" data-act="next">새로 만들기</button></div>`;
 }
 
-/** 카운터 오른쪽 아래 서랍: 잔고·오늘 장부·리필·상점. 영업 중 언제든 열 수 있다. */
+/** 서빙 결과를 가게 화면 구석에 신문 오려 붙이기처럼 남긴다(다음 손님을 고르는 데 방해되지 않게). */
+let clipShown = -1;
+function renderClip() {
+  const el = $('clip');
+  const r = state.clip;
+  el.hidden = !r || !!state.overlay || state.view !== 'shop';
+  if (el.hidden || !r) return;
+  if (clipShown === r.n) return;
+  clipShown = r.n;
+  const g = r.away ? { label: '돌려보냈어요', stars: '☆☆☆' } : GRADE_VIEW[r.grade];
+  el.className = `clip grade-${r.away ? 'away' : r.grade}`;
+  el.innerHTML = `
+    <button class="clip-x" data-act="clip-close" aria-label="결과 닫기">✕</button>
+    <p class="clip-eyebrow">${r.name} · ${r.away ? '주문 취소' : '서빙 결과'}</p>
+    <div class="verdict"><span class="stars" aria-hidden="true">${g.stars}</span>${ransom(g.label, { seed: r.n })}</div>
+    <p class="clip-line">「${r.line}」</p>
+    ${r.away ? '' : `<p class="money num">판매 +${r.sale} · 팁 +${r.tip}${r.cost ? ` · 장식 -${r.cost}` : ''}</p>`}
+    <ul class="checks">${r.checks.map((c) => `<li class="${c.pass ? 'pass' : 'miss'}">${c.pass ? '✓' : '✗'} ${c.label}</li>`).join('')}</ul>
+    ${r.recipeName ? `<p class="named">이 잔의 이름은 <strong>「${r.recipeName}」</strong></p>` : ''}`;
+}
+
+/** 오른쪽 아래 서랍: 잔고·오늘 장부·리필·상점. 영업 중 언제든 열 수 있다. */
 function renderDrawer() {
   const el = $('drawer');
   el.hidden = !shift() || !state.started || (!!state.overlay && state.overlay !== 'book');
   if (el.hidden) return;
   el.classList.toggle('open', state.drawer);
   const low = [...unlocked().ingredients].filter((id) => stockOf(id) === 0 && !state.refills.has(id)).length;
-  const tab = `<button class="drawer-tab" data-act="drawer" aria-expanded="${state.drawer}"><span class="knob"></span>서랍 <b class="${state.money < 0 ? 'debt' : ''}">${coin(state.money)}</b>${low ? `<span class="tab-alert" title="빈 병 ${low}개">빈 병 ${low}</span>` : ''}</button>`;
+  const tab = `<button class="drawer-tab" data-act="drawer" aria-expanded="${state.drawer}"><span class="dt-label">서랍</span> <b class="${state.money < 0 ? 'debt' : ''}">${coin(state.money)}</b>${low ? `<span class="tab-alert" title="빈 병 ${low}개">빈 병 ${low}</span>` : ''}</button>`;
   if (!state.drawer) {
     el.innerHTML = tab;
     return;
@@ -851,6 +994,18 @@ function bookList() {
   }).join('');
 }
 
+/** 신문 머리(제호 띠) */
+const masthead = (right: string) =>
+  `<div class="masthead" aria-hidden="true"><span>녹턴 야간 신문</span><span class="mh-mid">유성 골목 7번지 · 막차 이후 발행</span><span>${right}</span></div>`;
+
+const OUTCOME_VIEW: Record<Outcome, { stars: string; note?: string }> = {
+  perfect: { stars: '★★★' },
+  good: { stars: '★★☆' },
+  fail: { stars: '★☆☆' },
+  away: { stars: '☆☆☆', note: '돌려보냄' },
+  left: { stars: '☆☆☆', note: '기다리다 떠남' },
+};
+
 function renderOverlay() {
   const el = $('overlay');
   if (state.overlay) showTip(null, 0, 0);
@@ -860,20 +1015,22 @@ function renderOverlay() {
     return;
   }
   el.hidden = false;
+  el.dataset.kind = state.overlay;
   const save = loadSave();
   switch (state.overlay) {
     case 'title':
       el.innerHTML = `
-        <div class="card title-card">
-          <div class="logo big">✦</div>
-          <h1>StarCocktail</h1>
-          <p class="sub">꿈의 도시 한가운데, 별빛 바의 7일간의 영업이 시작됩니다.</p>
+        <div class="card title-card paper">
+          ${masthead('제 1 호')}
+          <h1 class="title-logo">${ransom('별빛 바', { seed: 11, cls: 'xl' })}</h1>
+          <p class="title-en">STARCOCKTAIL</p>
+          <p class="lede">정거장 도시 녹턴, 막차가 끊긴 뒤에만 불을 켜는 바. 사라진 전 주인 대신 카운터에 선 당신은 술을 팔고, 단골들의 이야기를 서로 이어 줍니다.</p>
           <ol class="howto">
-            <li>가게는 <b>18:00~04:00</b>. 손님은 띄엄띄엄 와요. 01:00부터는 조기 마감할 수 있어요.</li>
-            <li>말풍선의 주문을 읽고, 카운터 왼쪽 쟁반에서 잔을 골라</li>
-            <li>진열대의 병을 잔 위로 <b>끌어다 놓아</b> <b>단맛·도수·바디</b>(Day 4부터 <b>경향</b>)를 맞추고</li>
-            <li>제조 완료를 누르면 장식을 고르고 서빙하세요.</li>
-            <li>병은 한 번 부을 때마다 20%씩 줄어요. 카운터 오른쪽 아래 <b>서랍</b>에서 리필을 주문하면 다음 날 아침 채워져요.</li>
+            <li>가게는 <b>18:00~04:00</b>. 손님은 띄엄띄엄 들어와 빈 <b>스툴(4개)</b>에 앉아요. 01:00부터 조기 마감할 수 있어요.</li>
+            <li>앉은 손님을 <b>누르면</b> 그 손님의 잔을 만드는 제조대로 넘어가요. 다른 손님은 자리에서 기다려요(너무 오래 두면 화가 나서 나가요).</li>
+            <li>쟁반에서 잔을 고르고, 진열대의 병을 잔 위로 <b>끌어다 놓아</b> <b>단맛·도수·바디</b>(Day 4부터 <b>경향</b>)를 맞춰요.</li>
+            <li>제조 완료 → 장식을 골라 <b>서빙</b>하면 손님이 반응하고 잔을 들고 나가요.</li>
+            <li>병은 한 번 부을 때마다 20%씩 줄어요. 오른쪽 아래 <b>서랍</b>에서 리필을 주문하면 다음 날 아침 채워져요.</li>
           </ol>
           <div class="row center">
             ${
@@ -889,8 +1046,8 @@ function renderOverlay() {
       break;
     case 'book':
       el.innerHTML = `
-        <div class="card book">
-          <h2>레시피북 <small class="num">${state.discovered.size} / ${RECIPES.length}</small></h2>
+        <div class="card book paper">
+          <h2>${ransom('레시피북', { seed: 4 })} <small class="num">${state.discovered.size} / ${RECIPES.length}</small></h2>
           <ul class="recipes">${bookList()}</ul>
           <div class="row center"><button class="primary" data-act="close">닫기</button></div>
         </div>`;
@@ -899,16 +1056,19 @@ function renderOverlay() {
     case 'dayStart': {
       const plan = state.plan;
       el.innerHTML = `
-        <div class="card day-card">
-          <p class="eyebrow">${state.day > LAST_DAY ? `Day ${state.day} · 무한 영업` : `Day ${state.day} / ${LAST_DAY}`}</p>
-          <h2>${plan.title}</h2>
-          <p class="sub">${plan.intro}</p>
+        <div class="card day-card paper">
+          ${masthead(state.day > LAST_DAY ? '무한 영업' : `${state.day} / ${LAST_DAY}`)}
+          <div class="day-head">
+            <div class="day-no">${ransom(`DAY ${state.day}`, { seed: state.day * 13 })}</div>
+            <h2 class="headline">${plan.title}</h2>
+          </div>
+          <p class="lede">${plan.intro}</p>
           ${arrivalsList(state.day)}
           ${lowStockList()}
           <ul class="facts">
             <li><span>영업 시간</span><strong class="num">18:00 – 04:00</strong></li>
             <li><span>조기 마감</span><strong class="num">01:00부터</strong></li>
-            <li><span>예정 손님</span><strong class="num">${plan.visits.length}명</strong></li>
+            <li><span>예정 손님</span><strong class="num">${plan.visits.length}명 · 스툴 ${SEATS}개</strong></li>
             <li><span>마감 때 낼 임대료</span><strong>${coin(rentFor(state.day))}</strong></li>
             <li><span>가진 돈</span><strong class="${state.money < 0 ? 'debt' : ''}">${coin(state.money)}</strong></li>
           </ul>
@@ -918,16 +1078,20 @@ function renderOverlay() {
     }
     case 'dayEnd': {
       const plan = state.plan;
-      const missed = plan.visits.filter((_, i) => !state.dayGrades[i]).length;
+      const missed = plan.visits.filter((_, i) => !state.outcomes[i]).length;
       el.innerHTML = `
-        <div class="card end">
-          <p class="eyebrow">Day ${state.day} 마감 · ${clockLabel(minute())}</p>
-          <h2>${plan.title}</h2>
+        <div class="card end paper">
+          ${masthead(`${clockLabel(minute())} 마감`)}
+          <div class="day-head">
+            <div class="day-no">${ransom(`DAY ${state.day}`, { seed: state.day * 13 })}</div>
+            <h2 class="headline">${plan.title}</h2>
+          </div>
           <ul class="summary">
             ${plan.visits
               .map((v, i) => {
-                const g = state.dayGrades[i];
-                return `<li class="${g ? '' : 'missed'}"><span>${CUSTOMER_BY_ID[v.customer].name}</span><span>${g ? GRADE_VIEW[g].stars : '오지 않음'}</span></li>`;
+                const o = state.outcomes[i];
+                const view = o ? OUTCOME_VIEW[o] : null;
+                return `<li class="${o ? `o-${o}` : 'missed'}"><span>${CUSTOMER_BY_ID[v.customer].name}</span><span>${view ? `${view.note ? `<small>${view.note}</small> ` : ''}${view.stars}` : '오지 않음'}</span></li>`;
               })
               .join('')}
           </ul>
@@ -947,11 +1111,11 @@ function renderOverlay() {
     case 'shop': {
       const next = state.day + 1;
       el.innerHTML = `
-        <div class="card shop">
-          <p class="eyebrow">영업 준비 · Day ${next} 전날 밤</p>
-          <h2>별빛 바 상점</h2>
+        <div class="card shop paper">
+          ${masthead(`Day ${next} 전날 밤`)}
+          <h2>${ransom('별빛 바 상점', { seed: 21 })}</h2>
           <p class="total">가진 돈 <strong class="${state.money < 0 ? 'debt' : ''}">${coin(state.money)}</strong></p>
-          <p class="sub small">영업 중에도 카운터 오른쪽 아래 서랍에서 같은 상점을 열 수 있어요. 오늘 밤 주문한 것은 내일 아침 도착해요.</p>
+          <p class="sub small">영업 중에도 오른쪽 아래 서랍에서 같은 상점을 열 수 있어요. 오늘 밤 주문한 것은 내일 아침 도착해요.</p>
           ${shopLists()}
           <div class="row center"><button class="primary" data-act="next-day">Day ${next} 준비 완료</button></div>
         </div>`;
@@ -960,15 +1124,15 @@ function renderOverlay() {
     case 'final': {
       const rank = finalRank(state.money, state.perfectTotal);
       el.innerHTML = `
-        <div class="card end">
-          <p class="eyebrow">7일 영업 결산</p>
-          <h2>${rank}</h2>
+        <div class="card end paper">
+          ${masthead('호외')}
+          <h2 class="headline big">${ransom(rank, { seed: 31 })}</h2>
           <ul class="facts">
             <li><span>완벽한 잔</span><strong class="num">${state.perfectTotal} / ${TOTAL_VISITS}</strong></li>
             <li><span>남은 돈</span><strong class="${state.money < 0 ? 'debt' : ''}">${coin(state.money)}</strong></li>
             <li><span>꾸민 가게</span><strong class="num">${state.upgrades.size} / ${UPGRADES.length}</strong></li>
           </ul>
-          <p class="sub">별빛 바의 일주일이 끝났어요. 수고했어요, 바텐더.<br />단골들은 앞으로도 계속 찾아올 거예요.</p>
+          <p class="lede">별빛 바의 일주일이 끝났어요. 수고했어요, 바텐더.<br />단골들은 앞으로도 계속 찾아올 거예요.</p>
           <div class="row center">
             <button class="primary" data-act="go-infinite">무한 영업 이어가기 →</button>
           </div>
@@ -993,10 +1157,10 @@ function toast(html: string) {
 
 // ── 동작 ───────────────────────────────────────────────────
 
-/** 잔을 비운다. 영업 중 카운터에 손님이 없으면 기다림 단계로. */
+/** 잔을 비우고 잔 고르기부터 */
 function newDrink() {
   state.drink = emptyDrink();
-  state.phase = shift() && !state.present ? 'wait' : 'glass';
+  state.phase = 'glass';
   state.result = null;
   state.garnishSel = 0;
 }
@@ -1031,15 +1195,70 @@ function selectGarnish(i: number) {
   state.drink = { ...state.drink, garnish: GARNISHES[i].id };
 }
 
-function openBook(focus: string | null = visit()?.recipe ?? null) {
+function openBook(focus: string | null = activeVisit()?.recipe ?? null) {
   state.bookFocus = focus;
   state.overlay = 'book';
+  state.drawer = false;
   render();
 }
 
-/** 지금 손님이 떠난 뒤 다음 손님이 올 시각을 정한다. */
-function scheduleNext() {
-  state.nextAt = arrivalAt(state.arrivals, state.visitIdx + 1, minute());
+/** 잔에 부은 재료 색의 평균(손님이 들고 나가는 작은 잔의 술 색) */
+function drinkColor(d: Drink) {
+  if (!d.pours.length) return '#cfc9be';
+  const sum = [0, 0, 0];
+  for (const id of d.pours) {
+    const n = parseInt(INGREDIENT_BY_ID[id].color.slice(1), 16);
+    sum[0] += (n >> 16) & 255;
+    sum[1] += (n >> 8) & 255;
+    sum[2] += n & 255;
+  }
+  return `#${sum.map((v) => Math.round(v / d.pours.length).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** 빈 스툴 중 하나에 다음 손님을 앉힌다. 들였으면 true. */
+function maybeArrive(): boolean {
+  if (!shift() || !state.open) return false;
+  const m = minute();
+  const k = state.nextVisit;
+  // 04:00이 지나면 새 손님은 오지 않는다.
+  if (k >= state.plan.visits.length || m >= DAY_MINUTES) return false;
+  if (m < arrivalAt(state.arrivals, k, state.lastArrivalMin)) return false;
+  const free = state.seats.flatMap((s, i) => (s ? [] : [i]));
+  const seat = pickSeat(state.day, k, free);
+  if (seat < 0) return false;
+  const v = visitAt(k);
+  const c = CUSTOMER_BY_ID[v.customer];
+  const key = `${state.day}-${k}`;
+  state.seats[seat] = { idx: k, key, patience: 1, status: 'waiting', first: !state.met.has(c.id), grumbled: false, freeAt: 0 };
+  state.nextVisit = k + 1;
+  state.lastArrivalMin = m;
+  shop.enter(key, c, seat, c.lines.enter);
+  shop.setWaiting(key, true);
+  return true;
+}
+
+/** 손님이 스툴을 떠난다(반응한 뒤 잔을 들고, 또는 빈손으로). */
+function dismissSeat(s: Seat, mood: Mood, line: string, glass: { glass: string; color: string } | null) {
+  s.status = 'leaving';
+  s.freeAt = performance.now() + SEAT_FREE_MS;
+  shop.serve(s.key, mood, line, glass);
+}
+
+/** 스툴의 손님을 눌렀다: 그 손님의 잔을 만들러 제조대로 */
+function pickPatron(i: number) {
+  const s = state.seats[i];
+  if (!s || s.status !== 'waiting' || state.overlay || !shift()) return;
+  if (state.active !== s.idx) {
+    if (state.active !== null && state.drink.glass) {
+      toast(`만들던 <strong>${customerAt(state.active).name}</strong>의 잔은 비웠어요`);
+    }
+    state.active = s.idx;
+    newDrink();
+  }
+  state.clip = null;
+  state.drawer = false;
+  goView('mix');
+  render();
 }
 
 function serve() {
@@ -1050,12 +1269,14 @@ function serve() {
     saveDiscovered(state.discovered);
     toast(`새 레시피 발견! <strong>「${fresh.map((r) => r.name).join('」, 「')}」</strong>`);
   }
-  const v = visit();
-  if (!v) {
+  const v = activeVisit();
+  const s = seatOfVisit(state.active);
+  if (!v || !s) {
     state.result = { checks: [], grade: 'perfect', tip: 0, recipeName: matched[0]?.name ?? null, sale: 0, cost: 0 };
     state.phase = 'result';
     return;
   }
+  const c = CUSTOMER_BY_ID[v.customer];
   const j = judge(v.order, state.drink);
   const gCost = garnishCost(state.drink.garnish, state.upgrades);
   spend(gCost);
@@ -1063,21 +1284,25 @@ function serve() {
   state.money += sale + tip;
   state.ledger.sales += sale;
   state.ledger.tips += tip;
-  state.dayGrades[state.visitIdx] = j.grade;
+  state.outcomes[s.idx] = j.grade;
+  state.met.add(c.id);
   if (j.grade === 'perfect') state.perfectTotal += 1;
-  state.result = { ...j, tip, sale, cost: gCost, recipeName: matched[0]?.name ?? null };
-  state.phase = 'result';
-  stage.servePatron(j.grade);
-  scheduleNext();
+  const line = c.reactions[j.grade];
+  state.clip = { ...j, tip, sale, cost: gCost, recipeName: matched[0]?.name ?? null, name: c.name, line, n: (state.clip?.n ?? 0) + 1 };
+  stage.serveGlass();
+  dismissSeat(s, j.grade, line, { glass: state.drink.glass ?? 'rocks', color: drinkColor(state.drink) });
+  state.active = null;
+  newDrink();
+  goView('shop');
 }
 
-/** 만들 수 없는 주문이면 사과하고 돌려보낸다. 실패로 기록되고 수입은 없다. 부은 재료는 버려진다. */
+/** 만들 수 없는 주문이면 사과하고 돌려보낸다. 수입은 없고, 부은 재료는 버려진다. */
 function turnAway() {
-  const v = visit();
-  if (!v || state.phase === 'result') return;
-  state.drink = emptyDrink();
-  state.dayGrades[state.visitIdx] = 'fail';
-  state.result = {
+  const v = activeVisit();
+  const s = seatOfVisit(state.active);
+  if (!v || !s) return;
+  state.outcomes[s.idx] = 'away';
+  state.clip = {
     checks: v.order.map((c) => ({ label: describe(c, true), pass: false })),
     grade: 'fail',
     tip: 0,
@@ -1085,66 +1310,35 @@ function turnAway() {
     cost: 0,
     recipeName: null,
     away: true,
+    name: CUSTOMER_BY_ID[v.customer].name,
+    line: AWAY_LINE,
+    n: (state.clip?.n ?? 0) + 1,
   };
-  state.phase = 'result';
-  stage.servePatron('fail', false);
-  scheduleNext();
-}
-
-function patronLook(c: Customer) {
-  return { color: c.color, accent: c.accent, hair: c.hair, longHair: c.longHair };
-}
-
-/** 다음 손님이 걸어 들어온다. */
-function arrive() {
-  const v = state.plan.visits[state.visitIdx];
-  const c = CUSTOMER_BY_ID[v.customer];
-  state.present = true;
+  dismissSeat(s, 'fail', AWAY_LINE, null);
+  state.active = null;
   newDrink();
-  stage.showPatron(`${state.day}-${state.visitIdx}`, patronLook(c));
-  state.bubbleAt = performance.now() + ARRIVE_MS;
+  goView('shop');
 }
 
-/** 서빙을 마친 손님을 보내고 카운터를 비운다. */
-function finishVisit() {
-  if (!state.present) return;
-  state.present = false;
-  state.visitIdx += 1;
-  newDrink();
-  stage.showPatron(null, null);
-}
-
-/** 손님이 올 시각이 되었으면 들인다. 들였으면 true. */
-function maybeArrive(): boolean {
-  if (!shift() || !state.open) return false;
-  // 주문을 받는 중이면 다음 손님은 기다린다. 서빙 결과를 보는 중이면 앞 손님을 보내고 들인다.
-  if (state.present && state.phase !== 'result') return false;
-  const k = state.present ? state.visitIdx + 1 : state.visitIdx;
-  const m = minute();
-  if (k >= state.plan.visits.length || m >= DAY_MINUTES || m < state.nextAt) return false;
-  finishVisit();
-  arrive();
-  return true;
-}
-
-function next() {
-  if (shift()) {
-    finishVisit();
-    maybeArrive();
-    return;
-  }
-  newDrink();
+/** 인내가 다 떨어진 손님은 화가 나서 그냥 나간다(수입 없음). */
+function giveUp(s: Seat) {
+  const c = customerAt(s.idx);
+  state.outcomes[s.idx] = 'left';
+  dismissSeat(s, 'angry', c.lines.angry, null);
+  toast(`<strong>${c.name}</strong> 손님이 기다리다 지쳐 나갔어요`);
 }
 
 function endDay() {
-  if (state.present && state.phase === 'result') finishVisit();
   state.open = false;
   const rent = rentFor(state.day);
   state.ledger.rent = rent;
   state.money -= rent;
-  state.present = false;
+  state.seats = emptySeats();
+  state.active = null;
+  state.clip = null;
+  shop.clear();
   newDrink();
-  stage.showPatron(null, null);
+  goView('shop');
   state.drawer = false;
   state.overlay = 'dayEnd';
 }
@@ -1158,6 +1352,7 @@ function snapshot(): Save {
     early: [...state.early],
     perfect: state.perfectTotal,
     stock: state.stock,
+    met: [...state.met],
   };
 }
 
@@ -1165,6 +1360,19 @@ function setDay(day: number) {
   state.day = day;
   state.plan = planFor(day);
   state.arrivals = arrivalsFor(day, state.plan.visits.length);
+}
+
+/** 영업을 쉬는 상태(손님 없음, 빈 스툴)로 되돌린다. */
+function resetFloor() {
+  state.open = false;
+  state.seats = emptySeats();
+  state.active = null;
+  state.clip = null;
+  state.nextVisit = 0;
+  state.lastArrivalMin = 0;
+  state.clockMs = 0;
+  shop.clear();
+  newDrink();
 }
 
 function loadCampaign(s: Save | null) {
@@ -1177,31 +1385,25 @@ function loadCampaign(s: Save | null) {
   state.refills = new Set();
   state.stock = s?.stock ?? {};
   state.perfectTotal = s?.perfect ?? 0;
+  state.met = new Set(s?.met ?? []);
   state.started = true;
-  state.open = false;
-  state.present = false;
-  state.clockMs = 0;
   state.ledger = emptyLedger();
+  resetFloor();
   writeSave(snapshot());
-  newDrink();
-  stage.showPatron(null, null);
+  goView('shop');
   stage.setShelf(unlocked().ingredients, false);
   state.overlay = 'dayStart';
 }
 
 function beginDay() {
   state.mode = 'shift';
-  state.visitIdx = 0;
-  state.present = false;
+  resetFloor();
   state.open = true;
-  state.clockMs = 0;
   state.ledger = emptyLedger();
-  state.dayGrades = [];
+  state.outcomes = [];
   state.overlay = null;
-  state.nextAt = arrivalAt(state.arrivals, 0, 0);
-  newDrink();
-  stage.showPatron(null, null);
-  stage.setShelf(unlocked().ingredients, true);
+  goView('shop');
+  stage.setShelf(unlocked().ingredients, false);
   const a = arrivalsOn(state.day);
   const names = [
     ...a.ingredients.map((id) => INGREDIENT_BY_ID[id].name),
@@ -1226,15 +1428,13 @@ function startFree() {
   state.overlay = null;
   state.started = true;
   state.drawer = false;
-  state.open = false;
-  state.present = false;
+  resetFloor();
   // 자유 제조는 영업으로 입고한 재료까지만 쓸 수 있다. 병은 줄지 않고 시계도 없다.
   const s = loadSave();
   setDay(s?.day ?? 1);
   state.early = new Set(s?.early ?? []);
-  newDrink();
-  stage.showPatron(null, null);
   stage.setShelf(unlocked().ingredients, false);
+  goView('mix');
 }
 
 function buyRefill(id: IngredientId) {
@@ -1253,7 +1453,7 @@ document.addEventListener('click', (e) => {
   const act = btn.dataset.act!;
   const id = btn.dataset.id;
   // 붓기·젓기 연출 중에는 술을 바꾸는 입력을 받지 않는다.
-  if (stage.busy && ['stir', 'to-garnish', 'restart', 'turn-away'].includes(act)) return;
+  if (stage.busy && ['stir', 'to-garnish', 'restart', 'turn-away', 'pick-seat'].includes(act)) return;
 
   switch (act) {
     case 'ice':
@@ -1287,20 +1487,30 @@ document.addEventListener('click', (e) => {
     case 'turn-away':
       turnAway();
       break;
+    case 'pick-seat':
+      pickPatron(Number(id));
+      return;
+    case 'to-shop-view':
+      goView('shop');
+      break;
+    case 'clip-close':
+      state.clip = null;
+      break;
     case 'next':
-      next();
+      newDrink();
       break;
     case 'restart':
       newDrink();
       break;
     case 'book':
-      openBook(id ?? visit()?.recipe ?? null);
+      openBook(id ?? activeVisit()?.recipe ?? null);
       return;
     case 'drawer':
       state.drawer = !state.drawer;
       break;
     case 'menu':
       state.overlay = 'title';
+      state.drawer = false;
       break;
     case 'close':
       state.overlay = null;
@@ -1375,7 +1585,10 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'Escape' && state.drawer) {
     state.drawer = false;
     render();
-  } else if (!state.overlay && state.phase === 'garnish' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+  } else if (e.key === 'Escape' && !state.overlay && state.view === 'mix' && shift()) {
+    goView('shop');
+    render();
+  } else if (!state.overlay && state.view === 'mix' && state.phase === 'garnish' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
     e.preventDefault();
     stepGarnish(e.key === 'ArrowLeft' ? -1 : 1);
     render();
@@ -1410,12 +1623,35 @@ function tick() {
   const now = performance.now();
   const dt = Math.min(60_000, Math.max(0, now - lastTick));
   lastTick = now;
-  // 손님이 자리에 서면 말풍선을 띄운다.
-  if (bubbleWaiting && now >= state.bubbleAt && !state.overlay) render();
-  if (!clockRunning()) return;
-  state.clockMs = Math.min(DAY_MINUTES * REAL_MS_PER_MINUTE, state.clockMs + dt);
-  if (maybeArrive()) render();
+  let changed = false;
+  // 반응을 마치고 내려온 손님의 스툴을 비운다.
+  state.seats.forEach((s, i) => {
+    if (s && s.status === 'leaving' && now >= s.freeAt) {
+      state.seats[i] = null;
+      changed = true;
+    }
+  });
+  if (clockRunning()) {
+    state.clockMs = Math.min(DAY_MINUTES * REAL_MS_PER_MINUTE, state.clockMs + dt);
+    const dtMin = dt / REAL_MS_PER_MINUTE;
+    for (const s of state.seats) {
+      // 지금 잔을 만들어 주는 손님은 기다리지 않는다.
+      if (!s || s.status !== 'waiting' || s.idx === state.active) continue;
+      s.patience = drainPatience(s.patience, dtMin);
+      if (!s.grumbled && s.patience < IMPATIENT_AT) {
+        s.grumbled = true;
+        shop.say(s.key, customerAt(s.idx).lines.wait);
+      }
+      if (s.patience <= 0) {
+        giveUp(s);
+        changed = true;
+      }
+    }
+    if (maybeArrive()) changed = true;
+  }
+  if (changed) render();
   else updateClock();
+  updatePatienceUi();
 }
 window.setInterval(tick, 100);
 document.addEventListener('visibilitychange', () => {
@@ -1425,5 +1661,11 @@ document.addEventListener('visibilitychange', () => {
 stage.setShelf(unlocksFor(loadSave()?.day ?? 1).ingredients, false);
 render();
 
-// 테스트·디버그용: 진열대 병의 화면 좌표
-(window as unknown as { __bottleAt: unknown }).__bottleAt = (id: IngredientId) => stage.screenOf(id);
+// 테스트·디버그용: 진열대 병·스툴 손님의 화면 좌표, 스툴 상태
+const debug = window as unknown as Record<string, unknown>;
+debug.__bottleAt = (id: IngredientId) => stage.screenOf(id);
+debug.__patronAt = (seat: number) => {
+  const s = state.seats[seat];
+  return s ? shop.screenOf(s.key) : null;
+};
+debug.__seats = () => state.seats.map((s) => (s ? { customer: customerAt(s.idx).id, status: s.status, patience: s.patience } : null));

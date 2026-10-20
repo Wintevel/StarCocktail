@@ -114,19 +114,21 @@ export function speechParts(greeting: string): { text: string; cond: number | nu
 export const plainLine = (greeting: string) => greeting.replace(/[{}]/g, '');
 
 /**
- * 하루 손님은 3 → 6명으로 늘고, 주문 조건도 2개에서 4~5개로 늘어난다.
+ * 스툴이 넷이라 하루 손님은 4 → 8명으로 늘고, 주문 조건도 2개에서 4~5개로 늘어난다.
  * 주문 표현은 칩·강조 대사·레시피 이름·모호한 말이 섞여 나온다.
  * 모든 주문은 그날 입고된 재료만으로 완벽하게 만들 수 있고,
- * 병이 모두 가득 차 있으면 그날 주문을 한꺼번에 다 만들 수 있다(테스트로 확인).
+ * 병이 모두 가득 차 있으면 그날 주문을 한꺼번에 다 만들 수 있다(테스트로 확인). 손님 넷이 한꺼번에 앉아 있어도
+ * 병이 모자라 막히지 않는다는 뜻이다. 대사 몇 줄에는 세계관 단서(할의 실종, 막차, 오르골, 축제)를 심어 두었다.
  */
 export const DAYS: DayPlan[] = [
   {
     title: '첫 영업',
-    intro: '별빛 바의 문을 처음 여는 밤. 기본 재료 다섯 가지로 시작해요.',
+    intro: '사라진 전 주인 할이 남긴 별빛 바, 정거장 도시 녹턴에서 처음 문을 여는 밤. 기본 재료 다섯 가지와 빈 스툴 네 개로 시작해요.',
     visits: [
       chips('mio', '처음 와 봐요… 달달하고 순한 걸로 부탁해요. 내일도 출근이라.', [sweet('>=', 2), strength('<=', 1)], true),
       speech('bolt', '새 가게라고? {위스키} 한 잔에 {레몬 한 조각}이면 충분하네.', [has('whisky'), garnish('lemon')], true),
       chips('leila', '첫날이라며? 하이볼 잔에 시원하게, 축하 건배하자!', [glass('highball'), strength('>=', 2)], true),
+      chips('norma', '꿈 관리국 정기 점검입니다. 새 주인의 기본기를 보죠. 단맛은 정확히 0, 도수 2 이상.', [sweet('==', 0), strength('>=', 2)], true),
     ],
   },
   {
@@ -137,6 +139,7 @@ export const DAYS: DayPlan[] = [
       chips('evan', '와인이 들어왔다고 들었어요. 조금은 달콤하게 부탁해요.', [has('wine'), sweet('>=', 1)], true),
       vague('serena', '리허설 끝나고 들렀어요. 너무 세지 않게, 달달한 걸로요.', [strength('<=', 1), sweet('>=', 2)]),
       chips('pipi', '나도 어른들처럼 멋진 거! 술은 빼고, 민트 잎 올려 줘!', [strength('<=', 0), garnish('mint')]),
+      speech('mio', '막차 승객이 두고 간 오르골 소리가 귀에 맴돌아요. {달달하게}, {얼음은 가득} 넣어 주세요.', [sweet('>=', 2), ICE_MORE]),
     ],
   },
   {
@@ -147,6 +150,8 @@ export const DAYS: DayPlan[] = [
       named('mio', 'sweet-dream', '「달콤한 꿈」 하나 주세요. 오늘은 푹 자고 싶어요.'),
       speech('pipi', '{술은 빼고}, {엄청 달게}! {체리}도 올려 줘! 어른들처럼 멋지게!', [strength('<=', 0), sweet('>=', 3), garnish('cherry')]),
       vague('grey', '오늘은 쌉쌀하고 가볍게. 생각할 게 많거든.', [sweet('<=', -1), body('<=', 0)]),
+      chips('bolt', '할 녀석이 즐겨 마시던 걸로. 록 잔에 위스키, 체리 하나 띄워서.', [glass('rocks'), has('whisky'), garnish('cherry')]),
+      vague('leila', '축제 포스터 붙이고 왔어! 화끈하게, 그래도 달달하게!', [strength('>=', 3), sweet('>=', 2)]),
     ],
   },
   {
@@ -162,6 +167,7 @@ export const DAYS: DayPlan[] = [
       ]),
       named('bolt', 'old-captain', '「늙은 선장」을 아나? 모르면 레시피북이라도 펴 보게.'),
       vague('serena', '오늘은 솔직한 노래를 부를 거예요. 시원시원하고 가볍게 부탁해요.', [tone('>=', 2), body('<=', 0)]),
+      chips('pipi', '볼트 할아버지가 오늘은 내가 산대! 술은 빼고, 엄청 달게, 하이볼 잔에!', [strength('<=', 0), sweet('>=', 3), glass('highball')]),
     ],
   },
   {
@@ -173,11 +179,13 @@ export const DAYS: DayPlan[] = [
       chips('norma', '단맛 1, 도수 1. 쿠페 잔에, 별 장식을 정확히 하나.', [sweet('==', 1), strength('==', 1), glass('coupe'), garnish('star')]),
       named('evan', 'nebula-whisper', '「성운의 속삭임」… 이름만 들어도 시가 떠오르네요. 그걸로 주세요.'),
       chips('serena', '성운처럼 일렁이는 층에, 끝까지 완곡하게. 오늘 노래는 속삭이듯 부를 거예요.', [has('nebula'), LAYERED, kw('tone', 'low')]),
+      speech('grey', '할의 마지막 행적은 아직 안개 속이야. {비터스를 넣고}, {끝까지 직설적으로}.', [has('bitters'), kw('tone', 'high')]),
+      vague('mio', '오늘은 은근하게, 달달하게 부탁해요. 오르골 소리처럼 포근하게요.', [tone('<=', -2), sweet('>=', 2)]),
     ],
   },
   {
     title: '축제 전야',
-    intro: '내일은 꿈의 축제. 꿀빛 미드가 들어오고 손님이 부쩍 늘었어요.',
+    intro: '내일은 꿈의 축제. 꿀빛 미드가 들어오고 레일라가 축제 사람들을 모으느라 손님이 부쩍 늘었어요.',
     visits: [
       chips('leila', '축제 전야엔 꿀이지! 달고 화끈하게!', [has('mead'), strength('>=', 2), sweet('>=', 3)], true),
       speech('bolt', '{위스키를 두 번} 붓게. 대신 {텁텁하면 안 되고}, {레몬}은 잊지 말고.', [has('whisky', 2), body('<=', 1), garnish('lemon')]),
@@ -185,11 +193,13 @@ export const DAYS: DayPlan[] = [
       chips('grey', '록 잔, 얼음 가득. 씁쓸함도 독함도 끝까지. 이번 범인은 만만치 않아.', [kw('sweet', 'low'), kw('strength', 'high'), glass('rocks'), ICE_MORE]),
       vague('evan', '와인과 꿀이 서로 섞이지 않는 모습을 보고 싶어요. 은근하게요.', [has('wine'), has('mead'), LAYERED, tone('<=', -2)]),
       named('norma', 'golden-balance', '「황금 균형」. 오차는 허용하지 않습니다.'),
+      chips('serena', '익명의 「E」가 노랫말을 또 보냈어요. 와인 잔에, 완곡하게, 층을 살려서.', [glass('wine'), tone('<=', -2), LAYERED], true),
+      speech('pipi', '오늘 배달을 스무 개나 했어! {엄청 달게}, {술은 빼고}, {민트}도 올려 줘!', [sweet('>=', 3), strength('<=', 0), garnish('mint')]),
     ],
   },
   {
     title: '마지막 밤',
-    intro: '축제의 밤, 단골들이 모두 찾아옵니다. 혜성 에스프레소가 마지막으로 도착했어요.',
+    intro: '꿈의 축제 날, 단골들이 모두 찾아옵니다. 혜성 에스프레소가 마지막으로 도착했어요.',
     visits: [
       chips('norma', '단맛 -1, 도수 3, 바디 1. 저어서. 축제라고 기준이 느슨해지진 않습니다.', [sweet('==', -1), strength('==', 3), body('==', 1), STIRRED], true),
       vague('grey', '밤샘 수사야. 에스프레소를 넣어서, 쌉쌀하고 화끈하게.', [has('espresso'), sweet('<=', -1), strength('>=', 3)]),
@@ -203,6 +213,8 @@ export const DAYS: DayPlan[] = [
         sweet('>=', 2),
         garnish('star'),
       ], true),
+      speech('bolt', '피피 녀석한테는 비밀이네. {에스프레소}에 {위스키 두 번}, 그리고 {얼음은 가득}.', [has('espresso'), has('whisky', 2), ICE_MORE], true),
+      named('evan', 'ruby-serenade', '마지막 밤이니까요. 「루비 세레나데」로 부탁해요. 오늘 무대에 바치는 잔이에요.', true),
     ],
   },
 ];
@@ -211,8 +223,8 @@ export const TOTAL_VISITS = DAYS.reduce((n, d) => n + d.visits.length, 0);
 
 // ── 7일 이후: 무한 영업 ─────────────────────────────────
 
-/** 무한 영업에서 하루에 오는 손님 수 */
-export const INFINITE_VISITS = 6;
+/** 무한 영업에서 하루에 오는 손님 수 (스툴 넷이 바쁘게 돌아갈 만큼) */
+export const INFINITE_VISITS = 8;
 
 /** 무한 영업의 손님: 7일 동안 만난 손님들 */
 export const SEEN_PATRONS: string[] = [...new Set(DAYS.flatMap((d) => d.visits.map((v) => v.customer)))];
@@ -374,8 +386,11 @@ export function finalRank(money: number, perfect: number): string {
 
 // ── 저장 ───────────────────────────────────────────────
 
-/** 저장 형식 버전. 1은 잔량이 없던 시절(재료비를 부을 때마다 냄)의 저장이다. */
-export const SAVE_VERSION = 2;
+/**
+ * 저장 형식 버전.
+ * 1: 잔량이 없던 시절(재료비를 부을 때마다 냄), 2: 병 잔량, 3: 만난 단골 목록(2단계 이야기 장치의 바탕).
+ */
+export const SAVE_VERSION = 3;
 
 export interface Save {
   v: typeof SAVE_VERSION;
@@ -386,12 +401,19 @@ export interface Save {
   early: IngredientId[];
   perfect: number;
   stock: Stock;
+  /** 한 번이라도 잔을 내준 단골 id */
+  met: string[];
 }
 
 const SAVE_KEY = 'starcocktail.campaign';
 
+/** day일차 아침까지(그 전날까지의 영업에서) 만났을 단골 — 예전 저장을 옮길 때 쓴다. */
+export function metBefore(day: number): string[] {
+  return [...new Set(DAYS.slice(0, Math.max(0, Math.min(LAST_DAY, day - 1))).flatMap((d) => d.visits.map((v) => v.customer)))];
+}
+
 /**
- * 저장 문자열을 읽는다. 버전 1 저장은 병을 모두 가득 채운 채로 옮겨 온다.
+ * 저장 문자열을 읽는다. 버전 1 저장은 병을 모두 가득 채운 채로, 버전 1·2 저장은 그 전날까지 만났을 단골을 채워 옮겨 온다.
  * 알아볼 수 없는 저장이면 null(처음부터).
  */
 export function parseSave(raw: string | null): Save | null {
@@ -400,15 +422,17 @@ export function parseSave(raw: string | null): Save | null {
     const s = JSON.parse(raw) as Omit<Partial<Save>, 'v'> & { v?: number };
     if (typeof s !== 'object' || s === null) return null;
     if (typeof s.day !== 'number' || !Number.isInteger(s.day) || s.day < 1) return null;
-    if (s.v !== undefined && s.v !== 1 && s.v !== SAVE_VERSION) return null;
+    if (s.v !== undefined && s.v !== 1 && s.v !== 2 && s.v !== SAVE_VERSION) return null;
     const known = new Set<string>(INGREDIENTS.map((i) => i.id));
     const upgrades = new Set<string>(UPGRADES.map((u) => u.id));
+    const patrons = new Set<string>(DAYS.flatMap((d) => d.visits.map((v) => v.customer)));
     const stock: Stock = {};
-    if (s.v === SAVE_VERSION && s.stock && typeof s.stock === 'object') {
+    if ((s.v ?? 1) >= 2 && s.stock && typeof s.stock === 'object') {
       for (const [id, n] of Object.entries(s.stock)) {
         if (known.has(id) && typeof n === 'number') stock[id as IngredientId] = Math.max(0, Math.min(STOCK_MAX, Math.round(n)));
       }
     }
+    const met = s.v === SAVE_VERSION && Array.isArray(s.met) ? s.met.filter((id) => patrons.has(id)) : metBefore(s.day);
     return {
       v: SAVE_VERSION,
       day: s.day,
@@ -417,6 +441,7 @@ export function parseSave(raw: string | null): Save | null {
       early: (s.early ?? []).filter((id) => known.has(id)),
       perfect: s.perfect ?? 0,
       stock,
+      met,
     };
   } catch {
     return null;

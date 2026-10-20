@@ -7,6 +7,7 @@ import {
   infinitePlan,
   INFINITE_VISITS,
   LAST_DAY,
+  metBefore,
   parseSave,
   planFor,
   plainLine,
@@ -28,15 +29,18 @@ import {
 } from './campaign';
 import { CUSTOMERS, INGREDIENTS, type IngredientId, RECIPES, TONE_DAY } from './data';
 import { usesTone } from './mix';
+import { SEATS } from './shift';
 import { solve, solveAll } from './solver';
 
 const FULL = Object.fromEntries(INGREDIENTS.map((i) => [i.id, STOCK_MAX])) as Record<IngredientId, number>;
 const usesStrength = (v: Visit) => v.order.some((c) => (c.kind === 'attr' || c.kind === 'keyword') && c.attr === 'strength');
 
 describe('영업 일정', () => {
-  it('7일 동안 손님이 점점 늘어난다', () => {
+  it('7일 동안 손님이 점점 늘어난다 (스툴이 넷이라 하루 4~8명)', () => {
     expect(DAYS).toHaveLength(LAST_DAY);
     const counts = DAYS.map((d) => d.visits.length);
+    expect(counts[0]).toBeGreaterThanOrEqual(SEATS);
+    expect(Math.max(...counts)).toBeLessThanOrEqual(2 * SEATS);
     expect(counts[0]).toBeLessThan(counts[LAST_DAY - 1]);
     for (let i = 1; i < counts.length; i++) expect(counts[i]).toBeGreaterThanOrEqual(counts[i - 1]);
     expect(TOTAL_VISITS).toBe(counts.reduce((a, b) => a + b, 0));
@@ -58,7 +62,7 @@ describe('영업 일정', () => {
     expect(solve(v.order, unlocksFor(day))).not.toBeNull();
   });
 
-  it.each(DAYS.map((d, i) => [i + 1, d] as const))('Day %i: 병이 가득 차 있으면 그날 주문을 모두 만들 수 있다', (day, d) => {
+  it.each(DAYS.map((d, i) => [i + 1, d] as const))('Day %i: 병이 가득 차 있으면 그날 주문을 모두 만들 수 있다(스툴 넷이 다 차도 병이 모자라지 않는다)', (day, d) => {
     const drinks = solveAll(
       d.visits.map((v) => v.order),
       unlocksFor(day),
@@ -218,14 +222,21 @@ describe('경영', () => {
 });
 
 describe('저장', () => {
-  it('버전 1 저장은 병을 가득 채운 채 옮겨 온다', () => {
+  it('버전 1 저장은 병을 가득 채우고, 그 전날까지 만났을 단골을 채워 옮겨 온다', () => {
     const s = parseSave(JSON.stringify({ day: 3, money: 120, upgrades: ['neon', 'bogus'], early: ['bitters', 'nope'], perfect: 4 }));
-    expect(s).toEqual({ v: SAVE_VERSION, day: 3, money: 120, upgrades: ['neon'], early: ['bitters'], perfect: 4, stock: {} });
+    expect(s).toEqual({ v: SAVE_VERSION, day: 3, money: 120, upgrades: ['neon'], early: ['bitters'], perfect: 4, stock: {}, met: metBefore(3) });
+    expect(metBefore(3).sort()).toEqual(['bolt', 'evan', 'grey', 'leila', 'mio', 'norma', 'pipi', 'serena']);
+    expect(metBefore(1)).toEqual([]);
   });
 
   it('버전 2 저장은 잔량을 함께 읽고, 무한 영업 날짜도 받는다', () => {
     const raw = JSON.stringify({ v: 2, day: 11, money: -5, upgrades: [], early: [], perfect: 30, stock: { gin: 2, whisky: 9, bogus: 1 } });
-    expect(parseSave(raw)).toEqual({ v: 2, day: 11, money: -5, upgrades: [], early: [], perfect: 30, stock: { gin: 2, whisky: STOCK_MAX } });
+    expect(parseSave(raw)).toEqual({ v: SAVE_VERSION, day: 11, money: -5, upgrades: [], early: [], perfect: 30, stock: { gin: 2, whisky: STOCK_MAX }, met: metBefore(11) });
+  });
+
+  it('버전 3 저장은 만난 단골 목록을 그대로 읽는다', () => {
+    const raw = JSON.stringify({ v: 3, day: 2, money: 40, upgrades: [], early: [], perfect: 2, stock: { gin: 4 }, met: ['mio', 'nobody', 'grey'] });
+    expect(parseSave(raw)).toEqual({ v: 3, day: 2, money: 40, upgrades: [], early: [], perfect: 2, stock: { gin: 4 }, met: ['mio', 'grey'] });
   });
 
   it('알아볼 수 없는 저장은 처음부터 시작한다', () => {

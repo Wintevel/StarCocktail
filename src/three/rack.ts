@@ -1,10 +1,12 @@
 // 카운터 위 계단식 병 진열대. 입고된 재료의 병이 한 칸씩 채워지고, 병을 눌러 잔에 붓는다.
-// 병 몸통은 남은 양만큼만 술 색으로 빛나고, 그 위는 빈 유리처럼 어둡다(잔량 표시).
+// 병 몸통은 남은 양만큼만 술 색으로 칠해지고, 그 위는 빈 유리처럼 어둡다(잔량 표시).
+// 2D 가게와 같은 흑백+빨강: 검은 옻칠 계단에 빨간 단 모서리, 마우스를 올린 병은 빨간 윤곽이 생긴다.
 
 import * as THREE from 'three';
 import { INGREDIENT_DAY } from '../campaign';
 import { INGREDIENTS, type IngredientId } from '../data';
-import { goldMaterial, makeBottle } from './models';
+import { inkMaterial, PAPER, redMaterial, toonMaterial } from './materials';
+import { makeBottle } from './models';
 
 export const BOTTLE_SCALE = 0.78;
 const PER_TIER = [4, 4, 3];
@@ -23,12 +25,12 @@ export interface RackBottle {
   /** 병 입구를 원점으로 하는 축. 붓기 연출은 이 축을 옮기고 기울인다. */
   pivot: THREE.Group;
   home: THREE.Vector3;
-  body: THREE.MeshPhysicalMaterial;
+  body: THREE.MeshToonMaterial;
   glow: number;
   lift: number;
   appearAt: number;
   lent: boolean;
-  /** 마우스를 올리면 병 뒤로 비치는 밝은 테두리 */
+  /** 마우스를 올리면 병 둘레에 생기는 빨간 윤곽 */
   shell?: THREE.Mesh;
   /** 끌다가 놓아 제자리로 날아가는 중 */
   returning?: boolean;
@@ -40,7 +42,7 @@ export interface RackBottle {
 }
 
 /** 병 몸통 재질에 수면을 넣는다: 수면 위는 빈 유리처럼 어둡고, 수면에는 가는 빛줄이 생긴다. */
-function addLiquidLevel(mat: THREE.MeshPhysicalMaterial, level: { value: number }) {
+function addLiquidLevel(mat: THREE.MeshToonMaterial, level: { value: number }) {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uLevel = level;
     sh.vertexShader = sh.vertexShader
@@ -52,26 +54,24 @@ function addLiquidLevel(mat: THREE.MeshPhysicalMaterial, level: { value: number 
         '#include <color_fragment>',
         `#include <color_fragment>
         float scAir = smoothstep(uLevel - 0.006, uLevel + 0.006, vLocalY);
-        diffuseColor.rgb *= mix(1.0, 0.14, scAir);`,
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.155, 0.15), scAir * 0.9);`,
       )
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         totalEmissiveRadiance *= mix(1.0, 0.06, scAir);
-        totalEmissiveRadiance += vec3(1.0, 0.9, 0.72) * 0.55 * step(0.0, uLevel) * (1.0 - smoothstep(0.0, 0.014, abs(vLocalY - uLevel)));`,
+        totalEmissiveRadiance += vec3(0.97, 0.95, 0.9) * 0.9 * step(0.0, uLevel) * (1.0 - smoothstep(0.0, 0.014, abs(vLocalY - uLevel)));`,
       );
   };
   mat.customProgramCacheKey = () => 'rack-bottle-level';
 }
 
 const RIM_MAT = new THREE.MeshBasicMaterial({
-  color: 0xffe2a8,
+  color: 0xd8202a,
   side: THREE.BackSide,
   transparent: true,
   opacity: 0,
   depthWrite: false,
-  blending: THREE.AdditiveBlending,
-  toneMapped: false,
 });
 
 function slotOf(index: number) {
@@ -96,26 +96,21 @@ export class BottleRack {
   }
 
   private buildStand() {
-    const wood = new THREE.MeshPhysicalMaterial({
-      color: 0x3a1c33,
-      roughness: 0.45,
-      clearcoat: 0.6,
-      clearcoatRoughness: 0.3,
-    });
-    const glow = new THREE.MeshBasicMaterial({
-      color: 0xffc98a,
-      toneMapped: false,
-    });
+    const wood = toonMaterial(0x2a2827);
+    const glow = new THREE.MeshBasicMaterial({ color: PAPER });
     const width = PER_TIER[0] * COL_W + 0.1;
     for (let t = 0; t < PER_TIER.length; t++) {
       const h = 0.05 + t * STEP_H;
       const step = new THREE.Mesh(new THREE.BoxGeometry(width, h, STEP_D), wood);
       step.position.set(ORIGIN.x + (PER_TIER[0] - 1) * COL_W * 0.5, h / 2, ORIGIN.z - t * STEP_D);
       this.group.add(step);
-      // 각 단 앞모서리의 금테와 은은한 조명 띠
-      const trim = new THREE.Mesh(new THREE.BoxGeometry(width + 0.01, 0.014, 0.014), goldMaterial);
+      // 각 단 앞모서리의 빨간 띠와 종이색 점선 띠
+      const trim = new THREE.Mesh(new THREE.BoxGeometry(width + 0.01, 0.03, 0.02), redMaterial);
       trim.position.set(step.position.x, h, step.position.z + STEP_D / 2);
       const strip = new THREE.Mesh(new THREE.PlaneGeometry(width - 0.08, 0.012), glow);
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(width + 0.012, 0.008, 0.024), inkMaterial);
+      edge.position.set(step.position.x, h + 0.018, step.position.z + STEP_D / 2);
+      this.group.add(edge);
       strip.position.set(step.position.x, h - 0.03, step.position.z + STEP_D / 2 + 0.001);
       this.group.add(trim, strip);
     }
@@ -146,8 +141,8 @@ export class BottleRack {
         const fill: [number, number] = [bottle.userData.fillFloor, bottle.userData.fillTop];
         const amount = this.amountOf(ing.id);
         const level = { value: amount > 0 ? fill[0] + (fill[1] - fill[0]) * amount : -1 };
-        addLiquidLevel(body.material as THREE.MeshPhysicalMaterial, level);
-        // 병 몸통을 조금 키운 뒷면 껍질: 앞면에 가려지고 가장자리만 빛나 윤곽선처럼 보인다.
+        addLiquidLevel(body.material as THREE.MeshToonMaterial, level);
+        // 병 몸통을 조금 키운 뒷면 껍질: 앞면에 가려지고 가장자리만 빨갛게 보여 윤곽선이 된다.
         const shell = new THREE.Mesh(body.geometry, RIM_MAT.clone());
         shell.scale.setScalar(1.09);
         shell.position.copy(body.position);
@@ -157,7 +152,7 @@ export class BottleRack {
           id: ing.id,
           pivot,
           home,
-          body: body.material as THREE.MeshPhysicalMaterial,
+          body: body.material as THREE.MeshToonMaterial,
           glow: 0.2,
           lift: 0,
           appearAt: animate ? now + index * 70 : -1e9,
@@ -241,7 +236,7 @@ export class BottleRack {
       const targetGlow = this.hovered === b.id ? (empty ? 0.3 : 0.6) : empty ? 0.05 : 0.2;
       b.glow += (targetGlow - b.glow) * k;
       b.body.emissiveIntensity = b.glow;
-      if (b.shell) (b.shell.material as THREE.MeshBasicMaterial).opacity = Math.max(0, (b.glow - 0.2) / 0.35) * 0.55;
+      if (b.shell) (b.shell.material as THREE.MeshBasicMaterial).opacity = Math.max(0, (b.glow - 0.2) / 0.35);
       // 새 병은 위에서 살짝 튀며 내려앉는다.
       const p = Math.min(1, Math.max(0, (now - b.appearAt) / 550));
       const drop = p < 1 ? (1 - easeOutBounce(p)) * 0.8 : 0;
