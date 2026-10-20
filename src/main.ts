@@ -1236,6 +1236,8 @@ function maybeArrive(): boolean {
   const c = CUSTOMER_BY_ID[v.customer];
   const key = `${state.day}-${k}`;
   state.seats[seat] = { idx: k, key, patience: 1, status: 'waiting', first: !state.met.has(c.id), grumbled: false, freeAt: 0 };
+  // 들어온 순간 만난 손님이 된다(돌려보내거나 기다리다 떠나도 다음에는 「첫 손님」이 아니다).
+  state.met.add(c.id);
   state.nextVisit = k + 1;
   state.lastArrivalMin = m;
   shop.enter(key, c, seat, c.lines.enter);
@@ -1291,7 +1293,6 @@ function serve() {
   state.ledger.sales += sale;
   state.ledger.tips += tip;
   state.outcomes[s.idx] = j.grade;
-  state.met.add(c.id);
   if (j.grade === 'perfect') state.perfectTotal += 1;
   const line = c.reactions[j.grade];
   state.clip = { ...j, tip, sale, cost: gCost, recipeName: matched[0]?.name ?? null, name: c.name, line, n: (state.clip?.n ?? 0) + 1 };

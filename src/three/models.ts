@@ -1,5 +1,5 @@
 // 잔 모양 치수와 병·얼음·장식의 3D 모델. 모두 회전체(Lathe)와 기본 도형으로 만든다.
-// 잔 모델(크리스털 컷·금테)은 glassware.ts, 잔 속 술은 liquid.ts에 있다.
+// 잔 모델(먹선 테두리·흰 에칭 띠)은 glassware.ts, 잔 속 술은 liquid.ts에 있다.
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';

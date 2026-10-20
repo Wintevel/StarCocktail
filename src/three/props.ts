@@ -15,7 +15,7 @@ const ORIGIN = new THREE.Vector3(-1.75, 0.04, 0.42);
 interface ShelfGlass {
   id: GlassId;
   pivot: THREE.Group;
-  /** 잔을 이루는 메시(크리스털 몸통·금테)와 원래 재질 */
+  /** 잔을 이루는 메시(유리 몸통·먹선 테두리)와 원래 재질 */
   parts: { mesh: THREE.Mesh; base: THREE.Material }[];
   open: boolean;
   lift: number;
