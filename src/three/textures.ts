@@ -44,22 +44,26 @@ export function lemonTexture() {
 
 /** 병 라벨: 신문지 같은 종이에 검은 테두리와 빨간 별 (2D 세계와 같은 흑백+빨강) */
 export function labelTexture(accent: string) {
+  // 병 둘레를 한 바퀴 감는 띠라서 위아래 줄만 긋고(이음매가 보이지 않게), 가운데에 별 하나와 글줄 두 개.
   return canvasTexture(256, 128, (ctx) => {
     ctx.fillStyle = '#f2ece0';
     ctx.fillRect(0, 0, 256, 128);
-    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
     for (let y = 4; y < 128; y += 8) for (let x = (y / 8) % 2 ? 4 : 0; x < 256; x += 8) ctx.fillRect(x, y, 2, 2);
-    ctx.strokeStyle = '#151313';
-    ctx.lineWidth = 7;
-    ctx.strokeRect(8, 10, 240, 108);
     ctx.fillStyle = '#151313';
-    ctx.fillRect(24, 88, 208, 10);
+    ctx.fillRect(0, 0, 256, 9);
+    ctx.fillRect(0, 119, 256, 9);
+    ctx.fillStyle = accent;
+    ctx.fillRect(0, 106, 256, 8);
+    ctx.fillStyle = '#151313';
+    ctx.fillRect(150, 40, 70, 7);
+    ctx.fillRect(150, 58, 48, 7);
     ctx.fillStyle = accent;
     ctx.beginPath();
     for (let i = 0; i < 10; i++) {
       const r = i % 2 === 0 ? 30 : 12;
       const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
-      ctx.lineTo(128 + Math.cos(a) * r, 52 + Math.sin(a) * r);
+      ctx.lineTo(108 + Math.cos(a) * r, 56 + Math.sin(a) * r);
     }
     ctx.closePath();
     ctx.fill();

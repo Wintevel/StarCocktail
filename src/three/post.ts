@@ -67,7 +67,7 @@ void main() {
     // 3. 색 정리: 빨강은 살리고 나머지는 채도를 낮춘다.
     float L = lum(c);
     float red = smoothstep(0.18, 0.4, c.r - max(c.g, c.b));
-    c = mix(vec3(L), c, mix(0.55, 1.0, red));
+    c = mix(vec3(L), c, mix(0.72, 1.0, red));
     // 4. 하프톤: 어두울수록 큰 점
     vec2 p = gl_FragCoord.xy / uDot;
     p = vec2(p.x + p.y, p.x - p.y) * 0.7071;

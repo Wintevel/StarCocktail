@@ -500,6 +500,7 @@ function render() {
   syncShop();
   document.body.dataset.phase = state.phase;
   document.body.dataset.view = state.view;
+  document.body.dataset.mode = state.mode;
   document.body.dataset.overlay = state.overlay ?? '';
   layoutHud();
 }
@@ -537,8 +538,9 @@ function renderTopbar() {
   const infinite = state.day > LAST_DAY;
   const over = shift() && state.open && shiftStage(minute()) === 'over';
   // 자유 제조에는 시계가 없다: 같은 자리에 모드 이름만 둔다.
-  const clock =
-    shift() && state.started
+  const clock = !state.started
+    ? ''
+    : shift()
       ? `<div class="clock" aria-label="영업 시계"><span class="c-day">DAY<b>${state.day}</b>${infinite ? '<small class="inf">∞</small>' : ''}</span><span class="c-time ${over ? 'over' : ''}" id="clockTime">${clockLabel(minute())}</span></div>`
       : `<div class="clock free" aria-label="자유 제조 중"><span class="c-day">자유 제조</span></div>`;
   $('topbar').innerHTML = `
@@ -853,6 +855,9 @@ function renderClip() {
     ${r.recipeName ? `<p class="named">이 잔의 이름은 <strong>「${r.recipeName}」</strong></p>` : ''}`;
 }
 
+/** 서랍을 막 열었다(열리는 움직임은 이때 한 번만) */
+let drawerOpening = false;
+
 /** 오른쪽 아래 서랍: 잔고·오늘 장부·리필·상점. 영업 중 언제든 열 수 있다. */
 function renderDrawer() {
   const el = $('drawer');
@@ -868,7 +873,7 @@ function renderDrawer() {
   // 다시 그려도 보던 자리를 잃지 않게 스크롤을 지킨다.
   const scroll = el.querySelector('.drawer-body')?.scrollTop ?? 0;
   el.innerHTML = `
-    <div class="drawer-body">
+    <div class="drawer-body ${drawerOpening ? 'enter' : ''}">
       <p class="total">잔고 <strong class="${state.money < 0 ? 'debt' : ''}">${coin(state.money)}</strong></p>
       <h3>오늘 장부</h3>
       ${ledgerRows({ ...state.ledger, rent: state.ledger.rent || rentFor(state.day) }, '마감 때 임대료')}
@@ -877,6 +882,7 @@ function renderDrawer() {
     ${tab}`;
   const body = el.querySelector('.drawer-body');
   if (body) body.scrollTop = scroll;
+  drawerOpening = false;
 }
 
 function ledgerRows(l: Ledger, rentLabel = '임대료·관리비') {
@@ -1507,6 +1513,7 @@ document.addEventListener('click', (e) => {
       return;
     case 'drawer':
       state.drawer = !state.drawer;
+      drawerOpening = state.drawer;
       break;
     case 'menu':
       state.overlay = 'title';

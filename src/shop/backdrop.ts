@@ -202,13 +202,14 @@ function counter() {
 }
 
 function stool(x: number) {
+  // 방석을 손님 엉덩이보다 넓게 그려, 앉은 손님 양옆으로 빨간 방석이 보이게 한다.
   return `<g class="stool" data-seat-x="${x}">
     <path d="M${x - 6},${SEAT_Y + 10} L${x - 6},${FLOOR_Y - 8} L${x + 6},${FLOOR_Y - 8} L${x + 6},${SEAT_Y + 10} Z" fill="${INK}" stroke="${LGRAY}" stroke-width="3"/>
-    <ellipse cx="${x}" cy="840" rx="42" ry="10" fill="none" stroke="${LGRAY}" stroke-width="6"/>
-    <ellipse cx="${x}" cy="${FLOOR_Y - 4}" rx="50" ry="11" fill="${INK}" stroke="${LGRAY}" stroke-width="4"/>
-    <path d="M${x - 62},${SEAT_Y} L${x - 58},${SEAT_Y + 16} Q${x},${SEAT_Y + 34} ${x + 58},${SEAT_Y + 16} L${x + 62},${SEAT_Y} Z" fill="#8e1218" stroke="${INK}" stroke-width="4"/>
-    <ellipse cx="${x}" cy="${SEAT_Y}" rx="62" ry="15" fill="${RED}" stroke="${INK}" stroke-width="4"/>
-    <path d="M${x - 40},${SEAT_Y - 3} Q${x},${SEAT_Y - 10} ${x + 36},${SEAT_Y - 4}" fill="none" stroke="#ff7a7f" stroke-width="3"/>
+    <ellipse cx="${x}" cy="840" rx="46" ry="10" fill="none" stroke="${LGRAY}" stroke-width="6"/>
+    <ellipse cx="${x}" cy="${FLOOR_Y - 4}" rx="52" ry="11" fill="${INK}" stroke="${LGRAY}" stroke-width="4"/>
+    <path d="M${x - 84},${SEAT_Y} L${x - 79},${SEAT_Y + 18} Q${x},${SEAT_Y + 40} ${x + 79},${SEAT_Y + 18} L${x + 84},${SEAT_Y} Z" fill="#8e1218" stroke="${INK}" stroke-width="4"/>
+    <ellipse cx="${x}" cy="${SEAT_Y}" rx="84" ry="18" fill="${RED}" stroke="${INK}" stroke-width="4"/>
+    <path d="M${x - 56},${SEAT_Y - 4} Q${x},${SEAT_Y - 12} ${x + 50},${SEAT_Y - 5}" fill="none" stroke="#ff7a7f" stroke-width="3"/>
   </g>`;
 }
 

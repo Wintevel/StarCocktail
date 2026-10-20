@@ -937,11 +937,14 @@ function makeCoaster() {
   return g;
 }
 
-/** 카운터: 종이색 윗면, 검은 앞면에 빨간 띠 (2D 가게의 카운터와 같은 모양) */
+/** 카운터: 회색 윗면(하프톤 점이 앉는다)에 종이색 앞 가장자리, 검은 앞면에 빨간 띠 */
 function makeCounter() {
   const g = new THREE.Group();
-  const top = new THREE.Mesh(new THREE.BoxGeometry(16, 0.12, 4.2), toonMaterial(PAPER));
+  const top = new THREE.Mesh(new THREE.BoxGeometry(16, 0.12, 4.2), toonMaterial(0x8f8a83));
   top.position.set(0.5, -0.06, -0.6);
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(16, 0.13, 0.12), toonMaterial(PAPER));
+  lip.position.set(0.5, -0.06, 1.44);
+  g.add(lip);
   const front = new THREE.Mesh(new THREE.BoxGeometry(16, 1.6, 0.1), toonMaterial(0x232221));
   front.position.set(0.5, -0.92, 1.5);
   const band = new THREE.Mesh(new THREE.BoxGeometry(16, 0.08, 0.03), redMaterial);
