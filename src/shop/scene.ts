@@ -1,12 +1,13 @@
 // 2D 가게 화면: 정적인 배경(backdrop.ts) 위에서 손님(art.ts)이 문으로 들어와 빈 스툴에 앉고,
 // 기다리다가(인내 막대), 잔을 받으면 반응한 뒤 잔을 들고 나간다. 손님 머리 위 이름표·말풍선은 DOM으로 띄운다.
+// 가게는 손님 등 뒤에서 카운터를 보는 구도다: 걸을 때는 앞모습, 스툴에 올라앉는 순간 몸을 돌려 뒷모습이 된다.
 // 할 말이 있는 손님은 이름표가 「…」로 바뀌고, 잔을 받은 뒤에도 잔을 든 채 스툴에 남아 이야기를 기다린다.
 //
 // 움직임은 모두 performance.now() 기준 시간으로 계산한다(느린 기기·테스트 시계에서도 같은 자리에 있다).
 // 숨쉬기·눈 깜빡임·걸음의 다리 흔들기 같은 장식 움직임만 CSS 애니메이션이다.
 
 import type { Customer } from '../data';
-import { type Mood, miniGlass, rigFor, type Rig } from './art';
+import { artDefs, type Mood, miniGlass, rigFor, type Rig } from './art';
 import { backdropSvg, DOOR_X, FLOOR_Y, foregroundSvg, SEAT_X, SEAT_Y } from './backdrop';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -95,6 +96,8 @@ export class ShopScene {
 
   constructor(container: HTMLElement) {
     this.root = container;
+    // 손님 그림의 셀 그늘·무늬 정의는 문서에 한 번만 둔다(주문 카드 얼굴 그림도 함께 쓴다).
+    if (!document.querySelector('.art-defs')) document.body.insertAdjacentHTML('afterbegin', artDefs());
     const make = (cls: string, html: string) => {
       const svg = el('svg', { class: `shop-layer ${cls}`, preserveAspectRatio: 'xMidYMid slice', 'aria-hidden': cls === 'actors' ? 'false' : 'true' });
       svg.innerHTML = html;
@@ -165,7 +168,8 @@ export class ShopScene {
     const g = el('g', { class: 'patron walking', 'data-id': c.id, 'data-mood': 'idle' });
     // 장식 움직임이 손님마다 엇갈리게 지연을 준다.
     g.style.setProperty('--d', `${(seat * 0.83 + c.id.length * 0.37) % 3}s`);
-    g.innerHTML = `<g class="p-flip"><g class="p-hold"></g>${rig.svg}<rect class="p-hit" x="-70" y="${rig.top - 10}" width="140" height="${-rig.top + 130}" fill="transparent"/></g>`;
+    // 들고 나가는 잔(p-hold)은 앞모습에서만 보인다(앉아 있을 때는 카운터 위, 몸에 가려진다).
+    g.innerHTML = `<g class="p-flip">${rig.svg}<g class="p-hold"></g><rect class="p-hit" x="-70" y="${rig.top - 10}" width="140" height="${-rig.top + 130}" fill="transparent"/></g>`;
     this.actors.appendChild(g);
 
     const tag = document.createElement('button');
@@ -300,8 +304,6 @@ export class ShopScene {
       if (hold) {
         const [hx, hy] = v.rig.hand;
         hold.innerHTML = `<g transform="translate(${hx} ${hy - 4})" class="held-glass">${miniGlass(glass.glass, glass.color)}</g>`;
-        // 잔은 몸보다 앞에 그린다.
-        v.el.querySelector('.p-flip')?.appendChild(hold);
       }
     }
     this.say(key, line, mood, REACT_MS + 600);
@@ -403,7 +405,8 @@ export class ShopScene {
         const k = clamp01(t / (HOP_MS * 0.85));
         v.hipY = seatHip + (stand - seatHip) * easeInOut(k) - Math.sin(Math.PI * k) * 30;
         v.el.classList.toggle('seated', k < 0.5);
-        v.dir = -1;
+        // 뒷모습에서 몸을 돌려 앞모습이 된 뒤에 문 쪽(왼쪽)을 본다.
+        v.dir = k < 0.5 ? 1 : -1;
         if (k >= 1) {
           v.from = v.x;
           v.to = DOOR_X;
@@ -430,7 +433,10 @@ export class ShopScene {
     const bob = walking ? Math.abs(Math.sin(v.walk)) * 9 : 0;
     const lean = walking ? v.dir * 3 : 0;
     const s = v.rig.scale;
-    v.el.setAttribute('transform', `translate(${v.x.toFixed(1)} ${(v.hipY - bob).toFixed(1)}) rotate(${lean}) scale(${(s * v.dir).toFixed(3)} ${s})`);
+    // 스툴에 오르내리며 몸을 돌리는 순간: 가로로 살짝 좁아졌다 펴지며 앞모습 ↔ 뒷모습이 바뀐다.
+    const turn = v.mode === 'hop' ? clamp01(t / HOP_MS) : v.mode === 'hopdown' ? clamp01(t / (HOP_MS * 0.85)) : -1;
+    const sx = turn < 0 ? 1 : 1 - 0.28 * Math.sin(Math.PI * turn);
+    v.el.setAttribute('transform', `translate(${v.x.toFixed(1)} ${(v.hipY - bob).toFixed(1)}) rotate(${lean}) scale(${(s * v.dir * sx).toFixed(3)} ${s})`);
     this.placeUi(v, now);
   }
 
