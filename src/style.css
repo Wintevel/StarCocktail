@@ -17,6 +17,8 @@
   --white: #fffaff;
   --red: #e8238f;
   --red-deep: #a8126a;
+  /* 흰 글자를 얹는 마젠타 바탕(명도 대비 4.5:1 이상) */
+  --red-text-bg: #d81b84;
   --pink: #ff7ad9;
   --violet: #8a2be2;
   --lav: #c9b6ff;
@@ -112,8 +114,9 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* 마젠타 고리는 라벤더 카드(3.7:1)와 밤 바탕(4.6:1) 모두에서 보인다 */
 :focus-visible {
-  outline: 3px solid var(--cyan);
+  outline: 3px solid var(--red);
   outline-offset: 3px;
 }
 
@@ -236,7 +239,7 @@ button:disabled {
 }
 
 .primary {
-  background: linear-gradient(100deg, #f02a95 0%, #b021c9 55%, var(--violet) 100%);
+  background: linear-gradient(100deg, #d81b84 0%, #b021c9 55%, var(--violet) 100%);
   color: var(--white);
   border-color: #ffd1f0;
   box-shadow:
@@ -704,7 +707,7 @@ button:disabled {
   width: 22px;
   height: 22px;
   border-radius: 5px;
-  background: linear-gradient(160deg, var(--pink), var(--red));
+  background: linear-gradient(160deg, var(--red-text-bg), var(--violet));
   color: var(--white);
   font: 700 16px/1 var(--font-display);
   transform: rotate(-8deg);
@@ -746,7 +749,7 @@ button:disabled {
 }
 
 .p-tag.hot {
-  background: linear-gradient(110deg, #f02a95, var(--violet));
+  background: linear-gradient(110deg, #d81b84, var(--violet));
   border-color: var(--white);
   box-shadow:
     -4px -3px 0 var(--cyan),
@@ -1063,7 +1066,7 @@ body[data-view="mix"] .wipe-edge {
   align-items: baseline;
   gap: 5px;
   padding: 6px 10px 5px;
-  background: linear-gradient(110deg, #f02a95, var(--violet));
+  background: linear-gradient(110deg, #d81b84, var(--violet));
   color: var(--white);
   font: 500 13px/1 var(--font-display);
   letter-spacing: 0.14em;
@@ -1228,7 +1231,7 @@ body[data-view="mix"] .wipe-edge {
 }
 
 .ss.active {
-  background: linear-gradient(110deg, #f02a95, var(--violet));
+  background: linear-gradient(110deg, #d81b84, var(--violet));
   border-color: var(--white);
   box-shadow:
     3px 3px 0 var(--violet),
@@ -1484,7 +1487,7 @@ body[data-view="mix"] .wipe-edge {
 
 .kw-pill {
   padding: 3px 7px 4px;
-  background: linear-gradient(110deg, #f02a95, #b021c9);
+  background: linear-gradient(110deg, #d81b84, #b021c9);
   color: var(--white);
   border-radius: 999px;
   font: 400 13px/1 var(--font-title-ko);
@@ -1789,13 +1792,17 @@ body[data-view="mix"] .wipe-edge {
     background-color 160ms ease;
 }
 
+.g-card strong {
+  word-break: keep-all;
+}
+
 .g-card small {
   font: 600 11px var(--font-ui);
   color: #6a5a9a;
 }
 
 .g-card.selected {
-  background: linear-gradient(160deg, #f02a95, var(--violet));
+  background: linear-gradient(160deg, #d81b84, var(--violet));
   color: var(--white);
   border-color: var(--white);
   box-shadow:
@@ -1848,7 +1855,7 @@ body[data-view="mix"] .wipe-edge {
 
 @media (hover: hover) and (pointer: fine) {
   .g-arrow:not(:disabled):hover {
-    background: var(--red);
+    background: var(--red-text-bg);
   }
 }
 
@@ -1883,7 +1890,7 @@ body[data-view="mix"] .wipe-edge {
 }
 
 .prompt.loud {
-  background: linear-gradient(110deg, #f02a95, var(--violet));
+  background: linear-gradient(110deg, #d81b84, var(--violet));
   border-color: var(--white);
   box-shadow:
     5px 5px 0 var(--cyan),
@@ -2191,7 +2198,7 @@ body[data-view="mix"] .wipe-edge {
 .tab-alert {
   padding: 2px 7px;
   border-radius: 999px;
-  background: var(--red);
+  background: var(--red-text-bg);
   color: var(--white);
   font: 700 11px var(--font-ui);
 }
@@ -2581,7 +2588,7 @@ body[data-view="mix"] .wipe-edge {
   float: left;
   margin: 5px 8px 0 0;
   padding: 5px 8px 6px;
-  background: linear-gradient(150deg, #f02a95, var(--violet));
+  background: linear-gradient(150deg, #d81b84, var(--violet));
   color: var(--white);
   border-radius: 6px;
   font: 400 34px/0.9 var(--font-heavy);
@@ -2744,7 +2751,7 @@ body[data-view="mix"] .wipe-edge {
 .recipes li.focus em {
   padding: 1px 6px;
   border-radius: 999px;
-  background: var(--red);
+  background: var(--red-text-bg);
   color: var(--white);
   font: 400 12px var(--font-title-ko);
   font-style: normal;
@@ -2868,7 +2875,7 @@ body[data-view="mix"] .wipe-edge {
 }
 
 .clip-story.key {
-  background: linear-gradient(110deg, #f02a95, var(--violet));
+  background: linear-gradient(110deg, #d81b84, var(--violet));
   color: var(--white);
 }
 
@@ -3078,7 +3085,7 @@ body[data-view="mix"] .wipe-edge {
   width: 26px;
   height: 26px;
   border-radius: 6px;
-  background: linear-gradient(150deg, #f02a95, var(--violet));
+  background: linear-gradient(150deg, #d81b84, var(--violet));
   color: var(--white);
   font: 600 15px/1 var(--font-num);
   transform: rotate(-6deg);
@@ -3123,7 +3130,7 @@ body[data-view="mix"] .wipe-edge {
 }
 
 .st-blunt .tk-badge {
-  background: var(--red);
+  background: var(--red-text-bg);
   border-color: var(--red);
   color: var(--white);
 }
@@ -3221,7 +3228,7 @@ body[data-view="mix"] .wipe-edge {
 }
 
 .tk-notes .n-gain {
-  background: linear-gradient(110deg, #f02a95, var(--violet));
+  background: linear-gradient(110deg, #d81b84, var(--violet));
   color: var(--white);
 }
 
@@ -3371,7 +3378,7 @@ body:not([data-talk=""]) .p-tag {
   min-width: 20px;
   padding: 2px 5px;
   border-radius: 999px;
-  background: var(--red);
+  background: var(--red-text-bg);
   color: var(--white);
   font-size: 12px;
   text-align: center;
@@ -3471,7 +3478,7 @@ body:not([data-talk=""]) .p-tag {
   align-self: start;
   padding: 3px 0;
   border-radius: 4px;
-  background: var(--red);
+  background: var(--red-text-bg);
   color: var(--white);
   font: 400 12px/1.1 var(--font-title-ko);
   text-align: center;
@@ -3809,7 +3816,7 @@ body:not([data-talk=""]) .p-tag {
   margin: 0 0 6px;
   padding: 2px 9px;
   border-radius: 3px;
-  background: linear-gradient(110deg, #f02a95, var(--violet));
+  background: linear-gradient(110deg, #d81b84, var(--violet));
   color: var(--white);
   font: 400 12px var(--font-title-ko);
   transform: skewX(-10deg);
@@ -3983,7 +3990,7 @@ body:not([data-talk=""]) .p-tag {
   }
 
   .order-card {
-    top: calc(var(--topbar) + 54px);
+    top: calc(var(--topbar) + 58px);
     left: 8px;
     right: 8px;
     width: auto;
@@ -4049,15 +4056,16 @@ body:not([data-talk=""]) .p-tag {
     padding: 2px 7px 3px;
   }
 
+  /* 오른쪽 아래 서랍 탭 위로 올려 둔다(탭이 게이지 숫자를 가리지 않게) */
   .meters.docked {
     left: 8px;
     right: 8px;
-    bottom: 8px;
+    bottom: 62px;
   }
 
   .meters.compact {
     top: auto;
-    bottom: 70px;
+    bottom: 8px;
     left: 8px;
     transform: rotate(-1deg);
     width: 170px;

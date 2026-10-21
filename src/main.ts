@@ -645,7 +645,7 @@ function layoutHud(a: GlassAnchor | null = anchor) {
   const arc = $('garnish');
   if (!arc.hidden) {
     const cards = [...arc.querySelectorAll<HTMLElement>('.g-card')];
-    const R = Math.min(300, window.innerWidth * 0.36);
+    const R = Math.min(300, window.innerWidth * (isMobile() ? 0.32 : 0.36));
     const cy = Math.max(isMobile() ? 300 : 190, a.top - 30);
     arc.style.transform = `translate(${Math.round(a.x)}px, ${Math.round(cy)}px)`;
     const fresh = arc.dataset.fresh === '1';
