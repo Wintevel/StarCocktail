@@ -7,12 +7,13 @@
 //  - 모든 술: 수면의 잔물결 빛(커스틱)과 잔 벽에 맞닿은 가장자리(메니스커스)
 // 층마다 효과 세기(fx)를 정점에 담고, 저으면 섞인 층 전체에 옅게 퍼진다.
 // 수면 위로 튀는 물방울·떠오르는 별가루만 작은 점 입자(SurfaceSpray)로 따로 그린다.
+// 재질은 2D 그림과 어울리게 셀(툰) 셰이딩이다. 외곽선·하프톤 점·색 정리는 후처리(post.ts)가 맡는다.
 
 import * as THREE from 'three';
 import { INGREDIENT_BY_ID, type IngredientId } from '../data';
-import { fxTime } from './glassware';
+import { fxTime } from './materials';
 import type { GlassShape } from './models';
-import { sparkleTexture } from './textures';
+import { sparkleTexture, toonGradient } from './textures';
 
 /** 재료 효과 세기 (x 탄산, y 성운, z 크림 소용돌이, w 금빛). 섞인 층은 재료 비율만큼 옅어진다. */
 export function fxOf(ids: readonly IngredientId[]): THREE.Vector4 {
@@ -311,8 +312,8 @@ const CAP_FRAGMENT = /* glsl */ `
 `;
 
 export interface LiquidMaterials {
-  side: THREE.MeshPhysicalMaterial;
-  cap: THREE.MeshPhysicalMaterial;
+  side: THREE.MeshToonMaterial;
+  cap: THREE.MeshToonMaterial;
   /** 젓는 동안 쌓인 회전(바퀴 수). 옆면·수면 무늬가 함께 돈다. */
   spin: { value: number };
   /** 젓는 세기 0~1: 수면 무늬가 소용돌이처럼 감긴다. */
@@ -320,14 +321,11 @@ export interface LiquidMaterials {
 }
 
 function sideMaterial(spin: { value: number }) {
-  const mat = new THREE.MeshPhysicalMaterial({
+  const mat = new THREE.MeshToonMaterial({
     vertexColors: true,
     // 조명에 하얗게 바래지 않도록 난반사는 낮추고, 색은 자체 발광으로 살린다.
-    color: 0x999999,
-    roughness: 0.3,
-    clearcoat: 0.4,
-    clearcoatRoughness: 0.15,
-    envMapIntensity: 0.45,
+    color: 0xb0b0b0,
+    gradientMap: toonGradient(),
   });
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uLqTime = fxTime;
@@ -344,15 +342,8 @@ function sideMaterial(spin: { value: number }) {
 }
 
 /** 수면 재질. 서빙한 잔(손님이 들고 나가는 복제본)은 값을 그대로 복사한 새 재질을 쓴다. */
-export function capMaterial(spin: { value: number }, stir: { value: number }, from?: THREE.MeshPhysicalMaterial) {
-  // 수면은 백바 조명을 정면으로 비추는 각도라 반사가 강하면 하얗게 날아간다.
-  // 정반사를 약하게 퍼뜨려 술 색이 보이게 한다.
-  const mat = new THREE.MeshPhysicalMaterial({
-    color: 0xffffff,
-    roughness: 0.42,
-    specularIntensity: 0.3,
-    envMapIntensity: 0.2,
-  });
+export function capMaterial(spin: { value: number }, stir: { value: number }, from?: THREE.MeshToonMaterial) {
+  const mat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: toonGradient() });
   const u = {
     uLqTime: fxTime,
     uLqSpin: spin,
@@ -391,7 +382,7 @@ export function liquidMaterials(): LiquidMaterials {
 }
 
 /** 수면 재질에 맨 위 층의 색·효과와 수면 반지름을 넣는다. */
-export function setCap(mat: THREE.MeshPhysicalMaterial, top: LiquidBand, radius: number) {
+export function setCap(mat: THREE.MeshToonMaterial, top: LiquidBand, radius: number) {
   // 하얀 술(크림 등)은 조명과 발광이 겹쳐 하얗게 날아가지 않도록 조금 낮춘다.
   const luma = top.color.r * 0.299 + top.color.g * 0.587 + top.color.b * 0.114;
   const bright = THREE.MathUtils.smoothstep(luma, 0.6, 0.95);

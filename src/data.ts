@@ -143,11 +143,12 @@ export type Constraint =
 export interface Customer {
   id: string;
   name: string;
+  /** 칭호 (말풍선·이름표에 함께 보인다) */
   title: string;
-  color: string;
-  accent: string;
-  hair: string;
-  longHair?: boolean;
+  /** 정거장 도시 녹턴에서의 자리 (세계관, src/world.ts에 비밀·관계가 있다) */
+  role: string;
+  /** 자리에 앉을 때, 오래 기다릴 때, 참다못해 나갈 때 하는 짧은 말 */
+  lines: { enter: string; wait: string; angry: string };
   reactions: { perfect: string; good: string; fail: string };
 }
 
@@ -155,10 +156,9 @@ export const CUSTOMERS: Customer[] = [
   {
     id: 'mio',
     name: '미오',
-    title: '졸린 열차 차장',
-    color: '#6fa8ff',
-    accent: '#ffe08a',
-    hair: '#3b4f8f',
+    title: '졸린 막차 차장',
+    role: '은하선 막차 「녹턴 23호」의 차장',
+    lines: { enter: '막차 끝나고 왔어요… 여기 앉아도 되죠?', wait: '으음… 깜빡 졸 뻔했어요.', angry: '죄송해요, 다음 열차 시간이라서요…' },
     reactions: {
       perfect: '아, 이거예요. 꿈속에서도 이 맛이 날 것 같아요.',
       good: '음, 나쁘지 않아요. 조금만 더 제 취향이었으면…',
@@ -169,9 +169,8 @@ export const CUSTOMERS: Customer[] = [
     id: 'grey',
     name: '그레이',
     title: '비 오는 날의 탐정',
-    color: '#8a8fa3',
-    accent: '#c9782c',
-    hair: '#5a5d6b',
+    role: '할의 옛 동업자, 혼자 실종 사건을 쫓는 사립 탐정',
+    lines: { enter: '…자리 하나. 우산은 여기 둬도 되겠지.', wait: '기다리는 건 익숙해. 잠복이 일이니까.', angry: '시간은 단서보다 빨리 사라지지. 간다.' },
     reactions: {
       perfect: '…좋아. 실마리가 보이는군.',
       good: '흠, 쓸 만하네. 완벽하진 않지만.',
@@ -182,10 +181,8 @@ export const CUSTOMERS: Customer[] = [
     id: 'serena',
     name: '세레나',
     title: '무대 뒤의 가수',
-    color: '#ff8fb8',
-    accent: '#ffffff',
-    hair: '#ff6fa8',
-    longHair: true,
+    role: '극장 「월광관」의 전속 가수',
+    lines: { enter: '공연 끝! 목 좀 쉬어 갈게요.', wait: '라~ 라~ … 목 풀고 있을게요.', angry: '리허설에 늦겠어요. 다음에 봐요!' },
     reactions: {
       perfect: '라~ 목소리가 벨벳처럼 나와요! 고마워요.',
       good: '괜찮아요, 무대는 해낼 수 있겠어요.',
@@ -196,9 +193,8 @@ export const CUSTOMERS: Customer[] = [
     id: 'evan',
     name: '에반',
     title: '떠돌이 시인',
-    color: '#9c7cff',
-    accent: '#9c1d45',
-    hair: '#4b3a7a',
+    role: '세레나의 노랫말을 몰래 쓰는 익명 작사가 「E」',
+    lines: { enter: '오늘 밤 첫 줄은 이 자리에서 써야겠어요.', wait: '기다림도 운율이 되죠… 아마도.', angry: '마지막 연은… 다른 곳에서 쓸게요.' },
     reactions: {
       perfect: '아… 이 잔 하나로 시 한 편이 나오겠군요.',
       good: '아름답지만, 마지막 한 줄이 비어 있는 느낌이에요.',
@@ -209,9 +205,8 @@ export const CUSTOMERS: Customer[] = [
     id: 'bolt',
     name: '볼트 선장',
     title: '은퇴한 우주 해적',
-    color: '#4fbf9a',
-    accent: '#ffd84a',
-    hair: '#e6e6ee',
+    role: '마지막 항해에서 일등 항해사를 잃은 늙은 선장',
+    lines: { enter: '하하! 할 녀석 가게가 아직 열려 있군!', wait: '바텐더, 이 늙은이 목이 말라 가네.', angry: '느려 터졌군! 내 배였으면 갑판 청소감이야!' },
     reactions: {
       perfect: '하하! 옛날 함선 갑판에서 마시던 그 맛이야!',
       good: '나쁘지 않군, 바텐더. 다음엔 더 잘해 보게.',
@@ -221,11 +216,9 @@ export const CUSTOMERS: Customer[] = [
   {
     id: 'norma',
     name: '노르마',
-    title: '꿈의 감독관',
-    color: '#e0e6ff',
-    accent: '#7c5cff',
-    hair: '#c9d2ff',
-    longHair: true,
+    title: '꿈 관리국 감독관',
+    role: '녹턴의 꿈과 밤 장사를 허가하는 관리국 감독관',
+    lines: { enter: '정기 점검 겸 한 잔. 영업 허가증은 벽에 붙어 있군요.', wait: '대기 시간도 기록됩니다.', angry: '응대 지연. 보고서에 적겠습니다.' },
     reactions: {
       perfect: '오차 없음. 기록해 두겠습니다.',
       good: '허용 범위… 아슬아슬하군요.',
@@ -235,10 +228,9 @@ export const CUSTOMERS: Customer[] = [
   {
     id: 'pipi',
     name: '피피',
-    title: '꼬마 손님',
-    color: '#ffb36b',
-    accent: '#e8304a',
-    hair: '#ff9a3c',
+    title: '꼬마 배달부',
+    role: '녹턴 골목을 누비는 꼬마 배달부, 사라진 엄마를 찾는 중',
+    lines: { enter: '배달 끝! 나도 손님이야, 손님!', wait: '심심해애… 아직이야?', angry: '흥! 배달하러 갈 거야!' },
     reactions: {
       perfect: '우와아! 세상에서 제일 멋진 음료야!',
       good: '음… 맛있긴 한데 뭔가 부족해!',
@@ -249,10 +241,8 @@ export const CUSTOMERS: Customer[] = [
     id: 'leila',
     name: '레일라',
     title: '축제의 주인공',
-    color: '#ffcf5c',
-    accent: '#7c5cff',
-    hair: '#ffcf5c',
-    longHair: true,
+    role: '꿈의 축제 진행자, 무대와 사람을 모으는 중',
+    lines: { enter: '짜잔! 축제 준비 회의는 여기서 하자!', wait: '축제 일정표 좀 보고 있을게.', angry: '할 일이 산더미야, 다음에 올게!' },
     reactions: {
       perfect: '최고야! 이 잔으로 건배하자, 모두!',
       good: '좋아, 축제 분위기는 나네!',

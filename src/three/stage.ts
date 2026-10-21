@@ -1,20 +1,18 @@
-// 3D 무대: 바 배경 위에 잔과 병 진열대를 놓고, 게임 상태(Drink)가 바뀔 때마다
-// 붓기·젓기·얼음·장식 연출을 재생한다. 손님은 왼쪽에서 걸어 들어와 술을 받아 오른쪽으로 나간다.
+// 3D 제조대: 잔과 병 진열대·잔 쟁반을 놓고, 게임 상태(Drink)가 바뀔 때마다 붓기·젓기·얼음·장식 연출을 재생한다.
+// 2D 가게와 화풍을 맞추려고 셀 셰이딩 재질에 먹선·하프톤 후처리(post.ts)를 쓰고, 배경은 투명하게 두어
+// 캔버스 뒤 DOM 콜라주 배경이 비치게 한다. 손님은 2D 가게 화면(src/shop)에만 나온다.
+// 제조 화면이 아닐 때는 그리기를 멈춘다(setActive).
 
 import * as THREE from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { type GarnishId, GLASS_BY_ID, type GlassId, ICE_BY_ID, INGREDIENT_BY_ID, type IngredientId } from '../data';
-import { type Drink, type Grade, visibleLayers } from '../mix';
-import { buildBar, buildEnvScene } from './bar';
-import { animateFigure, buildFigure, disposeFigure, type Figure, type FigureLook, type Mood, setMood } from './figure';
-import { fxTime, makeGlass } from './glassware';
-import { capMaterial, fxOf, type LiquidBand, liquidGeometry, liquidMaterials, setCap, SurfaceSpray } from './liquid';
-import { fillDepth, GLASS_SHAPES, type GlassShape, goldMaterial, iceMaterial, makeBottle, makeGarnish, makeIce, rimY } from './models';
-import { GradedOutputPass } from './post';
-import { GlassShelf, makeRecipeBook } from './props';
-import { onQuality, quality, setQuality } from './quality';
+import { type Drink, visibleLayers } from '../mix';
+import { makeGlass } from './glassware';
+import { fxOf, type LiquidBand, liquidGeometry, liquidMaterials, setCap, SurfaceSpray } from './liquid';
+import { fxTime, inkMaterial, PAPER, redMaterial, steelMaterial, toonMaterial } from './materials';
+import { fillDepth, GLASS_SHAPES, type GlassShape, iceMaterial, makeBottle, makeGarnish, makeIce, rimY } from './models';
+import { InkRenderer } from './post';
+import { GlassShelf } from './props';
+import { quality, setQuality } from './quality';
 import { BOTTLE_SCALE, BottleRack, type RackBottle } from './rack';
 import { shadowTexture } from './textures';
 
@@ -25,21 +23,10 @@ const STIR_MS = 1300;
 /** 붓기 연출 중 술이 흘러나오는 구간 (0~1) */
 const FLOW: [number, number] = [0.37, 0.74];
 
-/** 손님이 서서 기다리는 자리 (카운터 건너편 왼쪽) */
-/** 손님이 서는 자리: 카운터 건너편, 잔보다 왼쪽 뒤. 몸 아래쪽은 카운터에 가려진다. */
-const PATRON_SPOT = new THREE.Vector3(-1.75, 1.3, -2.15);
-const PATRON_SCALE = 1.35;
-/** 서빙할 때 잔이 미끄러져 가는 자리(손님 바로 앞 카운터) */
-const SERVE_SPOT = new THREE.Vector3(PATRON_SPOT.x + 0.85, 0, -1.05);
-const PATRON_EDGE = 7.5;
-/** 왼쪽 끝에서 자리까지 걸어 들어오는 시간, 자리에서 오른쪽 끝까지 나가는 시간(초) */
-const ENTER_SEC = 3.2;
-const LEAVE_SEC = 3.6;
-
-/** 카메라 3단계: 손님 맞이(넓게) · 제조(진열대와 잔) · 장식(잔 가까이) */
-export type View = 'greet' | 'mix' | 'garnish';
+/** 카메라 3단계: 잔 고르기(쟁반까지 넓게) · 제조(진열대와 잔) · 장식(잔 가까이) */
+export type View = 'pick' | 'mix' | 'garnish';
 const VIEWS: Record<View, { target: THREE.Vector3; half: number; minDist: number; pitch: number }> = {
-  greet: { target: new THREE.Vector3(0.25, 0.75, -0.35), half: 2.75, minDist: 5.2, pitch: 0.3 },
+  pick: { target: new THREE.Vector3(0.35, 0.62, -0.2), half: 2.75, minDist: 4.6, pitch: 0.32 },
   mix: { target: new THREE.Vector3(0.95, 0.62, -0.05), half: 2.45, minDist: 3.7, pitch: 0.36 },
   garnish: { target: new THREE.Vector3(0, 0.78, 0.05), half: 1.6, minDist: 2.6, pitch: 0.38 },
 };
@@ -54,32 +41,13 @@ export interface GlassAnchor {
 }
 
 /** 포인터 아래에 있는 것 */
-export type Target = { kind: 'bottle'; id: IngredientId } | { kind: 'glass'; id: GlassId } | { kind: 'book' };
+export type Target = { kind: 'bottle'; id: IngredientId } | { kind: 'glass'; id: GlassId };
 
 const easeOut = (t: number) => 1 - (1 - t) ** 3;
 const easeOutBack = (t: number) => 1 + 2.2 * (t - 1) ** 3 + 1.2 * (t - 1) ** 2;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
 const seg = (p: number, a: number, b: number) => clamp01((p - a) / (b - a));
-
-interface Patron {
-  key: string;
-  fig: Figure;
-  x: number;
-  state: 'enter' | 'wait' | 'leave';
-  /** 지금 상태가 시작된 시각. 걸음은 프레임 수가 아니라 시간으로 계산해 느린 기기에서도 제때 도착한다. */
-  since: number;
-  mood: Mood;
-  moodAt: number;
-  leaveAt: number;
-  walk: number;
-  /** 서빙한 잔의 복제본. 손님이 들고 나간다. 원래 잔 자리는 다음 손님 잔에 쓰인다. */
-  takeaway: {
-    cup: THREE.Group;
-    from: THREE.Vector3;
-    cap: THREE.Material | null;
-  } | null;
-}
 
 interface IceCube {
   mesh: THREE.Mesh;
@@ -123,16 +91,14 @@ function layerOf(ids: IngredientId[]): Layer {
 export class Stage3D {
   readonly canvas: HTMLCanvasElement;
   private renderer: THREE.WebGLRenderer;
-  private composer: EffectComposer;
-  private bloom: UnrealBloomPass;
-  private output: GradedOutputPass;
+  private ink = new InkRenderer();
   private scene = new THREE.Scene();
-  private camera = new THREE.PerspectiveCamera(36, 1, 0.05, 60);
-  private camTarget = VIEWS.greet.target.clone();
+  private camera = new THREE.PerspectiveCamera(36, 1, 0.05, 40);
+  private camTarget = VIEWS.pick.target.clone();
   private camDist = 0;
-  private camPitch = VIEWS.greet.pitch;
-  private view: View = 'greet';
-  private bar = buildBar();
+  private camPitch = VIEWS.pick.pitch;
+  private view: View = 'pick';
+  private active = false;
 
   private drink: Drink | null = null;
   private glassRoot = new THREE.Group();
@@ -155,8 +121,6 @@ export class Stage3D {
 
   private rack = new BottleRack();
   private shelf = new GlassShelf();
-  private book = makeRecipeBook();
-  bookEnabled = false;
   /** 병을 끌고 있는 중 */
   private drag: {
     id: IngredientId;
@@ -167,7 +131,7 @@ export class Stage3D {
     moved: boolean;
     near: boolean;
   } | null = null;
-  /** 잔·책을 누르기 시작한 대상 (손을 뗄 때 같은 대상이면 누른 것으로 본다) */
+  /** 잔을 누르기 시작한 대상 (손을 뗄 때 같은 대상이면 누른 것으로 본다) */
   private press: { target: Target; sx: number; sy: number } | null = null;
   private dragPlane = new THREE.Plane();
   private lastAnchor = '';
@@ -194,11 +158,8 @@ export class Stage3D {
   private lastFrame = 0;
   private lastTick = 0;
   private slowFrames = 0;
-
-  private patron: Patron | null = null;
-  /** 서빙을 마치고 오른쪽으로 걸어 나가는 손님들 */
-  private leavers: Patron[] = [];
-  private serveAnim: { start: number; to: THREE.Vector3 } | null = null;
+  /** 서빙: 잔이 앞으로 미끄러져 나가는 연출 */
+  private serveAnim: { start: number } | null = null;
   private glassOffset = new THREE.Vector3();
 
   private raycaster = new THREE.Raycaster();
@@ -206,25 +167,16 @@ export class Stage3D {
 
   constructor(container: HTMLElement) {
     this.container = container;
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      powerPreference: 'high-performance',
-    });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.92;
-    this.fitTransmission();
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' });
+    // 먹선이 계단 현상을 가리지만, 화소 밀도는 2까지 올려 선을 매끈하게 한다(낮은 품질은 1.25).
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.level === 'high' ? 2 : 1.25));
+    this.renderer.setClearColor(0x000000, 0);
     this.canvas = this.renderer.domElement;
     container.prepend(this.canvas);
 
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(buildEnvScene(), 0.04).texture;
-    this.scene.background = new THREE.Color(0x0c0718);
-    this.scene.fog = new THREE.Fog(0x0c0718, 9, 18);
-
     const coaster = makeCoaster();
     coaster.scale.setScalar(GLASS_SCALE * 1.05);
-    this.scene.add(this.bar.group, this.glassRoot, coaster, this.rack.group, this.shelf.group, this.book.root);
+    this.scene.add(makeCounter(), this.glassRoot, coaster, this.rack.group, this.shelf.group);
     this.addLights();
 
     this.shadow = new THREE.Mesh(
@@ -241,15 +193,6 @@ export class Stage3D {
     this.glassRoot.add(this.shadow);
 
     this.glassRoot.add(this.spray.group);
-    // 품질이 바뀌면 술을 다시 만들어 수면 위 입자 수를 맞춘다.
-    onQuality(() => (this.liquidKey = ''));
-
-    this.composer = new EffectComposer(this.renderer);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.5, 0.9);
-    this.composer.addPass(this.bloom);
-    this.output = new GradedOutputPass();
-    this.composer.addPass(this.output);
 
     const ro = new ResizeObserver(() => this.resize(container));
     ro.observe(container);
@@ -263,7 +206,16 @@ export class Stage3D {
     this.canvas.addEventListener('pointerleave', () => {
       if (!this.drag) this.setHover(null, 0, 0);
     });
-    this.renderer.setAnimationLoop(this.frame);
+  }
+
+  /** 제조 화면이 보일 때만 그린다. */
+  setActive(on: boolean) {
+    if (on === this.active) return;
+    this.active = on;
+    this.lastTick = 0;
+    this.lastFrame = 0;
+    this.renderer.setAnimationLoop(on ? this.frame : null);
+    if (!on) this.cancelDrag();
   }
 
   /** 붓기·젓기 연출이 끝나 다시 조작할 수 있게 되면 호출된다. */
@@ -272,9 +224,7 @@ export class Stage3D {
   onBottleDrop: ((id: IngredientId) => boolean) | null = null;
   /** 쟁반의 잔을 눌렀을 때 */
   onGlassPick: ((id: GlassId) => void) | null = null;
-  /** 레시피북을 눌렀을 때 */
-  onBookOpen: (() => void) | null = null;
-  /** 병·잔·책 위에 포인터가 올라가거나 벗어날 때 (설명 말풍선용) */
+  /** 병·잔 위에 포인터가 올라가거나 벗어날 때 (설명 말풍선용) */
   onHover: ((t: Target | null, x: number, y: number) => void) | null = null;
   /** 잔의 화면 위치가 바뀔 때마다 호출된다. */
   onLayout: ((a: GlassAnchor) => void) | null = null;
@@ -318,22 +268,19 @@ export class Stage3D {
     if (id) return { kind: 'bottle', id };
     const g = ray.intersectObjects(this.shelf.hits, false)[0];
     if (g && this.shelf.selected !== g.object.userData.glass) return { kind: 'glass', id: g.object.userData.glass as GlassId };
-    if (ray.intersectObject(this.book.hit, false).length) return { kind: 'book' };
     return null;
   }
 
   private canUse(t: Target | null) {
     if (!t) return false;
     if (t.kind === 'bottle') return this.rack.enabled && !this.busy && !this.rack.isEmpty(t.id);
-    if (t.kind === 'glass') return this.shelf.enabled;
-    return this.bookEnabled;
+    return this.shelf.enabled;
   }
 
   private setHover(t: Target | null, x: number, y: number) {
     const key = t ? `${t.kind}:${'id' in t ? t.id : ''}` : '';
     this.rack.setHover(t?.kind === 'bottle' ? t.id : null);
     this.shelf.hovered = t?.kind === 'glass' ? t.id : null;
-    this.book.cover.emissiveIntensity = t?.kind === 'book' && this.bookEnabled ? 0.5 : 0.05;
     this.canvas.style.cursor = this.canUse(t) ? (t!.kind === 'bottle' ? 'grab' : 'pointer') : '';
     if (key !== this.hoverKey || t) this.onHover?.(t, x, y);
     this.hoverKey = key;
@@ -399,9 +346,8 @@ export class Stage3D {
     this.press = null;
     if (!p || Math.hypot(e.clientX - p.sx, e.clientY - p.sy) > 10) return;
     const t = this.pickAt(e.clientX, e.clientY);
-    if (!t || t.kind !== p.target.kind || ('id' in t && 'id' in p.target && t.id !== p.target.id)) return;
+    if (!t || t.kind !== p.target.kind || t.id !== p.target.id) return;
     if (t.kind === 'glass' && this.shelf.enabled) this.onGlassPick?.(t.id);
-    if (t.kind === 'book' && this.bookEnabled) this.onBookOpen?.();
   }
 
   private cancelDrag() {
@@ -448,144 +394,9 @@ export class Stage3D {
     this.onLayout(anchor);
   }
 
-  // ── 손님 ───────────────────────────────────────────
-
-  /** 손님을 바꾼다. 지금 손님은 오른쪽으로 나가고, 그와 동시에 다음 손님이 왼쪽에서 들어온다. null이면 비워 둔다. */
-  showPatron(key: string | null, look: FigureLook | null) {
-    const cur = this.patron;
-    if (cur && cur.key === key) return;
-    const now = performance.now();
-    if (cur) this.startLeaving(cur, now);
-    if (key && look) this.spawnPatron(key, look, now);
-  }
-
-  /**
-   * 서빙: 손님 표정이 바뀌고, 잔이 손님 앞으로 미끄러진 뒤 손님이 잔을 들고 나간다.
-   * withGlass가 false면(돌려보내기) 잔 없이 표정만 바뀌고 나간다.
-   */
-  servePatron(grade: Grade, withGlass = true) {
-    const p = this.patron;
-    if (!p) return;
-    const now = performance.now();
-    p.mood = grade;
-    p.moodAt = now;
-    setMood(p.fig, grade);
-    if (withGlass) this.serveAnim = { start: now, to: SERVE_SPOT.clone() };
-    p.leaveAt = now + (withGlass ? 2600 : 1800);
-  }
-
-  private spawnPatron(key: string, look: FigureLook, now: number) {
-    const fig = buildFigure(look);
-    fig.root.scale.setScalar(PATRON_SCALE);
-    fig.root.position.copy(PATRON_SPOT);
-    fig.root.position.x = -PATRON_EDGE;
-    this.scene.add(fig.root);
-    this.patron = {
-      key,
-      fig,
-      x: -PATRON_EDGE,
-      state: 'enter',
-      since: now,
-      mood: 'idle',
-      moodAt: 0,
-      leaveAt: 0,
-      walk: 0,
-      takeaway: null,
-    };
-  }
-
-  /** 지금 손님을 나가는 손님 목록으로 옮긴다. 서빙한 잔이 있으면 들려 보낸다. */
-  private startLeaving(p: Patron, now: number) {
-    p.state = 'leave';
-    p.since = now;
-    if (this.patron === p) this.patron = null;
-    this.leavers.push(p);
-    // 서빙한 잔은 그 모습 그대로 복제해 손님 손에 들려 보낸다.
-    // 바로 다음 손님을 불러도 잔이 사라지지 않고, 원래 잔 자리는 새 잔에 쓸 수 있다.
-    if (!this.serveAnim || !this.shape || !this.glassRoot.visible) return;
-    const cup = this.glassRoot.clone(true);
-    let cap: THREE.Material | null = null;
-    this.glassRoot.children.forEach((c, i) => {
-      const copy = cup.children[i];
-      if (c === this.spray.group) copy.visible = false;
-      if (c === this.liquidCap) {
-        // 수면 재질은 다음 잔과 함께 쓰므로 색·효과가 바뀌지 않게 값을 복사한 새 재질로 떼어 둔다.
-        cap = capMaterial({ value: this.liquidMats.spin.value }, { value: 0 }, this.liquidMats.cap);
-        (copy as THREE.Mesh).material = cap;
-      }
-    });
-    this.scene.add(cup);
-    p.takeaway = { cup, from: cup.position.clone(), cap };
-    this.glassRoot.visible = false;
-    this.serveAnim = null;
-  }
-
-  private removePatron(p: Patron) {
-    this.scene.remove(p.fig.root);
-    disposeFigure(p.fig);
-    const t = p.takeaway;
-    if (!t) return;
-    this.scene.remove(t.cup);
-    const shared = new Set<THREE.BufferGeometry>([this.shadow.geometry]);
-    this.spray.group.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.geometry) shared.add(m.geometry);
-    });
-    t.cup.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.geometry && !shared.has(m.geometry)) m.geometry.dispose();
-    });
-    t.cap?.dispose();
-  }
-
-  private updatePatrons(now: number, dt: number) {
-    const p = this.patron;
-    if (p?.state === 'wait' && p.leaveAt && now >= p.leaveAt) this.startLeaving(p, now);
-    if (this.patron) this.animatePatron(this.patron, now, dt);
-    this.leavers = this.leavers.filter((l) => {
-      if (this.animatePatron(l, now, dt)) return true;
-      this.removePatron(l);
-      return false;
-    });
-  }
-
-  /** 손님 한 명을 움직인다. 화면 밖으로 다 나갔으면 false. */
-  private animatePatron(p: Patron, now: number, dt: number): boolean {
-    const prevX = p.x;
-    const t = (now - p.since) / 1000;
-    if (p.state === 'enter') {
-      // 일정한 걸음으로 들어와 자리 앞에서 천천히 멈춘다.
-      const k = clamp01(t / ENTER_SEC);
-      p.x = -PATRON_EDGE + (PATRON_SPOT.x + PATRON_EDGE) * (1 - (1 - k) ** 2);
-      if (k >= 1) {
-        p.state = 'wait';
-        p.since = now;
-      }
-    } else if (p.state === 'leave') {
-      // 천천히 돌아서 걷기 시작해 오른쪽으로 빠져나간다.
-      const k = clamp01(t / LEAVE_SEC);
-      p.x = PATRON_SPOT.x + (PATRON_EDGE - PATRON_SPOT.x) * k * k;
-      if (k >= 1) return false;
-    }
-    const speed = dt > 0 ? Math.abs(p.x - prevX) / dt : 0;
-    // 걸음 주기는 걸은 거리에 맞춘다.
-    p.walk += Math.abs(p.x - prevX) * 4.2;
-    if (p.takeaway) {
-      // 잔을 집어 살짝 들고, 오른손에 쥔 채 함께 걸어 나간다.
-      const k = easeOut(clamp01(t / 0.45));
-      const hold = new THREE.Vector3(p.x + (SERVE_SPOT.x - PATRON_SPOT.x), 0.12 + Math.abs(Math.sin(p.walk)) * 0.03, SERVE_SPOT.z - 0.25);
-      p.takeaway.cup.position.copy(p.takeaway.from).lerp(hold, k);
-    }
-    // 걸을 때는 통통 튀며 진행 방향으로 몸을 돌리고, 멈추면 바텐더(카메라)를 본다.
-    const walking = speed > 0.05;
-    const bob = walking ? Math.abs(Math.sin(p.walk)) * 0.07 : 0;
-    const root = p.fig.root;
-    root.position.set(p.x, PATRON_SPOT.y + bob, PATRON_SPOT.z);
-    const face = walking ? 0.6 : 0;
-    root.rotation.y += (face - root.rotation.y) * Math.min(1, dt * 8);
-    root.rotation.z = walking ? Math.sin(p.walk) * 0.05 : 0;
-    animateFigure(p.fig, now, p.mood, (now - p.moodAt) / 1000);
-    return true;
+  /** 서빙: 잔이 앞으로 미끄러져 나간다(가게 화면으로 넘어가기 직전의 짧은 연출). */
+  serveGlass() {
+    if (this.shape) this.serveAnim = { start: performance.now() };
   }
 
   // ── 화면 배치 ───────────────────────────────────────
@@ -594,37 +405,20 @@ export class Stage3D {
     return this.pourAnim !== null || this.stirAnim !== null;
   }
 
+  /** 셀 셰이딩은 빛이 단순할수록 2D답다: 고른 바탕빛 + 왼쪽 위 열쇠빛 하나 */
   private addLights() {
-    this.scene.add(new THREE.HemisphereLight(0xb9a6ff, 0x1a0f2e, 0.45));
-    const key = new THREE.SpotLight(0xffe2b8, 13, 16, 0.38, 0.7, 1.2);
-    key.position.set(1.6, 4.6, 3.2);
-    key.target.position.set(0, 0.6, 0);
-    this.scene.add(key, key.target);
-    const rim = new THREE.SpotLight(0xa78bff, 14, 14, 0.5, 0.8, 1.2);
-    rim.position.set(-2.2, 3.2, -2.6);
-    rim.target.position.set(0, 0.8, 0);
-    this.scene.add(rim, rim.target);
-    const fill = new THREE.PointLight(0xff8fc8, 2.5, 8, 1.6);
-    fill.position.set(-2.5, 1.2, 2.5);
-    this.scene.add(fill);
-    const back = new THREE.PointLight(0xffc27a, 4, 7, 1.5);
-    back.position.set(0, 1.6, -3.0);
-    this.scene.add(back);
-    // 카운터 건너편에 선 손님의 얼굴을 비추는 조명
-    const patronLight = new THREE.PointLight(0xffe2cc, 3.2, 9, 1.2);
-    patronLight.position.set(PATRON_SPOT.x + 0.6, 2.3, 0.9);
-    this.scene.add(patronLight);
+    this.scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+    const key = new THREE.DirectionalLight(0xffffff, 2.2);
+    key.position.set(-2.5, 4.5, 3.5);
+    this.scene.add(key);
   }
 
   private resize(container: HTMLElement) {
     const w = Math.max(1, container.clientWidth);
     const h = Math.max(1, container.clientHeight);
     this.renderer.setSize(w, h, false);
-    this.fitTransmission();
-    this.composer.setPixelRatio(this.renderer.getPixelRatio());
-    this.composer.setSize(w, h);
-    this.bloom.resolution.set(w / 2, h / 2);
-    this.output.setAspect(w / h);
+    const ratio = this.renderer.getPixelRatio();
+    this.ink.setSize(Math.round(w * ratio), Math.round(h * ratio), ratio);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.lastAnchor = '';
@@ -661,7 +455,6 @@ export class Stage3D {
     this.shadow.visible = !!id;
     this.serveAnim = null;
     this.glassOffset.set(0, 0, 0);
-    this.glassRoot.visible = true;
     if (!id || !this.shape) return;
     const glass = makeGlass(id);
     glass.userData.glass = true;
@@ -747,7 +540,7 @@ export class Stage3D {
         id,
         pivot,
         home,
-        body: (b.children[0] as THREE.Mesh).material as THREE.MeshPhysicalMaterial,
+        body: (b.children[0] as THREE.Mesh).material as THREE.MeshToonMaterial,
         glow: 0.2,
         lift: 0,
         appearAt: 0,
@@ -759,16 +552,7 @@ export class Stage3D {
       temp = true;
     }
     const color = liquidColor([id]);
-    const stream = new THREE.Mesh(
-      new THREE.CylinderGeometry(1, 1, 1, 12, 1, true),
-      new THREE.MeshPhysicalMaterial({
-        color,
-        emissive: color,
-        emissiveIntensity: 0.35,
-        roughness: 0.1,
-        clearcoat: 1,
-      }),
-    );
+    const stream = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 12, 1, true), toonMaterial(color, { emissive: color, glow: 0.35 }));
     stream.visible = false;
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.6, 1, 32),
@@ -803,18 +587,18 @@ export class Stage3D {
   private startStir(from: Layer[], now: number) {
     this.clearStir();
     const spoon = new THREE.Group();
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 1.7, 8), goldMaterial);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 1.7, 8), steelMaterial);
     shaft.position.y = 0.85;
-    const twist = new THREE.Mesh(new THREE.TorusGeometry(0.016, 0.004, 4, 12), goldMaterial);
+    const twist = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.005, 4, 12), inkMaterial);
     for (let i = 0; i < 10; i++) {
       const t = twist.clone();
       t.rotation.x = Math.PI / 2;
       t.position.y = 0.55 + i * 0.05;
       spoon.add(t);
     }
-    const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 8), goldMaterial);
+    const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 8), steelMaterial);
     bowl.scale.set(1, 0.35, 0.7);
-    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.03, 12, 8), goldMaterial);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 8), redMaterial);
     knob.position.y = 1.7;
     spoon.add(shaft, bowl, knob);
     this.glassRoot.add(spoon);
@@ -848,11 +632,9 @@ export class Stage3D {
     this.lastTick = now;
     fxTime.value = now / 1000;
     this.adaptResolution(now);
-    this.bar.update(now);
     this.rack.update(now, dt);
     this.shelf.update(dt);
     this.animateCamera(dt);
-    this.updatePatrons(now, dt);
     if (this.drink && this.shape) {
       const g = this.drink.glass!;
       this.updateGlassPlacement(now);
@@ -866,26 +648,26 @@ export class Stage3D {
       this.removeLiquid();
       this.spray.update(dt, 0, 0, false);
     }
-    this.composer.render();
+    this.ink.render(this.renderer, this.scene, this.camera);
     this.emitLayout();
   };
 
-  /** 잔이 처음 놓일 때의 등장, 서빙할 때 손님 앞으로 미끄러지기 */
+  /** 잔이 처음 놓일 때의 등장, 서빙할 때 앞으로 미끄러져 나가기 */
   private updateGlassPlacement(now: number) {
     const appear = clamp01((now - this.glassIn) / 600);
     this.glassRoot.scale.setScalar(GLASS_SCALE * (0.82 + 0.18 * easeOutBack(appear)));
     const off = this.glassOffset.set(0, (1 - easeOut(appear)) * 0.35, 0);
     if (this.serveAnim) {
-      const k = easeInOut(clamp01((now - this.serveAnim.start - 350) / 750));
-      off.x = this.serveAnim.to.x * k;
-      off.z = this.serveAnim.to.z * k;
+      const k = easeInOut(clamp01((now - this.serveAnim.start) / 420));
+      off.z = k * 0.9;
+      off.y += Math.sin(k * Math.PI) * 0.05;
     }
     this.glassRoot.position.copy(off);
   }
 
   /**
    * 프레임이 계속 느리면 저사양 기기에서도 부드럽게 돌도록 단계적으로 가볍게 한다.
-   * 먼저 품질을 낮추고(유리 굴절·빛줄기 끄기, 입자 절반), 그래도 느리면 해상도를 낮춘다.
+   * 먼저 품질을 낮추고(입자 절반), 그래도 느리면 해상도를 낮춘다.
    */
   private adaptResolution(now: number) {
     const dt = now - this.lastFrame;
@@ -904,11 +686,6 @@ export class Stage3D {
     }
   }
 
-  /** 굴절용 화면 복사본은 CSS 해상도 안팎이면 충분하다(화소 밀도가 높은 화면에서 비용을 줄인다). */
-  private fitTransmission() {
-    this.renderer.transmissionResolutionScale = Math.min(1, 1.1 / this.renderer.getPixelRatio());
-  }
-
   /** 단계별 시선으로 부드럽게 옮겨 간다. 마우스에 따라 흔들리지 않는다. */
   private animateCamera(dt: number) {
     const v = VIEWS[this.view];
@@ -923,10 +700,6 @@ export class Stage3D {
     this.camTarget.lerp(target, k);
     this.camDist += (goal - this.camDist) * k;
     this.camPitch += (v.pitch - this.camPitch) * k;
-    // 세로 화면처럼 카메라가 멀어져도 백바가 안개에 묻히지 않게 안개를 함께 민다.
-    const fog = this.scene.fog as THREE.Fog;
-    fog.near = Math.max(9, this.camDist + 3.5);
-    fog.far = fog.near + 9;
     const dir = new THREE.Vector3(0, this.camPitch, 1).normalize();
     this.camera.position.copy(this.camTarget).addScaledVector(dir, this.camDist);
     this.camera.lookAt(this.camTarget);
@@ -1151,22 +924,32 @@ export class Stage3D {
   }
 }
 
-/** 잔 받침: 짙은 벨벳 원판에 금테 */
+/** 잔 받침: 검은 원판에 빨간 테 (2D 가게의 스툴 방석과 같은 색) */
 function makeCoaster() {
   const g = new THREE.Group();
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.64, 0.66, 0.02, 64),
-    new THREE.MeshStandardMaterial({ color: 0x2b1745, roughness: 0.85 }),
-  );
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.66, 0.02, 64), inkMaterial);
   base.position.y = 0.001;
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.012, 8, 96), goldMaterial);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.022, 8, 96), redMaterial);
   ring.rotation.x = Math.PI / 2;
-  ring.position.y = 0.012;
-  const inner = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.005, 6, 96), goldMaterial);
-  inner.rotation.x = Math.PI / 2;
-  inner.position.y = 0.012;
-  g.add(base, ring, inner);
+  ring.position.y = 0.014;
+  g.add(base, ring);
   g.position.y = -0.004;
+  return g;
+}
+
+/** 카운터: 회색 윗면(하프톤 점이 앉는다)에 종이색 앞 가장자리, 검은 앞면에 빨간 띠 */
+function makeCounter() {
+  const g = new THREE.Group();
+  const top = new THREE.Mesh(new THREE.BoxGeometry(16, 0.12, 4.2), toonMaterial(0x8f8a83));
+  top.position.set(0.5, -0.06, -0.6);
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(16, 0.13, 0.12), toonMaterial(PAPER));
+  lip.position.set(0.5, -0.06, 1.44);
+  g.add(lip);
+  const front = new THREE.Mesh(new THREE.BoxGeometry(16, 1.6, 0.1), toonMaterial(0x232221));
+  front.position.set(0.5, -0.92, 1.5);
+  const band = new THREE.Mesh(new THREE.BoxGeometry(16, 0.08, 0.03), redMaterial);
+  band.position.set(0.5, -0.32, 1.57);
+  g.add(top, front, band);
   return g;
 }
 
@@ -1176,7 +959,7 @@ function disposeDeep(obj: THREE.Object3D, materials = false) {
     if (m.geometry) m.geometry.dispose();
     if (materials && m.material) {
       const mats = Array.isArray(m.material) ? m.material : [m.material];
-      for (const mat of mats) if (mat !== goldMaterial && !mat.userData.shared) mat.dispose();
+      for (const mat of mats) if (!mat.userData.shared) mat.dispose();
     }
   });
 }

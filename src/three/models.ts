@@ -1,9 +1,10 @@
 // 잔 모양 치수와 병·얼음·장식의 3D 모델. 모두 회전체(Lathe)와 기본 도형으로 만든다.
-// 잔 모델(크리스털 컷·금테)은 glassware.ts, 잔 속 술은 liquid.ts에 있다.
+// 잔 모델(먹선 테두리·흰 에칭 띠)은 glassware.ts, 잔 속 술은 liquid.ts에 있다.
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { GarnishId, GlassId, IngredientId } from '../data';
+import { inkMaterial, steelMaterial, toonMaterial } from './materials';
 import { labelTexture, lemonTexture } from './textures';
 
 // ── 잔 ────────────────────────────────────────────────
@@ -138,10 +139,9 @@ const BOTTLE_PROFILES: Record<BottleKind, { pts: THREE.Vector2[]; label: [number
   },
 };
 
-const GOLD = new THREE.MeshStandardMaterial({ color: 0xe0b45a, metalness: 1, roughness: 0.28 });
-GOLD.userData.shared = true;
-const CORK = new THREE.MeshStandardMaterial({ color: 0x9a6b44, roughness: 0.8 });
-const labelMaterials = new Map<string, THREE.MeshStandardMaterial>();
+const CORK = toonMaterial(0x8a7a6a);
+CORK.userData.shared = true;
+const labelMaterials = new Map<string, THREE.MeshToonMaterial>();
 
 export interface BottleOptions {
   glow?: number;
@@ -155,30 +155,26 @@ export function makeBottle(id: IngredientId | BottleKind, color: string, opts: B
   const prof = BOTTLE_PROFILES[kind];
   const group = new THREE.Group();
   const square = kind === 'decanter';
-  const geo = new THREE.LatheGeometry(prof.pts, square ? 4 : 40);
-  if (square) geo.rotateY(Math.PI / 4);
+  let geo: THREE.BufferGeometry = new THREE.LatheGeometry(prof.pts, square ? 4 : 40);
+  if (square) {
+    // 각진 병: 면마다 법선을 따로 둬서 툰 셰이딩이 면 단위로 끊기게 한다.
+    geo.rotateY(Math.PI / 4);
+    geo = geo.toNonIndexed();
+    geo.computeVertexNormals();
+  }
   const col = new THREE.Color(color);
-  const body = new THREE.Mesh(
-    geo,
-    new THREE.MeshPhysicalMaterial({
-      color: col,
-      roughness: 0.12,
-      metalness: 0,
-      clearcoat: 1,
-      clearcoatRoughness: 0.06,
-      emissive: col,
-      emissiveIntensity: opts.glow ?? 0.12,
-      flatShading: square,
-    }),
-  );
+  const bodyMat = toonMaterial(col, { emissive: col, glow: opts.glow ?? 0.12 });
+  const body = new THREE.Mesh(geo, bodyMat);
   group.add(body);
 
   if (opts.label !== false) {
     const [r, h, y] = prof.label;
-    const accent = opts.accent ?? '#7c5cff';
+    const accent = opts.accent ?? '#d8202a';
     let mat = labelMaterials.get(accent);
     if (!mat) {
-      mat = new THREE.MeshStandardMaterial({ map: labelTexture(accent), roughness: 0.7 });
+      mat = toonMaterial(0xffffff);
+      mat.map = labelTexture(accent);
+      mat.userData.shared = true;
       labelMaterials.set(accent, mat);
     }
     const label = new THREE.Mesh(
@@ -193,12 +189,13 @@ export function makeBottle(id: IngredientId | BottleKind, color: string, opts: B
   const top = prof.pts[prof.pts.length - 1].y;
   const lipR = Math.max(...prof.pts.slice(-3).map((p) => p.x));
   if (prof.cap === 'stopper') {
-    const stopper = new THREE.Mesh(new THREE.OctahedronGeometry(0.1, 0), new THREE.MeshPhysicalMaterial({ color: col, roughness: 0.05, clearcoat: 1, emissive: col, emissiveIntensity: 0.2, flatShading: true }));
+    const stopperMat = toonMaterial(col, { emissive: col, glow: 0.2 });
+    const stopper = new THREE.Mesh(new THREE.OctahedronGeometry(0.1, 0), stopperMat);
     stopper.scale.set(1, 1.3, 1);
     stopper.position.y = top + 0.1;
     group.add(stopper);
   } else {
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(lipR + 0.006, lipR + 0.006, 0.06, 24), prof.cap === 'cork' ? CORK : GOLD);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(lipR + 0.006, lipR + 0.006, 0.06, 24), prof.cap === 'cork' ? CORK : inkMaterial);
     cap.position.y = top - 0.01;
     group.add(cap);
   }
@@ -214,20 +211,12 @@ export function makeBottle(id: IngredientId | BottleKind, color: string, opts: B
 
 // ── 얼음 ──────────────────────────────────────────────
 
-export function iceMaterial(): THREE.MeshPhysicalMaterial {
-  return new THREE.MeshPhysicalMaterial({
-    color: 0xdcefff,
-    roughness: 0.1,
-    metalness: 0,
-    transparent: true,
-    opacity: 0.45,
-    specularIntensity: 0.6,
-    clearcoat: 0.4,
-    clearcoatRoughness: 0.08,
-    envMapIntensity: 1.3,
-    emissive: 0x9fc8ff,
-    emissiveIntensity: 0.06,
-  });
+/** 얼음: 반투명한 흰 툰 덩어리 (외곽선은 후처리가 그린다) */
+export function iceMaterial(): THREE.MeshToonMaterial {
+  const m = toonMaterial(0xf4f7f8, { emissive: 0xdfe8ea, glow: 0.35 });
+  m.transparent = true;
+  m.opacity = 0.82;
+  return m;
 }
 
 export function makeIce(size: number, mat: THREE.Material): THREE.Mesh {
@@ -262,7 +251,7 @@ export function makeStar(outer: number, depth: number, material: THREE.Material)
   return new THREE.Mesh(geo, material);
 }
 
-let lemonMat: THREE.MeshStandardMaterial | null = null;
+let lemonMat: THREE.MeshToonMaterial | null = null;
 
 /**
  * 장식 모델. 원점은 잔 테두리에 닿는 지점이며,
@@ -272,8 +261,11 @@ export function makeGarnish(id: GarnishId): THREE.Group {
   const g = new THREE.Group();
   switch (id) {
     case 'lemon': {
-      lemonMat ??= new THREE.MeshStandardMaterial({ map: lemonTexture(), roughness: 0.45 });
-      const rind = new THREE.MeshStandardMaterial({ color: 0xffd23a, roughness: 0.5 });
+      if (!lemonMat) {
+        lemonMat = toonMaterial(0xffffff);
+        lemonMat.map = lemonTexture();
+      }
+      const rind = toonMaterial(0xf2cf4a);
       const slice = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.035, 48), [rind, lemonMat, lemonMat]);
       slice.rotation.x = Math.PI / 2; // 원판이 잔 반지름 방향을 품도록 세운다
       slice.position.set(0.02, 0.08, 0);
@@ -281,13 +273,13 @@ export function makeGarnish(id: GarnishId): THREE.Group {
       break;
     }
     case 'mint': {
-      const mat = new THREE.MeshStandardMaterial({ color: 0x3fcf73, roughness: 0.5, side: THREE.DoubleSide, emissive: 0x0d4a22, emissiveIntensity: 0.3 });
+      const mat = toonMaterial(0x4fb874, { emissive: 0x0d4a22, glow: 0.3, side: THREE.DoubleSide });
       const leaf = new THREE.Shape();
       leaf.moveTo(0, 0);
       leaf.quadraticCurveTo(0.09, 0.1, 0, 0.26);
       leaf.quadraticCurveTo(-0.09, 0.1, 0, 0);
       const geo = new THREE.ShapeGeometry(leaf, 12);
-      const vein = new THREE.MeshStandardMaterial({ color: 0x2a9a52 });
+      const vein = inkMaterial;
       for (const [rz, rx, s] of [
         [0.5, -0.5, 1],
         [-0.3, -0.8, 0.85],
@@ -307,21 +299,21 @@ export function makeGarnish(id: GarnishId): THREE.Group {
     case 'cherry': {
       const berry = new THREE.Mesh(
         new THREE.SphereGeometry(0.09, 32, 24),
-        new THREE.MeshPhysicalMaterial({ color: 0xe0203f, roughness: 0.15, clearcoat: 1, clearcoatRoughness: 0.05, emissive: 0x5a0010, emissiveIntensity: 0.3 }),
+        toonMaterial(0xd8202a, { emissive: 0x5a0010, glow: 0.35 }),
       );
       berry.scale.y = 0.92;
       berry.position.set(0.06, 0.05, 0);
       const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0.06, 0.13, 0), new THREE.Vector3(0.02, 0.28, 0), new THREE.Vector3(-0.08, 0.38, 0.02)]);
-      const stem = new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.008, 6), new THREE.MeshStandardMaterial({ color: 0x5c8a35, roughness: 0.6 }));
+      const stem = new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.01, 6), inkMaterial);
       g.add(berry, stem);
       break;
     }
     case 'star': {
-      const stickMat = new THREE.MeshStandardMaterial({ color: 0xead9a8, roughness: 0.6 });
+      const stickMat = toonMaterial(0xf2ece0);
       const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.0, 8), stickMat);
       stick.position.set(-0.12, 0.05, 0);
       stick.rotation.z = -0.38;
-      const star = makeStar(0.11, 0.03, new THREE.MeshStandardMaterial({ color: 0xffcf5c, metalness: 0.8, roughness: 0.25, emissive: 0xffb02e, emissiveIntensity: 0.6 }));
+      const star = makeStar(0.11, 0.03, toonMaterial(0xd8202a, { emissive: 0xd8202a, glow: 0.3 }));
       star.position.set(0.07, 0.52, 0);
       g.add(stick, star);
       g.userData.spin = star;
@@ -333,4 +325,4 @@ export function makeGarnish(id: GarnishId): THREE.Group {
   return g;
 }
 
-export { GOLD as goldMaterial };
+export { steelMaterial };
