@@ -700,6 +700,12 @@ button:disabled {
   opacity: 1;
 }
 
+.p-say.flip::after {
+  left: auto;
+  right: 10px;
+  clip-path: polygon(0 0, 100% 0, 90% 100%);
+}
+
 .p-say.say-perfect {
   background: var(--red);
   color: var(--white);
@@ -2627,23 +2633,35 @@ body[data-view="mix"] .wipe-edge {
 .talk {
   position: fixed;
   z-index: 6;
-  left: 50%;
   bottom: 22px;
-  width: min(660px, calc(100vw - 32px));
+  width: min(640px, calc(100vw - 48px));
   max-height: calc(100vh - var(--topbar) - 40px);
   overflow: auto;
   padding: 14px 20px 18px;
   border: 3px solid var(--ink);
   filter: drop-shadow(9px 9px 0 var(--ink));
-  transform: translateX(-50%) rotate(-0.6deg);
+  transform: rotate(-0.6deg);
   animation: talk-in 260ms var(--ease-out);
   scrollbar-width: thin;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  outline: none;
+}
+
+/* 이야기하는 손님 반대편에 둔다 */
+.talk.side-left {
+  left: 28px;
+}
+
+.talk.side-right {
+  right: 28px;
+  transform: rotate(0.6deg);
 }
 
 @keyframes talk-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 18px) rotate(-2deg);
+    transform: translateY(18px) rotate(-2deg);
   }
 }
 
@@ -3565,8 +3583,21 @@ body:not([data-talk=""]) .p-tag {
   color: var(--red);
 }
 
-.news-side .alley li {
-  font: 15px/1.35 var(--font-speech);
+.news-side .counter b {
+  font: 400 13px var(--font-title-ko);
+  color: var(--red-deep);
+}
+
+.news,
+.nb-body,
+.patrons,
+.promises,
+.story-log,
+.endings,
+.clip,
+.oc-story {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .facts .hot {
@@ -3886,7 +3917,9 @@ body:not([data-talk=""]) .p-tag {
 
 /* 좁은 화면: 대화 카드는 아래에서 올라오는 시트, 수첩은 서랍처럼 화면 폭 */
 @media (max-width: 860px) {
-  .talk {
+  .talk,
+  .talk.side-left,
+  .talk.side-right {
     left: 0;
     right: 0;
     bottom: 0;

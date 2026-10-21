@@ -381,7 +381,7 @@ app.innerHTML = `
   <p class="prompt" id="prompt"></p>
   <section class="result-card" id="result"></section>
   <section class="clip" id="clip" aria-live="polite"></section>
-  <section class="talk" id="talk" role="dialog" aria-modal="false" hidden></section>
+  <section class="talk" id="talk" role="dialog" aria-modal="false" tabindex="-1" hidden></section>
   <aside class="notebook" id="notebook" hidden></aside>
   <aside class="drawer" id="drawer"></aside>
   <div class="tip-card" id="tip" hidden></div>
@@ -1038,10 +1038,12 @@ function renderResult() {
 
 /** 서빙 결과를 가게 화면 구석에 신문 오려 붙이기처럼 남긴다(다음 손님을 고르는 데 방해되지 않게). */
 let clipShown = -1;
+/** 오려 붙이기마다 새 번호(같은 번호면 다시 그리지 않는다) */
+let clipSeq = 0;
 function renderClip() {
   const el = $('clip');
   const r = state.clip;
-  el.hidden = !r || !!state.overlay || state.view !== 'shop' || !!state.talk;
+  el.hidden = !r || !!state.overlay || state.view !== 'shop' || !!state.talk || state.notebook;
   if (el.hidden || !r) return;
   if (clipShown === r.n) return;
   clipShown = r.n;
@@ -1056,7 +1058,7 @@ function renderClip() {
     <ul class="checks">${r.checks.map((c) => `<li class="${c.pass ? 'pass' : 'miss'}">${c.pass ? '✓' : '✗'} ${c.label}</li>`).join('')}</ul>
     ${r.recipeName ? `<p class="named">이 잔의 이름은 <strong>「${r.recipeName}」</strong></p>` : ''}
     ${r.key ? `<p class="clip-story key">✓ 열쇠 맛 「${r.key}」을 켰어요</p>` : ''}
-    ${r.stay === 'after' ? `<p class="clip-story">「…」 ${r.name}에게 할 말이 남았어요 · 눌러서 들어요</p>` : r.stay === 'shop' ? `<p class="clip-story">「✦」 ${r.name}${josa(r.name, '이', '가')} 진열장을 기웃거려요</p>` : ''}`;
+    ${r.stay === 'after' ? `<p class="clip-story">「…」 할 말이 남았대요 · ${r.name}${josa(r.name, '을', '를')} 눌러요</p>` : r.stay === 'shop' ? `<p class="clip-story">「✦」 ${r.name}${josa(r.name, '이', '가')} 진열장을 기웃거려요</p>` : ''}`;
 }
 
 // ── 대화 카드·수첩 ─────────────────────────────────────────
@@ -1141,8 +1143,11 @@ function renderTalk() {
         : ''
     }
     ${foot}`;
-  el.className = `talk paper when-${t.when}`;
-  el.setAttribute('aria-label', `${c.name}와 이야기`);
+  // 넓은 화면에서는 이야기하는 손님을 가리지 않게 손님 반대편에 카드를 둔다.
+  const at = shop.screenOf(s.key);
+  const side = at && at.x < window.innerWidth / 2 ? 'right' : 'left';
+  el.className = `talk paper when-${t.when} side-${side}`;
+  el.setAttribute('aria-label', `${c.name}${josa(c.name, '과', '와')} 이야기`);
   if (html !== talkHtml) {
     talkHtml = html;
     el.innerHTML = html;
@@ -1472,13 +1477,16 @@ function newsHtml() {
   const side = rest.filter((n) => n.head !== '피피의 배달 일지');
   const posts = rest.filter((n) => n.head === '피피의 배달 일지');
   const alley = alleyGossip(state.story);
+  // 어젯밤 카운터에서 이어진 이야기(소문 듣기는 빼고) 세 줄
+  const counter = state.story.log.filter((l) => l.day === state.day - 1 && l.who && !l.text.startsWith('소문을 들었다')).slice(-3);
   return `
     <section class="news" aria-label="오늘의 기사">
       <article class="news-lead"><p class="kicker">1면</p><h3 class="news-head">${lead.head}</h3><p>${lead.body}</p></article>
       ${
-        side.length || posts.length || alley.length
+        side.length || posts.length || alley.length || counter.length
           ? `<aside class="news-side">
               ${side.map((n) => `<article><h4>${n.head}</h4><p>${n.body}</p></article>`).join('')}
+              ${counter.length ? `<article class="counter"><h4>어젯밤 카운터 일지</h4><ul>${counter.map((l) => `<li><b>${nameOf(l.who)}</b> ${l.text}</li>`).join('')}</ul></article>` : ''}
               ${posts.length ? `<article class="post"><h4>피피의 배달 일지</h4><ul>${posts.map((n) => `<li>${n.body}</li>`).join('')}</ul></article>` : ''}
               ${alley.length ? `<article class="alley"><h4>골목 소문</h4><ul>${alley.map((a) => `<li>${a}</li>`).join('')}</ul></article>` : ''}
             </aside>`
@@ -1501,7 +1509,7 @@ function todayStory() {
   if (!today.length) return '';
   return `<h3>오늘의 이야기 <small>${today.length}건 · 레시피북 「이야기 기록」에 남아요</small></h3>
     <ul class="story-log">${today
-      .slice(-8)
+      .slice(-10)
       .map((l) => `<li>${l.who ? `<b>${nameOf(l.who)}</b> ` : ''}${l.text}</li>`)
       .join('')}</ul>`;
 }
@@ -1797,14 +1805,16 @@ function pickPatron(i: number) {
 function openTalk(i: number, when: When) {
   const s = state.seats[i]!;
   const beat = beatFor(s, when);
+  // 결과 기사의 「할 말이 남았어요」는 이제 들었으니 지운다.
+  if (state.clip?.stay && state.clip.name === customerAt(s.idx).name) state.clip = { ...state.clip, stay: undefined, n: ++clipSeq };
   state.talk = { seat: i, when, beat, picked: null, reply: [], notes: [], count: beat ? 1 : 0, sold: null };
   talkFresh = true;
   state.drawer = false;
   state.notebook = false;
   goView('shop');
   render();
-  // 첫 선택지(또는 닫기)에 초점을 둔다(키보드 1~9로도 고를 수 있다).
-  ($('talk').querySelector<HTMLButtonElement>('.tk-choice:not(:disabled), .tk-foot .primary') ?? null)?.focus({ preventScroll: true });
+  // 카드에 초점을 옮겨 읽기 도구가 이야기를 읽게 한다(선택은 Tab 또는 숫자 1~9).
+  $('talk').focus({ preventScroll: true });
 }
 
 /** 바텐더가 선택지를 골랐다. */
@@ -1860,7 +1870,7 @@ function talkSell(g: GoodId) {
   const price = sellGood(s, g);
   if (!price) return;
   t.sold = g;
-  toast(`<strong>${GOOD_BY_ID[g].name}</strong> 판매 ${coin(price)}`);
+  t.notes = [...t.notes, `<li class="n-sold">${GOOD_BY_ID[g].name} 판매 <b class="num">+✦${price}</b></li>`];
 }
 
 function talkNext() {
@@ -1937,7 +1947,7 @@ function serve() {
   // 잔을 받은 뒤 할 이야기가 있으면(또는 진열장에 찾는 물건이 있으면) 잔을 든 채 스툴에 남는다.
   const stay = beatFor(s, 'after') ? 'after' : offersFor(s).length ? 'shop' : undefined;
   const key = storyOn() && j.grade === 'perfect' && keyLit(c.id, attrs) && !confessed(state.story, c.id) ? keyLabel(c.id) : undefined;
-  state.clip = { ...j, tip, sale, cost: gCost, recipeName: matched[0]?.name ?? null, name: c.name, line, n: (state.clip?.n ?? 0) + 1, stay, key };
+  state.clip = { ...j, tip, sale, cost: gCost, recipeName: matched[0]?.name ?? null, name: c.name, line, n: ++clipSeq, stay, key };
   stage.serveGlass();
   const glass = { glass: state.drink.glass ?? 'rocks', color: drinkColor(state.drink) };
   if (stay) {
@@ -1970,7 +1980,7 @@ function turnAway() {
     away: true,
     name: CUSTOMER_BY_ID[v.customer].name,
     line: AWAY_LINE,
-    n: (state.clip?.n ?? 0) + 1,
+    n: ++clipSeq,
   };
   dismissSeat(s, 'fail', AWAY_LINE, null);
   state.active = null;

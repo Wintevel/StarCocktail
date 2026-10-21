@@ -445,6 +445,12 @@ export class ShopScene {
     if (key === v.lastTag) return;
     v.lastTag = key;
     v.tag.style.transform = `translate(${Math.round(head.x)}px, ${Math.round(head.y - 8)}px) translate(-50%, -100%)`;
-    v.say.style.transform = `translate(${Math.round(head.x + 24 * this.k * 2)}px, ${Math.round(head.y - (v.tag.hidden ? 0 : 54))}px) translate(0, -100%)`;
+    // 말풍선은 머리 오른쪽에 띄우되, 화면 밖으로 나가면 왼쪽으로 뒤집는다.
+    const gap = 24 * this.k * 2;
+    const w = sayOn ? v.say.offsetWidth : 0;
+    const flip = sayOn && head.x + gap + w > this.root.clientWidth - 8;
+    v.say.classList.toggle('flip', flip);
+    const sx = flip ? Math.max(8, head.x - gap - w) : head.x + gap;
+    v.say.style.transform = `translate(${Math.round(sx)}px, ${Math.round(head.y - (v.tag.hidden ? 0 : 54))}px) translate(0, -100%)`;
   }
 }
