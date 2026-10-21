@@ -1,5 +1,6 @@
 // 2D 가게 화면: 정적인 배경(backdrop.ts) 위에서 손님(art.ts)이 문으로 들어와 빈 스툴에 앉고,
 // 기다리다가(인내 막대), 잔을 받으면 반응한 뒤 잔을 들고 나간다. 손님 머리 위 이름표·말풍선은 DOM으로 띄운다.
+// 할 말이 있는 손님은 이름표가 「…」로 바뀌고, 잔을 받은 뒤에도 잔을 든 채 스툴에 남아 이야기를 기다린다.
 //
 // 움직임은 모두 performance.now() 기준 시간으로 계산한다(느린 기기·테스트 시계에서도 같은 자리에 있다).
 // 숨쉬기·눈 깜빡임·걸음의 다리 흔들기 같은 장식 움직임만 CSS 애니메이션이다.
@@ -23,6 +24,19 @@ const ESSENTIAL = {
 };
 
 type ModeName = 'enter' | 'hop' | 'sit' | 'hopdown' | 'leave';
+
+/**
+ * 이름표 꼴: 주문 받기(!) / 잔을 받기 전에 할 말이 있다(…) / 잔을 받은 뒤 할 말이 남았다(…) / 진열장 물건을 기웃거린다(✦)
+ */
+export type TagMode = 'order' | 'talk' | 'after' | 'shop';
+
+const TAG_MARK: Record<TagMode, string> = { order: '!', talk: '…', after: '…', shop: '✦' };
+const TAG_HINT: Record<TagMode, string> = {
+  order: '주문 받기',
+  talk: '할 말이 있어요 · 눌러서 듣기',
+  after: '할 말이 남았어요 · 눌러서 듣기',
+  shop: '진열장을 기웃거려요',
+};
 
 interface Vis {
   key: string;
@@ -48,6 +62,7 @@ interface Vis {
   sayUntil: number;
   /** 화면 좌표 캐시(바뀔 때만 DOM을 고친다) */
   lastTag: string;
+  tagMode: TagMode;
 }
 
 export interface ShopHooks {
@@ -188,6 +203,7 @@ export class ShopScene {
       leaveAt: 0,
       sayUntil: 0,
       lastTag: '',
+      tagMode: 'order',
     };
     v.hipY = this.standHip(v);
     this.vis.set(key, v);
@@ -228,6 +244,18 @@ export class ShopScene {
     }
   }
 
+  /** 이름표 꼴을 바꾼다(같으면 그대로) */
+  setTag(key: string, mode: TagMode) {
+    const v = this.vis.get(key);
+    if (!v || v.tagMode === mode) return;
+    v.tagMode = mode;
+    v.tag.dataset.mode = mode;
+    v.el.dataset.tag = mode;
+    v.tag.querySelector('.p-mark')!.textContent = TAG_MARK[mode];
+    v.tag.querySelector('.p-hint')!.textContent = `${v.c.title} · ${TAG_HINT[mode]}`;
+    v.tag.setAttribute('aria-label', `${v.c.name}, ${v.c.title}: ${TAG_HINT[mode]}`);
+  }
+
   setPatience(key: string, frac: number, impatient: boolean) {
     const v = this.vis.get(key);
     if (!v) return;
@@ -257,6 +285,14 @@ export class ShopScene {
     const v = this.vis.get(key);
     if (!v) return;
     this.setWaiting(key, false);
+    this.react(key, mood, line, glass);
+    v.leaveAt = performance.now() + REACT_MS;
+  }
+
+  /** 잔을 받고 반응하지만 스툴에 남는다(할 말이 남은 손님). 나갈 때는 depart(). */
+  react(key: string, mood: Mood, line: string, glass: { glass: string; color: string } | null) {
+    const v = this.vis.get(key);
+    if (!v) return;
     v.el.setAttribute('data-mood', mood);
     v.el.classList.remove('impatient');
     if (glass) {
@@ -269,7 +305,15 @@ export class ShopScene {
       }
     }
     this.say(key, line, mood, REACT_MS + 600);
-    v.leaveAt = performance.now() + REACT_MS;
+  }
+
+  /** 스툴에 남아 있던 손님이 일어나 나간다(이야기를 마쳤다). line이 있으면 한마디 하고. */
+  depart(key: string, line = '', ms = 500) {
+    const v = this.vis.get(key);
+    if (!v) return;
+    this.setWaiting(key, false);
+    if (line) this.say(key, line, 'line', ms + 1400);
+    v.leaveAt = performance.now() + ms;
   }
 
   /** 잔 없이 나간다(돌려보냄·기다리다 지침). */
@@ -401,6 +445,12 @@ export class ShopScene {
     if (key === v.lastTag) return;
     v.lastTag = key;
     v.tag.style.transform = `translate(${Math.round(head.x)}px, ${Math.round(head.y - 8)}px) translate(-50%, -100%)`;
-    v.say.style.transform = `translate(${Math.round(head.x + 24 * this.k * 2)}px, ${Math.round(head.y - (v.tag.hidden ? 0 : 54))}px) translate(0, -100%)`;
+    // 말풍선은 머리 오른쪽에 띄우되, 화면 밖으로 나가면 왼쪽으로 뒤집는다.
+    const gap = 24 * this.k * 2;
+    const w = sayOn ? v.say.offsetWidth : 0;
+    const flip = sayOn && head.x + gap + w > this.root.clientWidth - 8;
+    v.say.classList.toggle('flip', flip);
+    const sx = flip ? Math.max(8, head.x - gap - w) : head.x + gap;
+    v.say.style.transform = `translate(${Math.round(sx)}px, ${Math.round(head.y - (v.tag.hidden ? 0 : 54))}px) translate(0, -100%)`;
   }
 }
