@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { INGREDIENT_DAY } from '../campaign';
 import { INGREDIENTS, type IngredientId } from '../data';
-import { inkMaterial, PAPER, redMaterial, toonMaterial } from './materials';
+import { inkMaterial, neonCyanMaterial, redMaterial, toonMaterial } from './materials';
 import { makeBottle } from './models';
 
 export const BOTTLE_SCALE = 0.78;
@@ -67,7 +67,7 @@ function addLiquidLevel(mat: THREE.MeshToonMaterial, level: { value: number }) {
 }
 
 const RIM_MAT = new THREE.MeshBasicMaterial({
-  color: 0xd8202a,
+  color: 0xff3fb4,
   side: THREE.BackSide,
   transparent: true,
   opacity: 0,
@@ -96,15 +96,15 @@ export class BottleRack {
   }
 
   private buildStand() {
-    const wood = toonMaterial(0x2a2827);
-    const glow = new THREE.MeshBasicMaterial({ color: PAPER });
+    const wood = toonMaterial(0x2e1a63, { emissive: 0x14062e, glow: 0.3 });
+    const glow = neonCyanMaterial;
     const width = PER_TIER[0] * COL_W + 0.1;
     for (let t = 0; t < PER_TIER.length; t++) {
       const h = 0.05 + t * STEP_H;
       const step = new THREE.Mesh(new THREE.BoxGeometry(width, h, STEP_D), wood);
       step.position.set(ORIGIN.x + (PER_TIER[0] - 1) * COL_W * 0.5, h / 2, ORIGIN.z - t * STEP_D);
       this.group.add(step);
-      // 각 단 앞모서리의 빨간 띠와 종이색 점선 띠
+      // 각 단 앞모서리의 마젠타 네온 띠와 시안 네온 띠
       const trim = new THREE.Mesh(new THREE.BoxGeometry(width + 0.01, 0.03, 0.02), redMaterial);
       trim.position.set(step.position.x, h, step.position.z + STEP_D / 2);
       const strip = new THREE.Mesh(new THREE.PlaneGeometry(width - 0.08, 0.012), glow);

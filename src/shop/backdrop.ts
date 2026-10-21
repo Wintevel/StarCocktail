@@ -323,23 +323,28 @@ export function backdropSvg() {
 
 /** 앞쪽 조각(손님 앞, 화면 가장자리): 만화 집중선과 반짝이·꽃잎 */
 export function foregroundSvg() {
-  const burst = (cx: number, cy: number, r0: number, r1: number, n: number, a0: number, a1: number, color: string) => {
+  // 집중선: 화면 가운데를 향해 가장자리에서 들어오는 가는 선(모서리 근처에만 보인다)
+  const burst = (a0: number, a1: number, n: number, color: string, op: number) => {
+    const cx = 750;
+    const cy = 520;
     const out: string[] = [];
     for (let i = 0; i < n; i++) {
       const t = i / (n - 1);
-      const a = a0 + (a1 - a0) * t + Math.sin(i * 12.9898) * 0.02;
-      const w = 0.006 + ((i * 7) % 5) * 0.003;
-      const r2 = r0 + ((i * 37) % 11) * 14;
+      const a = a0 + (a1 - a0) * t + Math.sin(i * 12.9898) * 0.03;
+      const w = 0.003 + ((i * 7) % 5) * 0.0018;
+      const rin = 800 + ((i * 37) % 11) * 26;
       const pt = (rr: number, aa: number) => `${(cx + Math.cos(aa) * rr).toFixed(1)},${(cy + Math.sin(aa) * rr).toFixed(1)}`;
-      out.push(`M${pt(r2, a)} L${pt(r1, a - w)} L${pt(r1, a + w)} Z`);
+      out.push(`M${pt(rin, a)} L${pt(1800, a - w)} L${pt(1800, a + w)} Z`);
     }
-    return p(out.join(' '), color, 'none', 0, ' opacity="0.5"');
+    return p(out.join(' '), color, 'none', 0, ` opacity="${op}"`);
   };
   const petal = (x: number, y: number, rot: number, c: string) => `<path d="M${x},${y} q10,-14 22,-4 q-8,14 -22,4 Z" fill="${c}" opacity="0.85" transform="rotate(${rot} ${x} ${y})"/>`;
   return `
   <g class="collage">
-    ${burst(-260, 1180, 420, 1500, 26, -1.45, -0.2, '#f2e6ff')}
-    ${burst(2020, -160, 420, 1500, 22, 1.75, 2.95, '#ffd0f0')}
+    ${burst(-3.0, -2.25, 16, '#f6eeff', 0.55)}
+    ${burst(-0.9, -0.2, 14, '#ffd0f0', 0.45)}
+    ${burst(0.2, 0.8, 14, '#f6eeff', 0.4)}
+    ${burst(2.3, 2.95, 14, '#bff6ff', 0.4)}
     ${sparkles([
       [-80, 980, 14, WHITE],
       [260, 1040, 9, CYAN],

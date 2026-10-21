@@ -1,5 +1,4 @@
 import './style.css';
-import '@fontsource/cinzel/700.css';
 import '@fontsource/jetbrains-mono/500.css';
 import '@fontsource/jetbrains-mono/700.css';
 import {
@@ -473,7 +472,8 @@ function syncTags() {
 function portrait(id: string, mood: Mood = 'idle', crop: 'bust' | 'head' = 'bust') {
   const rig = rigFor(id);
   const top = rig.top - 6;
-  const box = crop === 'bust' ? `-84 ${top} 168 ${-top - 40}` : `-62 ${top + 4} 124 ${Math.min(124, -top - 110)}`;
+  // 머리 자르기: 애니메풍 큰 머리(정수리 -256, 턱 -150)를 정사각형에 가깝게 담는다(높은 모자는 조금 잘린다)
+  const box = crop === 'bust' ? `-84 ${top} 168 ${-top - 40}` : `-74 -286 148 150`;
   return `<svg class="portrait ${crop}" viewBox="${box}" data-mood="${mood}" aria-hidden="true" focusable="false">${rig.svg}</svg>`;
 }
 
@@ -603,7 +603,12 @@ function layoutHud(a: GlassAnchor | null = anchor) {
     if (docked) {
       meters.style.left = meters.style.top = '';
     } else {
-      place(meters, room - w, Math.max(midY - meters.offsetHeight / 2, 250));
+      const h = meters.offsetHeight;
+      let y = Math.max(midY - h / 2, 250);
+      // 주문 카드(이야기 귀띔이 붙어 길어질 수 있다)와 겹치면 그 아래로
+      const card = orderRect();
+      if (card && overlaps(card, room - w, y, w, h)) y = card.bottom + GAP;
+      place(meters, room - w, y);
     }
   }
 
@@ -619,29 +624,71 @@ function layoutHud(a: GlassAnchor | null = anchor) {
     Math.min(window.innerHeight - actions.offsetHeight - 70, a.bottom + 40),
   );
 
+  // 얼음 고르기는 잔 바로 위 가운데. 주문 카드와 겹치면 카드 오른쪽으로 비켜 서고, 자리가 없으면 카드 아래로 내린다.
   const ice = $('ice');
-  place(ice, clampX(a.x - ice.offsetWidth / 2, ice.offsetWidth), Math.max(isMobile() ? 230 : 120, a.top - ice.offsetHeight - 24));
+  if (!ice.hidden) {
+    const w = ice.offsetWidth;
+    const h = ice.offsetHeight;
+    let x = clampX(a.x - w / 2, w);
+    let y = Math.max(isMobile() ? 230 : 120, a.top - h - 24);
+    const card = orderRect();
+    if (card && overlaps(card, x, y, w, h)) {
+      const right = card.right + GAP;
+      if (right + w <= window.innerWidth - 8) x = right;
+      else y = card.bottom + GAP;
+    }
+    place(ice, x, y);
+  }
 
-  // 장식 카드는 잔 위에 부채꼴로 펼친다. 가운데 카드가 가장 높고 크다.
+  // 장식 카드는 잔 위 한 점(사북)을 축으로 부채꼴로 펼친다. 가운데 카드가 가장 높고 크다.
+  // 축(#garnish)만 잔을 따라 매 프레임 옮기고, 카드는 축 기준 자리라서 카메라가 움직여도 흔들리지 않는다.
   const arc = $('garnish');
-  const cards = [...arc.querySelectorAll<HTMLElement>('.g-card')];
-  const R = Math.min(300, window.innerWidth * 0.36);
-  const cy = Math.max(isMobile() ? 300 : 190, a.top - 30);
-  cards.forEach((c, i) => {
-    const k = i - state.garnishSel;
-    const th = k * 0.42;
-    const x = a.x + Math.sin(th) * R;
-    const y = cy - Math.cos(th) * 70;
-    c.style.transform = `translate(${Math.round(x - c.offsetWidth / 2)}px, ${Math.round(y - c.offsetHeight)}px) scale(${k === 0 ? 1 : 0.8}) rotate(${th * 14}deg)`;
-    c.style.opacity = Math.abs(k) > 2 ? '0' : k === 0 ? '1' : '0.8';
-    c.style.pointerEvents = Math.abs(k) > 2 ? 'none' : '';
-  });
-  const arrows = arc.querySelectorAll<HTMLElement>('.g-arrow');
-  if (arrows.length === 2) {
-    place(arrows[0], Math.max(8, a.x - R - 70), cy - 70);
-    place(arrows[1], Math.min(window.innerWidth - 52, a.x + R + 26), cy - 70);
+  if (!arc.hidden) {
+    const cards = [...arc.querySelectorAll<HTMLElement>('.g-card')];
+    const R = Math.min(300, window.innerWidth * 0.36);
+    const cy = Math.max(isMobile() ? 300 : 190, a.top - 30);
+    arc.style.transform = `translate(${Math.round(a.x)}px, ${Math.round(cy)}px)`;
+    const fresh = arc.dataset.fresh === '1';
+    // 새로 만든 카드는 전환 없이 제자리에 놓는다(왼쪽 위 모서리에서 날아오지 않게)
+    if (fresh) arc.classList.add('snap');
+    cards.forEach((c, i) => {
+      const k = i - state.garnishSel;
+      const th = k * 0.42;
+      const x = Math.sin(th) * R;
+      const y = -Math.cos(th) * 70;
+      c.style.transform = `translate(${Math.round(x - c.offsetWidth / 2)}px, ${Math.round(y - c.offsetHeight)}px) scale(${k === 0 ? 1 : 0.8}) rotate(${(th * 14).toFixed(2)}deg)`;
+      c.style.opacity = Math.abs(k) > 2 ? '0' : k === 0 ? '1' : '0.8';
+      c.style.pointerEvents = Math.abs(k) > 2 ? 'none' : '';
+      c.tabIndex = Math.abs(k) > 2 ? -1 : 0;
+    });
+    const arrows = arc.querySelectorAll<HTMLElement>('.g-arrow');
+    if (arrows.length === 2) {
+      place(arrows[0], Math.max(8, a.x - R - 70) - a.x, -70);
+      place(arrows[1], Math.min(window.innerWidth - 52, a.x + R + 26) - a.x, -70);
+    }
+    if (fresh) {
+      void arc.offsetWidth;
+      arc.classList.remove('snap');
+      delete arc.dataset.fresh;
+    }
+    if (garnishFanIn) {
+      garnishFanIn = false;
+      fanInGarnish(arc);
+    }
   }
 }
+
+/** 화면 요소끼리 띄울 간격 */
+const GAP = 14;
+/** 보이는 주문 카드의 화면 상자(기울어진 카드는 바깥 상자) */
+function orderRect(): DOMRect | null {
+  const el = $('order');
+  if (el.hidden) return null;
+  const r = el.getBoundingClientRect();
+  return r.width && r.height ? r : null;
+}
+const overlaps = (r: DOMRect, x: number, y: number, w: number, h: number) =>
+  x < r.right + GAP && x + w > r.left - GAP && y < r.bottom + GAP && y + h > r.top - GAP;
 window.addEventListener('resize', () => layoutHud());
 
 // ── 화면 그리기 ─────────────────────────────────────────────
@@ -1002,20 +1049,76 @@ function renderHud() {
   }
 
   const arc = $('garnish');
-  arc.hidden = !mix || phase !== 'garnish';
-  if (phase === 'garnish') {
-    const u = unlocked();
+  const showArc = mix && phase === 'garnish';
+  arc.hidden = !showArc;
+  if (showArc) renderGarnish(arc);
+  // 장식 단계에 들어올 때마다 한 번 부채꼴을 펼친다(layoutHud에서 자리를 잡은 뒤)
+  if (showArc && !garnishOpen) garnishFanIn = true;
+  garnishOpen = showArc;
+}
+
+/** 장식 부채꼴이 보이는 중인가 / 다음 배치 때 펼침 연출을 할 것인가 */
+let garnishOpen = false;
+let garnishFanIn = false;
+
+/**
+ * 장식 카드는 내용(열림·값)이 바뀔 때만 새로 만든다. 고르기만 바뀌면 클래스만 바꿔서,
+ * 같은 카드가 제자리에서 부드럽게 돌아가게 한다(다시 만들면 카드가 순간이동한다).
+ */
+function renderGarnish(arc: HTMLElement) {
+  const u = unlocked();
+  const key = GARNISHES.map((g) => `${g.id}:${u.garnishes.has(g.id) ? 1 : 0}:${shift() ? garnishCost(g.id, state.upgrades) : 0}`).join('|');
+  if (arc.dataset.key !== key) {
+    arc.dataset.key = key;
+    arc.dataset.fresh = '1';
     arc.innerHTML =
       `<button class="g-arrow" data-act="g-prev" aria-label="이전 장식">‹</button><button class="g-arrow" data-act="g-next" aria-label="다음 장식">›</button>` +
-      GARNISHES.map((g, i) => {
+      GARNISHES.map((g) => {
         const open = u.garnishes.has(g.id);
         const cost = garnishCost(g.id, state.upgrades);
-        return `<button class="g-card ${i === state.garnishSel ? 'selected' : ''}" data-act="garnish" data-id="${g.id}" ${open ? '' : 'disabled'}>
+        return `<button class="g-card" data-act="garnish" data-id="${g.id}" ${open ? '' : 'disabled'}>
           ${icon(`garnish:${g.id}`)}<strong>${g.name}</strong>
           ${open ? (shift() && cost ? `<small>${coin(cost)}</small>` : '<small>&nbsp;</small>') : `<small class="lock">Day ${GARNISH_DAY[g.id]} 입고</small>`}
         </button>`;
       }).join('');
   }
+  arc.querySelectorAll<HTMLElement>('.g-card').forEach((c, i) => {
+    const on = i === state.garnishSel;
+    c.classList.toggle('selected', on);
+    c.setAttribute('aria-pressed', String(on));
+  });
+  const opens = GARNISHES.map((g) => u.garnishes.has(g.id));
+  const [prev, next] = arc.querySelectorAll<HTMLButtonElement>('.g-arrow');
+  prev.disabled = !opens.slice(0, state.garnishSel).some(Boolean);
+  next.disabled = !opens.slice(state.garnishSel + 1).some(Boolean);
+}
+
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * 장식 단계에 들어올 때: 카드가 잔 위 한 점(부채의 사북)에 모여 있다가 가운데 카드부터 차례로 제자리로 펼쳐진다.
+ * 움직임 줄이기에서는 제자리에서 흐리게 나타나기만 한다.
+ */
+function fanInGarnish(arc: HTMLElement) {
+  const reduce = reducedMotion();
+  const ease = 'cubic-bezier(0.23, 1, 0.32, 1)';
+  arc.querySelectorAll<HTMLElement>('.g-card').forEach((c, i) => {
+    const k = Math.abs(i - state.garnishSel);
+    const to = c.style.transform;
+    const op = Number(c.style.opacity || 1);
+    if (op === 0) return;
+    const from = reduce ? to : `translate(${Math.round(-c.offsetWidth / 2)}px, ${Math.round(-c.offsetHeight + 46)}px) scale(0.86) rotate(0deg)`;
+    c.animate(
+      [
+        { transform: from, opacity: 0 },
+        { transform: to, opacity: op },
+      ],
+      { duration: reduce ? 180 : 300, delay: reduce ? 0 : k * 45, easing: ease, fill: 'backwards' },
+    );
+  });
+  arc.querySelectorAll<HTMLElement>('.g-arrow').forEach((b) => {
+    b.animate([{ opacity: 0 }, { opacity: getComputedStyle(b).opacity }], { duration: 200, delay: reduce ? 0 : 120, easing: 'ease', fill: 'backwards' });
+  });
 }
 
 const GRADE_VIEW: Record<Grade, { label: string; stars: string }> = {
@@ -1515,7 +1618,7 @@ function todayStory() {
 }
 
 /** 신문 머리(제호 띠) */
-const masthead = (right: string, left = '녹턴 야간 신문', mid = '유성 골목 7번지 · 막차 이후 발행') =>
+const masthead = (right: string, left = '★ 별빛 바', mid = '유성 골목 7번지 · 막차 이후의 바') =>
   `<div class="masthead" aria-hidden="true"><span>${left}</span><span class="mh-mid">${mid}</span><span>${right}</span></div>`;
 
 const OUTCOME_VIEW: Record<Outcome, { stars: string; note?: string }> = {
@@ -1541,7 +1644,7 @@ function renderOverlay() {
     case 'title':
       el.innerHTML = `
         <div class="card title-card paper">
-          ${masthead('제 1 호')}
+          ${masthead('NOCTURNE 7')}
           <h1 class="title-logo">${ransom('별빛 바', { seed: 11, cls: 'xl' })}</h1>
           <p class="title-en">STARCOCKTAIL</p>
           <p class="lede">정거장 도시 녹턴, 막차가 끊긴 뒤에만 불을 켜는 바. 사라진 전 주인 대신 카운터에 선 당신은 술을 팔고, 단골들의 이야기를 서로 이어 줍니다.</p>
@@ -1582,7 +1685,7 @@ function renderOverlay() {
       const news = shift() ? newsHtml() : '';
       el.innerHTML = `
         <div class="card day-card paper ${news ? 'has-news' : ''}">
-          ${masthead(state.day > LAST_DAY ? '무한 영업' : `${state.day} / ${LAST_DAY}`)}
+          ${masthead(state.day > LAST_DAY ? '무한 영업' : `${state.day} / ${LAST_DAY}`, news ? '녹턴 야간 신문' : undefined)}
           <div class="day-head">
             <div class="day-no">${ransom(`DAY ${state.day}`, { seed: state.day * 13 })}</div>
             <h2 class="headline">${plan.title}</h2>
@@ -1655,7 +1758,7 @@ function renderOverlay() {
       const settled = Object.keys(state.story.endings).length > 0;
       el.innerHTML = `
         <div class="card end final paper">
-          ${masthead('호외')}
+          ${masthead('LAST NIGHT')}
           <h2 class="headline big">${ransom(rank, { seed: 31 })}</h2>
           <ul class="facts">
             <li><span>완벽한 잔</span><strong class="num">${state.perfectTotal} / ${TOTAL_VISITS}</strong></li>

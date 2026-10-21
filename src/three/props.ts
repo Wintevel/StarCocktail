@@ -26,7 +26,7 @@ export class GlassShelf {
   readonly hits: THREE.Mesh[] = [];
   private items: ShelfGlass[] = [];
   private locked = new THREE.MeshBasicMaterial({
-    color: 0x5a5753,
+    color: 0x5a4a8a,
     transparent: true,
     opacity: 0.45,
     depthWrite: false,
@@ -38,10 +38,10 @@ export class GlassShelf {
   constructor() {
     const width = GAP * GLASSES.length + 0.1;
     const cx = ORIGIN.x + (GLASSES.length - 1) * GAP * 0.5;
-    // 검은 쟁반에 종이색 깔개를 깔고 빨간 난간을 둘렀다.
+    // 남보라 쟁반에 보라 벨벳을 깔고 마젠타 네온 난간을 둘렀다.
     const tray = new THREE.Mesh(new THREE.BoxGeometry(width, 0.04, 0.44), inkMaterial);
     tray.position.set(cx, 0.02, ORIGIN.z);
-    const velvet = new THREE.Mesh(new THREE.BoxGeometry(width - 0.06, 0.006, 0.38), toonMaterial(0x3a3836));
+    const velvet = new THREE.Mesh(new THREE.BoxGeometry(width - 0.06, 0.006, 0.38), toonMaterial(0x4a2a8f, { emissive: 0x1a0840, glow: 0.3 }));
     velvet.position.set(cx, 0.042, ORIGIN.z);
     this.group.add(tray, velvet);
     for (const dz of [-0.215, 0.215]) {

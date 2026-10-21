@@ -402,7 +402,13 @@ function legsSitBack(o: LegOpts, scale: number, seat: number, dangle = false) {
 // ── 감정 표시(머리 위) ─────────────────────────────────
 
 function emote(top: number) {
+  // 머리 오른쪽 옆(이름표 아래, 머리카락 밖)에 띄운다
+  // 가게 화면에서 손님이 작게 그려지므로 1.5배로 키운다(기준점: 하트 가운데)
   const y = top + 6;
+  return `<g transform="translate(${44 + 30} ${y + 52}) scale(1.5) translate(-44 ${-y})">${emoteAt(y)}</g>`;
+}
+
+function emoteAt(y: number) {
   const perfect = g('emo emo-perfect', P(heartPath(40, y, 11), MAGENTA, WHITE, 2.5) + P(heartPath(60, y + 16, 7), PINK, WHITE, 2) + P(sparklePath(22, y - 8, 7), GOLD) + P(sparklePath(64, y - 6, 5), CYAN));
   const good = g('emo emo-good', P(`M44,${y - 14} L60,${y - 18} L60,${y + 4}`, 'none', CYAN, 4) + E(39, y + 6, 7, 5.5, CYAN, WHITE, 2) + E(55, y + 4, 7, 5.5, CYAN, WHITE, 2) + L(`M46,${y + 6} L46,${y - 14}`, CYAN, 4) + P(sparklePath(28, y - 4, 5), WHITE));
   const fail = g('emo emo-fail', P(`M48,${y - 16} Q60,${y + 2} 48,${y + 8} Q36,${y + 2} 48,${y - 16} Z`, '#8fe2ff', WHITE, 2.5) + L(`M24,${y - 10} l-3,14 M32,${y - 14} l-2,16`, LAV, 3));
@@ -842,7 +848,7 @@ function norma(): Rig {
 /** 피피 · 꼬마 배달부: 별 핀 꽂은 복숭앗빛 양갈래, 고글 얹은 청록 배달 모자, 분홍 점퍼, 몸만 한 가방, 볼에 반창고 */
 function pipi(): Rig {
   const line = '#5a2140';
-  const hair: Garb = { base: '#ffb48a', shade: '#ee8064', line, rim: '#fff0e0' };
+  const hair: Garb = { base: '#ff9d62', shade: '#e8693f', line, rim: '#ffe6c8' };
   const jacket: Garb = { base: '#ff5fae', shade: '#d6358a', line };
   const cap: Garb = { base: '#3fd2e6', shade: '#2499b8', line, rim: WHITE };
   const bag: Garb = { base: '#5b47c8', shade: '#3f2f98', line };

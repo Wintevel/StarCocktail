@@ -139,7 +139,7 @@ const BOTTLE_PROFILES: Record<BottleKind, { pts: THREE.Vector2[]; label: [number
   },
 };
 
-const CORK = toonMaterial(0x8a7a6a);
+const CORK = toonMaterial(0xc99a86);
 CORK.userData.shared = true;
 const labelMaterials = new Map<string, THREE.MeshToonMaterial>();
 
@@ -169,7 +169,7 @@ export function makeBottle(id: IngredientId | BottleKind, color: string, opts: B
 
   if (opts.label !== false) {
     const [r, h, y] = prof.label;
-    const accent = opts.accent ?? '#d8202a';
+    const accent = opts.accent ?? '#ff3fb4';
     let mat = labelMaterials.get(accent);
     if (!mat) {
       mat = toonMaterial(0xffffff);
@@ -299,7 +299,7 @@ export function makeGarnish(id: GarnishId): THREE.Group {
     case 'cherry': {
       const berry = new THREE.Mesh(
         new THREE.SphereGeometry(0.09, 32, 24),
-        toonMaterial(0xd8202a, { emissive: 0x5a0010, glow: 0.35 }),
+        toonMaterial(0xff2d6f, { emissive: 0x6a0030, glow: 0.35 }),
       );
       berry.scale.y = 0.92;
       berry.position.set(0.06, 0.05, 0);
@@ -309,11 +309,11 @@ export function makeGarnish(id: GarnishId): THREE.Group {
       break;
     }
     case 'star': {
-      const stickMat = toonMaterial(0xf2ece0);
+      const stickMat = toonMaterial(0xfff0fb);
       const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.0, 8), stickMat);
       stick.position.set(-0.12, 0.05, 0);
       stick.rotation.z = -0.38;
-      const star = makeStar(0.11, 0.03, toonMaterial(0xd8202a, { emissive: 0xd8202a, glow: 0.3 }));
+      const star = makeStar(0.11, 0.03, toonMaterial(0xffd25a, { emissive: 0xffb02a, glow: 0.35 }));
       star.position.set(0.07, 0.52, 0);
       g.add(stick, star);
       g.userData.spin = star;
