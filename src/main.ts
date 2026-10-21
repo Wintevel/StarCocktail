@@ -91,8 +91,10 @@ import {
   SEATS,
   shiftStage,
 } from './shift';
+import { type GoodsStock, START_GOODS } from './goods';
 import { type Mood, rigFor } from './shop/art';
 import { ShopScene } from './shop/scene';
+import { emptyStory, fromSave as storyFromSave, type StoryState, toSave as storyToSave } from './story';
 import { type GlassAnchor, Stage3D, type Target, type View as StageView } from './three/stage';
 import { icons } from './ui/icons2d';
 import { ransom } from './ui/ransom';
@@ -168,8 +170,14 @@ interface State {
   ledger: Ledger;
   outcomes: (Outcome | undefined)[];
   perfectTotal: number;
-  /** 잔을 내준 적 있는 단골(세계관 2단계에서 이야기 진행에 쓴다) */
+  /** 잔을 내준 적 있는 단골 */
   met: Set<string>;
+  /** 진열장 물건 재고 */
+  goods: GoodsStock;
+  /** 서랍에서 주문해 다음 날 아침 도착할 물건 */
+  goodsPending: GoodsStock;
+  /** 이야기 진행(깃발·맡은 것·신뢰·기록) */
+  story: StoryState;
   drink: Drink;
   /** 자유 제조 결과 */
   result: ServeResult | null;
@@ -234,6 +242,9 @@ const state: State = {
   outcomes: [],
   perfectTotal: 0,
   met: new Set(),
+  goods: { ...START_GOODS },
+  goodsPending: {},
+  story: emptyStory(),
   drink: emptyDrink(),
   result: null,
   clip: null,
@@ -1360,6 +1371,8 @@ function snapshot(): Save {
     perfect: state.perfectTotal,
     stock: state.stock,
     met: [...state.met],
+    goods: state.goods,
+    story: storyToSave(state.story),
   };
 }
 
@@ -1393,6 +1406,9 @@ function loadCampaign(s: Save | null) {
   state.stock = s?.stock ?? {};
   state.perfectTotal = s?.perfect ?? 0;
   state.met = new Set(s?.met ?? []);
+  state.goods = { ...(s?.goods ?? START_GOODS) };
+  state.goodsPending = {};
+  state.story = s ? storyFromSave(s.story) : emptyStory();
   state.started = true;
   state.ledger = emptyLedger();
   resetFloor();

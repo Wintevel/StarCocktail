@@ -28,9 +28,14 @@ import {
   type Visit,
 } from './campaign';
 import { CUSTOMERS, INGREDIENTS, type IngredientId, RECIPES, TONE_DAY } from './data';
+import { START_GOODS } from './goods';
 import { usesTone } from './mix';
 import { SEATS } from './shift';
 import { solve, solveAll } from './solver';
+import { emptyStory, toSave } from './story';
+
+/** 이야기가 없던 저장(버전 1~3)을 옮기면 빈 수첩과 할이 남긴 진열장 물건으로 시작한다. */
+const FRESH = { goods: START_GOODS, story: toSave(emptyStory()) };
 
 const FULL = Object.fromEntries(INGREDIENTS.map((i) => [i.id, STOCK_MAX])) as Record<IngredientId, number>;
 const usesStrength = (v: Visit) => v.order.some((c) => (c.kind === 'attr' || c.kind === 'keyword') && c.attr === 'strength');
@@ -202,8 +207,9 @@ describe('경영', () => {
     for (const i of INGREDIENTS) expect(REFILL_PRICE[i.id]).toBeLessThan(income('perfect', new Set()).sale + income('perfect', new Set()).tip);
   });
 
-  it('하루 손익은 수입에서 리필·장식 값과 임대료를 뺀 값', () => {
+  it('하루 손익은 수입(잔·팁·물건·이야기)에서 리필·장식·물건 들여오기 값과 임대료를 뺀 값', () => {
     expect(profitOf({ sales: 60, tips: 70, supplies: 18, rent: 30 })).toBe(82);
+    expect(profitOf({ sales: 60, tips: 70, goods: 24, supplies: 18, goodsCost: 12, story: -30, rent: 30 })).toBe(64);
   });
 
   it('임대료는 7일째까지 오르고 무한 영업에서는 그대로다', () => {
@@ -224,19 +230,33 @@ describe('경영', () => {
 describe('저장', () => {
   it('버전 1 저장은 병을 가득 채우고, 그 전날까지 만났을 단골을 채워 옮겨 온다', () => {
     const s = parseSave(JSON.stringify({ day: 3, money: 120, upgrades: ['neon', 'bogus'], early: ['bitters', 'nope'], perfect: 4 }));
-    expect(s).toEqual({ v: SAVE_VERSION, day: 3, money: 120, upgrades: ['neon'], early: ['bitters'], perfect: 4, stock: {}, met: metBefore(3) });
+    expect(s).toEqual({ v: SAVE_VERSION, day: 3, money: 120, upgrades: ['neon'], early: ['bitters'], perfect: 4, stock: {}, met: metBefore(3), ...FRESH });
     expect(metBefore(3).sort()).toEqual(['bolt', 'evan', 'grey', 'leila', 'mio', 'norma', 'pipi', 'serena']);
     expect(metBefore(1)).toEqual([]);
   });
 
   it('버전 2 저장은 잔량을 함께 읽고, 무한 영업 날짜도 받는다', () => {
     const raw = JSON.stringify({ v: 2, day: 11, money: -5, upgrades: [], early: [], perfect: 30, stock: { gin: 2, whisky: 9, bogus: 1 } });
-    expect(parseSave(raw)).toEqual({ v: SAVE_VERSION, day: 11, money: -5, upgrades: [], early: [], perfect: 30, stock: { gin: 2, whisky: STOCK_MAX }, met: metBefore(11) });
+    expect(parseSave(raw)).toEqual({ v: SAVE_VERSION, day: 11, money: -5, upgrades: [], early: [], perfect: 30, stock: { gin: 2, whisky: STOCK_MAX }, met: metBefore(11), ...FRESH });
   });
 
-  it('버전 3 저장은 만난 단골 목록을 그대로 읽는다', () => {
+  it('버전 3 저장은 만난 단골 목록을 그대로 읽고, 이야기는 빈 수첩으로 시작한다', () => {
     const raw = JSON.stringify({ v: 3, day: 2, money: 40, upgrades: [], early: [], perfect: 2, stock: { gin: 4 }, met: ['mio', 'nobody', 'grey'] });
-    expect(parseSave(raw)).toEqual({ v: 3, day: 2, money: 40, upgrades: [], early: [], perfect: 2, stock: { gin: 4 }, met: ['mio', 'grey'] });
+    expect(parseSave(raw)).toEqual({ v: SAVE_VERSION, day: 2, money: 40, upgrades: [], early: [], perfect: 2, stock: { gin: 4 }, met: ['mio', 'grey'], ...FRESH });
+  });
+
+  it('버전 4 저장은 진열장 재고와 이야기(깃발·신뢰·맡은 것·끝난 장면·결말)를 함께 읽는다', () => {
+    const story = { flags: ['mb_known', 'fest_started'], trust: { mio: 2, ghost: 3 }, items: ['musicbox', 'nope'], seen: ['mio_box', 'gone'], log: [{ day: 1, who: 'mio', text: '오르골' }], news: [], endings: { song: 'duet' } };
+    const raw = JSON.stringify({ v: 4, day: 3, money: 90, upgrades: [], early: [], perfect: 3, stock: {}, met: ['mio'], goods: { key: 2, umbrella: 99, bogus: 1 }, story });
+    const s = parseSave(raw)!;
+    expect(s.v).toBe(SAVE_VERSION);
+    expect(s.goods).toEqual({ key: 2, umbrella: 5 });
+    expect(s.story.flags.sort()).toEqual(['fest_started', 'mb_known']);
+    expect(s.story.trust).toEqual({ mio: 2 });
+    expect(s.story.items).toEqual(['musicbox']);
+    expect(s.story.seen).toEqual(['mio_box']);
+    expect(s.story.log).toHaveLength(1);
+    expect(s.story.endings).toEqual({ song: 'duet' });
   });
 
   it('알아볼 수 없는 저장은 처음부터 시작한다', () => {

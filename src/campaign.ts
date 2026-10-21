@@ -2,8 +2,11 @@
 // 화면과 무관한 순수 데이터·계산만 둔다.
 
 import { type AttrKey, type Constraint, type GarnishId, type GlassId, INGREDIENTS, type IngredientId, RECIPES } from './data';
+import { type GoodsStock, GOODS_MAX, START_GOODS } from './goods';
 import type { Grade } from './mix';
 import { seeded } from './shift';
+import { emptyStory, fromSave as storyFromSave, type StorySave, toSave as storyToSave } from './story';
+import { GOOD_BY_ID, type GoodId } from './world';
 
 export const LAST_DAY = 7;
 
@@ -369,13 +372,20 @@ export function income(grade: Grade, upgrades: ReadonlySet<UpgradeId>): { sale: 
 export interface Ledger {
   sales: number;
   tips: number;
+  /** 진열장 물건 판매 */
+  goods: number;
   /** 리필·장식 값 */
   supplies: number;
+  /** 물건 들여오기 값 */
+  goodsCost: number;
+  /** 이야기로 오간 돈(볼트의 선불 +, 축제 후원 -) */
+  story: number;
   rent: number;
 }
 
-export const emptyLedger = (): Ledger => ({ sales: 0, tips: 0, supplies: 0, rent: 0 });
-export const profitOf = (l: Ledger) => l.sales + l.tips - l.supplies - l.rent;
+export const emptyLedger = (): Ledger => ({ sales: 0, tips: 0, goods: 0, supplies: 0, goodsCost: 0, story: 0, rent: 0 });
+export const profitOf = (l: Partial<Ledger>) =>
+  (l.sales ?? 0) + (l.tips ?? 0) + (l.goods ?? 0) + (l.story ?? 0) - (l.supplies ?? 0) - (l.goodsCost ?? 0) - (l.rent ?? 0);
 
 export function finalRank(money: number, perfect: number): string {
   if (money >= 900 && perfect >= TOTAL_VISITS - 2) return '전설의 바텐더';
@@ -388,9 +398,10 @@ export function finalRank(money: number, perfect: number): string {
 
 /**
  * 저장 형식 버전.
- * 1: 잔량이 없던 시절(재료비를 부을 때마다 냄), 2: 병 잔량, 3: 만난 단골 목록(2단계 이야기 장치의 바탕).
+ * 1: 잔량이 없던 시절(재료비를 부을 때마다 냄), 2: 병 잔량, 3: 만난 단골 목록,
+ * 4: 이야기(깃발·신뢰·맡은 것·끝난 장면·기록·신문·결말)와 진열장 물건 재고.
  */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export interface Save {
   v: typeof SAVE_VERSION;
@@ -401,8 +412,12 @@ export interface Save {
   early: IngredientId[];
   perfect: number;
   stock: Stock;
-  /** 한 번이라도 잔을 내준 단골 id */
+  /** 한 번이라도 가게에 들어온 단골 id */
   met: string[];
+  /** 진열장 물건 재고 */
+  goods: GoodsStock;
+  /** 이야기 진행 */
+  story: StorySave;
 }
 
 const SAVE_KEY = 'starcocktail.campaign';
@@ -413,7 +428,9 @@ export function metBefore(day: number): string[] {
 }
 
 /**
- * 저장 문자열을 읽는다. 버전 1 저장은 병을 모두 가득 채운 채로, 버전 1·2 저장은 그 전날까지 만났을 단골을 채워 옮겨 온다.
+ * 저장 문자열을 읽는다. 버전 1 저장은 병을 모두 가득 채운 채로, 버전 1·2 저장은 그 전날까지 만났을 단골을 채워,
+ * 버전 1~3 저장은 이야기를 처음부터(빈 수첩)·진열장은 할이 남긴 물건으로 채워 옮겨 온다.
+ * 이야기 줄기는 여러 날에 걸쳐 시작될 수 있어서, 중간에 이어도 남은 날 안에서 시작하고 결말로 갈린다.
  * 알아볼 수 없는 저장이면 null(처음부터).
  */
 export function parseSave(raw: string | null): Save | null {
@@ -422,17 +439,25 @@ export function parseSave(raw: string | null): Save | null {
     const s = JSON.parse(raw) as Omit<Partial<Save>, 'v'> & { v?: number };
     if (typeof s !== 'object' || s === null) return null;
     if (typeof s.day !== 'number' || !Number.isInteger(s.day) || s.day < 1) return null;
-    if (s.v !== undefined && s.v !== 1 && s.v !== 2 && s.v !== SAVE_VERSION) return null;
+    const v = s.v ?? 1;
+    if (![1, 2, 3, SAVE_VERSION].includes(v)) return null;
     const known = new Set<string>(INGREDIENTS.map((i) => i.id));
     const upgrades = new Set<string>(UPGRADES.map((u) => u.id));
-    const patrons = new Set<string>(DAYS.flatMap((d) => d.visits.map((v) => v.customer)));
+    const patrons = new Set<string>(DAYS.flatMap((d) => d.visits.map((x) => x.customer)));
     const stock: Stock = {};
-    if ((s.v ?? 1) >= 2 && s.stock && typeof s.stock === 'object') {
+    if (v >= 2 && s.stock && typeof s.stock === 'object') {
       for (const [id, n] of Object.entries(s.stock)) {
         if (known.has(id) && typeof n === 'number') stock[id as IngredientId] = Math.max(0, Math.min(STOCK_MAX, Math.round(n)));
       }
     }
-    const met = s.v === SAVE_VERSION && Array.isArray(s.met) ? s.met.filter((id) => patrons.has(id)) : metBefore(s.day);
+    const met = v >= 3 && Array.isArray(s.met) ? s.met.filter((id) => patrons.has(id)) : metBefore(s.day);
+    const goods: GoodsStock = {};
+    if (v >= 4 && s.goods && typeof s.goods === 'object') {
+      for (const [id, n] of Object.entries(s.goods)) {
+        if (GOOD_BY_ID[id as GoodId] && typeof n === 'number') goods[id as GoodId] = Math.max(0, Math.min(GOODS_MAX, Math.round(n)));
+      }
+    } else Object.assign(goods, START_GOODS);
+    const story = storyToSave(v >= 4 ? storyFromSave(s.story) : emptyStory());
     return {
       v: SAVE_VERSION,
       day: s.day,
@@ -442,6 +467,8 @@ export function parseSave(raw: string | null): Save | null {
       perfect: s.perfect ?? 0,
       stock,
       met,
+      goods,
+      story,
     };
   } catch {
     return null;

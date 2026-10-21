@@ -1,5 +1,5 @@
 // 세계관 데이터: 정거장 도시 녹턴의 단골들이 숨긴 비밀·바람·서로의 관계, 그리고 가게에서 팔 물건.
-// 1단계(지금)는 데이터만 두고 화면에는 칭호·대사로만 비친다. 2단계에서 전언·소문·고백의 잔·약속 장부가 이 데이터를 쓴다.
+// 이야기 장치(전언·소문·고백의 잔·약속 장부)는 src/story.ts, 물건 경영(원가·재고·수요)은 src/goods.ts가 이 데이터를 쓴다.
 // 설정 문서: 정리-v5-세계관.md
 
 import type { AttrKey } from './data';
@@ -84,7 +84,8 @@ export const LORE: Record<string, PatronLore> = {
   leila: {
     secret: '축제 자금이 바닥났고 허가도 아직이다.',
     wish: '모두가 무대에 서는 축제',
-    key: { attr: 'tone', side: 'high' },
+    // 「화끈하게」를 입에 달고 사는 축제의 주인공. (직설적은 레일라 주문과 함께 켤 수 있는 날이 Day 1뿐이라 독함으로 바꿨다.)
+    key: { attr: 'strength', side: 'high' },
     ties: [
       { id: 'serena', note: '피날레 가수' },
       { id: 'bolt', note: '불꽃' },
@@ -94,21 +95,30 @@ export const LORE: Record<string, PatronLore> = {
   },
 };
 
+export type GoodId = 'candy' | 'umbrella' | 'letter' | 'key' | 'mask' | 'jar' | 'postcard';
+
 export interface Good {
-  id: string;
+  id: GoodId;
   name: string;
+  /** 손님에게 파는 값 */
   price: number;
+  /** 들여오는 값(도매 계약이면 30% 싸진다) */
+  cost: number;
+  /** 서랍에서 들여올 수 있게 되는 날(주문하면 다음 날 도착) */
+  from: number;
   /** 찾는 손님이나 쓰임 */
   note: string;
 }
 
-/** 카운터에서 팔 물건 (2단계: 서랍 상점에서 들여와 손님에게 판다) */
+/** 카운터 아래 진열장에서 파는 물건. 서랍에서 들여오면 다음 날 아침 도착하고, 찾는 손님에게 판다. */
 export const GOODS: Good[] = [
-  { id: 'candy', name: '별사탕 봉지', price: 4, note: '피피의 배달 심부름 값' },
-  { id: 'umbrella', name: '접이식 우산', price: 8, note: '비 오는 밤의 그레이' },
-  { id: 'letter', name: '편지지와 봉투', price: 6, note: '에반의 익명 편지' },
-  { id: 'key', name: '오르골 태엽', price: 12, note: '미오와 세레나의 오르골' },
-  { id: 'mask', name: '축제 가면', price: 10, note: '축제 손님(Day 6~7)' },
-  { id: 'jar', name: '꿈 보관병', price: 15, note: '노르마, 관리국 규격품' },
-  { id: 'postcard', name: '유성 엽서', price: 3, note: '받는 사람을 적으면 피피가 배달' },
+  { id: 'candy', name: '별사탕 봉지', price: 4, cost: 2, from: 1, note: '피피의 배달 심부름 값' },
+  { id: 'umbrella', name: '접이식 우산', price: 8, cost: 4, from: 1, note: '비 오는 밤엔 누구나, 특히 그레이' },
+  { id: 'letter', name: '편지지와 봉투', price: 6, cost: 3, from: 1, note: '에반의 익명 편지' },
+  { id: 'key', name: '오르골 태엽', price: 12, cost: 6, from: 1, note: '미오의 멈춘 오르골' },
+  { id: 'mask', name: '축제 가면', price: 10, cost: 5, from: 5, note: '축제 손님 모두(Day 6~7)' },
+  { id: 'jar', name: '꿈 보관병', price: 15, cost: 8, from: 1, note: '노르마, 관리국 규격품' },
+  { id: 'postcard', name: '유성 엽서', price: 3, cost: 1, from: 1, note: '받는 사람을 적으면 피피가 배달' },
 ];
+
+export const GOOD_BY_ID = Object.fromEntries(GOODS.map((g) => [g.id, g])) as Record<GoodId, Good>;
