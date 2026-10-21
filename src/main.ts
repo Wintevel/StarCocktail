@@ -1840,7 +1840,7 @@ function applyOutcome(s: Seat, out: StoryOutcome): string[] {
   }
   for (const g of out.sold) {
     const price = sellGood(s, g);
-    if (price) notes.push(`<li class="n-sold">${GOOD_BY_ID[g].name} 판매 <b class="num">+✦${price}</b></li>`);
+    if (price) notes.push(`<li class="n-sold">${GOOD_BY_ID[g].name} 판매 <b class="num">+${price}</b></li>`);
   }
   for (const id of out.gained) {
     const it = ITEMS[id];
@@ -1870,7 +1870,7 @@ function talkSell(g: GoodId) {
   const price = sellGood(s, g);
   if (!price) return;
   t.sold = g;
-  t.notes = [...t.notes, `<li class="n-sold">${GOOD_BY_ID[g].name} 판매 <b class="num">+✦${price}</b></li>`];
+  t.notes = [...t.notes, `<li class="n-sold">${GOOD_BY_ID[g].name} 판매 <b class="num">+${price}</b></li>`];
 }
 
 function talkNext() {
