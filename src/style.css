@@ -2512,6 +2512,1088 @@ body[data-view="mix"] .wipe-edge {
   font-size: 11px;
 }
 
+/* ── 이야기: 이름표 꼴·대화 카드·수첩·단골 수첩·약속 장부·신문 ─────── */
+
+/* 이름표: 할 말이 있는 손님은 「…」, 잔을 받고 남은 손님은 머무는 시간, 진열장을 기웃거리는 손님은 「✦」 */
+.p-tag[data-mode="talk"] .p-mark,
+.p-tag[data-mode="after"] .p-mark {
+  width: 26px;
+  border-radius: 50% 50% 50% 0;
+  background: var(--white);
+  color: var(--red);
+  border: 2px solid var(--red);
+  font: 900 15px/0.6 var(--font-ui);
+  letter-spacing: -1px;
+  animation: talk-bob 1.6s var(--ease-in-out) infinite alternate;
+}
+
+.p-tag[data-mode="after"] .p-pat i,
+.p-tag[data-mode="shop"] .p-pat i {
+  background: repeating-linear-gradient(90deg, var(--paper) 0 5px, transparent 5px 8px);
+}
+
+.p-tag[data-mode="shop"] .p-mark {
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 15px/1 var(--font-ui);
+}
+
+.p-tag.hot[data-mode="talk"] .p-mark,
+.p-tag.hot[data-mode="after"] .p-mark {
+  background: var(--ink);
+  border-color: var(--paper);
+  color: var(--paper);
+}
+
+@keyframes talk-bob {
+  to {
+    transform: translateY(-2px) rotate(-6deg);
+  }
+}
+
+/* 제조대 위 스툴 목록의 「…」 */
+.ss {
+  position: relative;
+}
+
+.ss-mark {
+  position: absolute;
+  top: -9px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 18px;
+  border-radius: 50% 50% 50% 0;
+  background: var(--white);
+  color: var(--red);
+  border: 2px solid var(--red);
+  font: 900 12px/0.5 var(--font-ui);
+}
+
+.ss.after {
+  border-style: dashed;
+}
+
+.ss.after .ss-pat i {
+  background: repeating-linear-gradient(90deg, var(--paper) 0 5px, transparent 5px 8px);
+}
+
+/* 주문 카드 아래 이야기 귀띔 */
+.oc-story {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font: 500 12.5px/1.45 var(--font-ui);
+  color: var(--ink-2);
+}
+
+.oc-story li {
+  padding: 3px 0 3px 9px;
+  border-left: 3px solid var(--red);
+}
+
+.oc-story li.h-key {
+  border-left-color: var(--ink);
+}
+
+.oc-story li.h-key.lit {
+  border-left-color: var(--red);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.oc-story b {
+  color: var(--red-deep);
+}
+
+/* 서빙 결과 오려 붙이기의 이야기 한 줄 */
+.clip-story {
+  margin: 8px 0 0;
+  padding: 5px 8px;
+  background: var(--ink);
+  color: var(--paper);
+  font: 400 15px/1.25 var(--font-title-ko);
+}
+
+.clip-story.key {
+  background: var(--red);
+  color: var(--white);
+}
+
+/* ── 대화 카드 ─────────────────────────────── */
+.talk {
+  position: fixed;
+  z-index: 6;
+  left: 50%;
+  bottom: 22px;
+  width: min(660px, calc(100vw - 32px));
+  max-height: calc(100vh - var(--topbar) - 40px);
+  overflow: auto;
+  padding: 14px 20px 18px;
+  border: 3px solid var(--ink);
+  filter: drop-shadow(9px 9px 0 var(--ink));
+  transform: translateX(-50%) rotate(-0.6deg);
+  animation: talk-in 260ms var(--ease-out);
+  scrollbar-width: thin;
+}
+
+@keyframes talk-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 18px) rotate(-2deg);
+  }
+}
+
+.talk .masthead {
+  margin: 0 40px 10px 0;
+}
+
+.tk-x {
+  top: 10px;
+  right: 10px;
+}
+
+.tk-head {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  align-items: end;
+  gap: 0 14px;
+}
+
+.tk-face {
+  width: 76px;
+  height: 92px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle, rgba(21, 19, 19, 0.5) 1.6px, transparent 2px) 0 0 / 7px 7px,
+    var(--lgray);
+  border: 3px solid var(--ink);
+}
+
+.tk-face .portrait {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.tk-who {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding-bottom: 2px;
+}
+
+.tk-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.tk-meta small {
+  font: 700 11px var(--font-num);
+  letter-spacing: 0.04em;
+  color: var(--gray);
+}
+
+.trust {
+  color: var(--red);
+  font-size: 14px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.trust i {
+  font-style: normal;
+  color: var(--lgray);
+}
+
+.tk-lines {
+  margin: 12px 0 0;
+  padding: 10px 0 0;
+  border-top: 3px solid var(--ink);
+}
+
+.tk-lines.fresh > * {
+  animation: line-in 320ms var(--ease-out) backwards;
+}
+
+.tk-lines.fresh > :nth-child(2) {
+  animation-delay: 70ms;
+}
+
+.tk-lines.fresh > :nth-child(3) {
+  animation-delay: 140ms;
+}
+
+.tk-lines.fresh > :nth-child(n + 4) {
+  animation-delay: 200ms;
+}
+
+@keyframes line-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.tk-say {
+  margin: 0 0 6px;
+  font: 20px/1.4 var(--font-speech);
+  color: var(--ink);
+}
+
+.tk-say::before {
+  content: "「";
+  color: var(--red);
+}
+
+.tk-say::after {
+  content: "」";
+  color: var(--red);
+}
+
+.tk-narr {
+  margin: 0 0 6px;
+  font: italic 14px/1.6 var(--font-book);
+  color: var(--ink-2);
+}
+
+.tk-drink {
+  display: inline-block;
+  margin: 4px 0 0;
+  padding: 4px 9px;
+  background: var(--ink);
+  color: var(--paper);
+  font: 600 12.5px/1.3 var(--font-ui);
+  transform: skewX(-6deg);
+}
+
+.tk-drink b {
+  color: var(--white);
+  font-size: 14px;
+}
+
+.tk-choices {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tk-choice {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 8px;
+  background: var(--white);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+  text-align: left;
+  transition:
+    transform 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out),
+    background-color 160ms ease;
+}
+
+.tk-n {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 14px;
+  font-weight: 700;
+  transform: rotate(-6deg);
+}
+
+.tk-cbody {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tk-cbody strong {
+  font: 400 17px/1.2 var(--font-title-ko);
+}
+
+.tk-cbody small {
+  font: 500 12px/1.35 var(--font-ui);
+  color: var(--ink-2);
+}
+
+.tk-cbody .tk-lock {
+  color: var(--red-deep);
+  font-weight: 700;
+}
+
+.tk-badge {
+  padding: 2px 7px;
+  border: 2px solid var(--ink);
+  font: 400 13px/1.1 var(--font-title-ko);
+  white-space: nowrap;
+  transform: rotate(4deg);
+}
+
+.st-asis .tk-badge {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.st-soft .tk-badge {
+  border-style: dashed;
+}
+
+.st-blunt .tk-badge {
+  background: var(--red);
+  border-color: var(--red);
+  color: var(--white);
+}
+
+.st-bury .tk-badge {
+  border-color: var(--gray);
+  color: var(--gray);
+}
+
+.st-sell .tk-badge {
+  border-color: var(--red);
+  color: var(--red);
+  font-family: var(--font-num);
+  font-size: 12px;
+}
+
+.tk-choice:disabled {
+  background: transparent;
+  border-style: dashed;
+  box-shadow: none;
+  opacity: 0.75;
+}
+
+.tk-choice:disabled .tk-n {
+  background: var(--gray);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tk-choice:not(:disabled):hover {
+    transform: translate(-2px, -2px);
+    box-shadow:
+      -3px -2px 0 var(--cyan),
+      5px 5px 0 var(--red);
+  }
+
+  .tk-good:hover {
+    transform: translate(-1px, -2px);
+    box-shadow:
+      -3px -2px 0 var(--cyan),
+      4px 4px 0 var(--red);
+  }
+}
+
+.tk-choice:not(:disabled):active,
+.tk-good:active {
+  transform: scale(0.98);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+.tk-reply {
+  margin: 12px 0 0;
+  padding: 2px 0 2px 12px;
+  border-left: 4px solid var(--red);
+  animation: line-in 260ms var(--ease-out);
+}
+
+.tk-you {
+  margin: 0 0 6px;
+  font: 400 15px/1.2 var(--font-title-ko);
+  color: var(--red);
+}
+
+.tk-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tk-notes li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 4px;
+  background: var(--ink);
+  color: var(--paper);
+  font: 600 12.5px/1.25 var(--font-ui);
+  transform: rotate(-1deg);
+  animation: note-in 240ms var(--ease-out) backwards;
+}
+
+.tk-notes li:nth-child(even) {
+  transform: rotate(1deg);
+}
+
+.tk-notes li:nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.tk-notes li:nth-child(n + 3) {
+  animation-delay: 120ms;
+}
+
+.tk-notes .n-gain {
+  background: var(--red);
+  color: var(--white);
+}
+
+.tk-notes .n-lost {
+  background: var(--white);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+}
+
+.tk-notes .trust {
+  color: var(--white);
+  font-size: 12px;
+}
+
+.tk-notes .trust i {
+  color: rgba(247, 242, 232, 0.4);
+}
+
+@keyframes note-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+}
+
+.tk-shelf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px dashed var(--ink);
+}
+
+.tk-shelf-h {
+  display: grid;
+  font: 400 16px/1 var(--font-title-ko);
+}
+
+.tk-shelf-h small {
+  margin-top: 3px;
+  font: 600 10px var(--font-ui);
+  color: var(--gray);
+}
+
+.tk-good {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 4px;
+  background: var(--white);
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+  text-align: left;
+  transition:
+    transform 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out);
+}
+
+.tk-good .icon2d .ic {
+  width: 34px;
+  height: 34px;
+}
+
+.tk-good span {
+  display: grid;
+  gap: 1px;
+}
+
+.tk-good strong {
+  font: 400 15px/1.1 var(--font-title-ko);
+}
+
+.tk-good small {
+  font: 500 11px var(--font-ui);
+  color: var(--ink-2);
+}
+
+.tk-good b {
+  color: var(--red);
+}
+
+.tk-reply.sold {
+  border-left-color: var(--ink);
+}
+
+.tk-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* 대화 중에는 다른 손님을 흐리게(이야기하는 손님만 또렷하게), 이름표는 감춘다 */
+.shop-view .patron {
+  transition: opacity 200ms ease;
+}
+
+body:not([data-talk=""]) .shop-view .patron:not(.selected) {
+  opacity: 0.5;
+}
+
+body:not([data-talk=""]) .p-tag {
+  visibility: hidden;
+}
+
+/* ── 수첩(왼쪽 아래) ─────────────────────────── */
+.notebook {
+  position: fixed;
+  z-index: 5;
+  left: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.notebook > * {
+  pointer-events: auto;
+}
+
+.nb-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 20px 20px;
+  padding: 10px 16px 11px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  box-shadow: 5px 5px 0 var(--ink);
+  font: 400 17px/1 var(--font-title-ko);
+  transform: skewX(-8deg);
+  transition:
+    transform 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out);
+}
+
+.nb-tab b {
+  min-width: 20px;
+  padding: 2px 5px;
+  background: var(--red);
+  color: var(--white);
+  font-size: 12px;
+  text-align: center;
+}
+
+.nb-ic {
+  width: 14px;
+  height: 18px;
+  border: 2px solid var(--ink);
+  background: linear-gradient(90deg, var(--red) 0 4px, var(--white) 4px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .nb-tab:hover {
+    transform: skewX(-8deg) translate(-2px, -2px);
+    box-shadow:
+      -4px -3px 0 var(--cyan),
+      6px 6px 0 var(--red);
+  }
+}
+
+.nb-tab:active {
+  transform: skewX(-8deg) scale(0.97);
+}
+
+.nb-body {
+  width: min(390px, 100vw);
+  max-height: calc(100vh - var(--topbar) - 96px);
+  overflow: auto;
+  margin-bottom: 12px;
+  padding: 14px 18px 18px;
+  background-image: var(--grain), var(--rule);
+  border: 3px solid var(--ink);
+  border-left: 0;
+  box-shadow: 7px 7px 0 var(--ink);
+  font-size: 13px;
+  scrollbar-width: thin;
+}
+
+.nb-body.enter {
+  animation: notebook-in 260ms var(--ease-drawer);
+}
+
+@keyframes notebook-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+.nb-body h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 14px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 3px solid var(--ink);
+  font: 400 18px/1.1 var(--font-title-ko);
+}
+
+.nb-body h3:first-child {
+  margin-top: 0;
+}
+
+.nb-body h3 small {
+  font: 500 11px var(--font-ui);
+  color: var(--gray);
+}
+
+.nb-list,
+.nb-gossip {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nb-item {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 8px;
+  padding: 8px;
+  background: var(--white);
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.nb-kind {
+  align-self: start;
+  padding: 3px 0;
+  background: var(--red);
+  color: var(--white);
+  font: 400 12px/1.1 var(--font-title-ko);
+  text-align: center;
+  transform: rotate(-6deg);
+}
+
+.nb-item.k-thing .nb-kind {
+  background: var(--ink);
+}
+
+.nb-item strong {
+  font: 400 16px/1.2 var(--font-title-ko);
+}
+
+.nb-route {
+  display: block;
+  font: 700 11px var(--font-num);
+  color: var(--red-deep);
+}
+
+.nb-item p {
+  margin: 3px 0 0;
+  font: 13px/1.5 var(--font-book);
+  color: var(--ink-2);
+}
+
+.nb-post {
+  margin-top: 8px;
+  padding: 6px 10px 7px;
+  font-size: 14px;
+}
+
+.nb-posted {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 7px;
+  border: 2px dashed var(--red);
+  color: var(--red);
+  font: 400 13px var(--font-title-ko);
+}
+
+.nb-gossip li {
+  padding: 2px 0 6px;
+  border-bottom: 1px dotted rgba(21, 19, 19, 0.5);
+  font: 16px/1.35 var(--font-speech);
+}
+
+.nb-gossip small {
+  display: block;
+  font: 700 11px var(--font-ui);
+  color: var(--gray);
+}
+
+.nb-empty,
+.nb-tip {
+  margin: 0;
+  font: 13px/1.6 var(--font-book);
+  color: var(--ink-2);
+}
+
+.nb-tip {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 2px dashed var(--ink);
+}
+
+.nb-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  margin-top: 16px;
+}
+
+.nb-links .ghost {
+  padding: 7px 11px 8px;
+  font-size: 14px;
+}
+
+/* ── 레시피북의 쪽: 단골 수첩·약속 장부·이야기 기록 ─── */
+.book-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 12px;
+  border-bottom: 3px solid var(--ink);
+}
+
+.bt {
+  padding: 8px 13px 7px;
+  border: 2px solid var(--ink);
+  border-bottom: 0;
+  background: var(--paper-2);
+  color: var(--ink);
+  font: 400 16px/1 var(--font-title-ko);
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.bt.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bt:not(.on):hover {
+    background: var(--white);
+    color: var(--red);
+  }
+}
+
+.patrons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 0 24px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pt {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 10px;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid rgba(21, 19, 19, 0.3);
+}
+
+.pt-face {
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle, rgba(21, 19, 19, 0.45) 1.4px, transparent 1.8px) 0 0 / 6px 6px,
+    var(--lgray);
+  border: 2px solid var(--ink);
+}
+
+.pt-face .portrait {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.pt.unmet .pt-face .portrait {
+  filter: brightness(0);
+  opacity: 0.35;
+}
+
+.pt-main {
+  min-width: 0;
+}
+
+.pt-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin: 0;
+}
+
+.pt-name strong {
+  font: 400 19px/1.1 var(--font-title-ko);
+}
+
+.pt-name small {
+  font: 600 12px var(--font-ui);
+  color: var(--gray);
+}
+
+.pt-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  margin: 4px 0 0;
+  font: 500 12px var(--font-ui);
+}
+
+.pt-key b {
+  color: var(--red-deep);
+}
+
+.pt-key small {
+  color: var(--gray);
+}
+
+.pt-facts {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font: 13px/1.5 var(--font-book);
+}
+
+.pt-facts li {
+  padding-left: 14px;
+  text-indent: -14px;
+}
+
+.pt-facts li::before {
+  content: "— ";
+  color: var(--red);
+}
+
+.pt-none {
+  margin: 6px 0 0;
+  font: 13px var(--font-book);
+  color: var(--gray);
+}
+
+.promises {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  background-image: var(--rule);
+}
+
+.promises li {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 0 7px;
+  border-bottom: 1px dotted rgba(21, 19, 19, 0.5);
+}
+
+.pr-who {
+  font: 400 15px var(--font-title-ko);
+  color: var(--red-deep);
+}
+
+.pr-text {
+  font: 19px/1.35 var(--font-speech);
+}
+
+.promises li.done .pr-text {
+  color: var(--ink-2);
+  text-decoration: line-through;
+  text-decoration-color: var(--red);
+  text-decoration-thickness: 2.5px;
+}
+
+.story-log {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: 13.5px/1.5 var(--font-book);
+}
+
+.story-log li {
+  padding: 5px 0;
+  border-bottom: 1px dotted rgba(21, 19, 19, 0.45);
+}
+
+.story-log b {
+  margin-right: 4px;
+  font: 400 14px var(--font-title-ko);
+  color: var(--red-deep);
+}
+
+.endings {
+  display: grid;
+  gap: 10px;
+  margin: 6px 0 4px;
+  padding: 0;
+  list-style: none;
+}
+
+.ending {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px 11px;
+  background: var(--white);
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.ending:nth-child(odd) {
+  transform: rotate(-0.4deg);
+}
+
+.ending .arc {
+  justify-self: start;
+  padding: 2px 8px 3px;
+  background: var(--ink);
+  color: var(--paper);
+  font: 700 11px var(--font-ui);
+  transform: skewX(-10deg);
+}
+
+.ending strong {
+  font: 400 22px/1.15 var(--font-heavy);
+}
+
+.ending p {
+  margin: 0;
+  font: 14px/1.6 var(--font-book);
+}
+
+.ending .extra {
+  font-size: 13px;
+  color: var(--red-deep);
+}
+
+.ending .extra::before {
+  content: "+ ";
+  font-weight: 700;
+}
+
+/* ── 아침 신문 1면 ─────────────────────────── */
+.day-card.has-news,
+.card.final {
+  width: min(720px, 100%);
+}
+
+.news {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 16px;
+  margin: 14px 0 6px;
+  padding: 12px 0;
+  border-top: 3px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+
+.news-lead .kicker {
+  display: inline-block;
+  margin: 0 0 6px;
+  padding: 2px 8px;
+  background: var(--red);
+  color: var(--white);
+  font: 400 12px var(--font-title-ko);
+  transform: skewX(-10deg);
+}
+
+.card h3.news-head {
+  display: block;
+  margin: 0 0 6px;
+  padding: 0;
+  border: 0;
+  font: 400 26px/1.15 var(--font-heavy);
+}
+
+.news p {
+  margin: 0;
+  font: 14px/1.65 var(--font-book);
+}
+
+.news-side {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding-left: 16px;
+  border-left: 1px solid var(--ink);
+}
+
+.news-side h4 {
+  margin: 0 0 3px;
+  font: 400 16px/1.2 var(--font-title-ko);
+}
+
+.news-side ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: 13px/1.5 var(--font-book);
+}
+
+.news-side li + li {
+  margin-top: 4px;
+}
+
+.news-side .post li::before {
+  content: "✉ ";
+  color: var(--red);
+}
+
+.news-side .alley li {
+  font: 15px/1.35 var(--font-speech);
+}
+
+.facts .hot {
+  color: var(--red);
+  font: 600 13px var(--font-ui);
+}
+
+.goods .price {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--red-deep);
+}
+
+.goods li.out strong {
+  color: var(--gray);
+}
+
+.pips i.pend {
+  background: transparent;
+  border-color: var(--red);
+  border-style: dashed;
+}
+
+.ledger tr.story td {
+  color: var(--red-deep);
+}
+
 /* ── 좁은 화면(휴대폰) ─────────────────────── */
 @media (max-width: 860px) {
   :root {
@@ -2802,6 +3884,150 @@ body[data-view="mix"] .wipe-edge {
   }
 }
 
+/* 좁은 화면: 대화 카드는 아래에서 올라오는 시트, 수첩은 서랍처럼 화면 폭 */
+@media (max-width: 860px) {
+  .talk {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: min(74vh, calc(100vh - var(--topbar) - 12px));
+    padding: 10px 14px calc(14px + env(safe-area-inset-bottom));
+    border-width: 3px 0 0;
+    filter: drop-shadow(0 -6px 0 var(--ink));
+    transform: none;
+    animation: sheet-in 260ms var(--ease-drawer);
+  }
+
+  .talk .masthead {
+    margin-bottom: 8px;
+  }
+
+  .tk-head {
+    grid-template-columns: 58px 1fr;
+    gap: 0 10px;
+  }
+
+  .tk-face {
+    width: 58px;
+    height: 70px;
+  }
+
+  .tk-who .who .ransom {
+    font-size: 21px;
+  }
+
+  .tk-lines {
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+
+  .tk-say {
+    font-size: 17px;
+  }
+
+  .tk-narr {
+    font-size: 13px;
+  }
+
+  .tk-choices {
+    gap: 7px;
+    margin-top: 10px;
+  }
+
+  .tk-choice {
+    padding: 7px 8px 7px 7px;
+    gap: 8px;
+  }
+
+  .tk-cbody strong {
+    font-size: 16px;
+  }
+
+  .tk-foot {
+    margin-top: 12px;
+  }
+
+  .tk-foot .primary,
+  .tk-foot .secondary {
+    flex: 1;
+    padding: 10px 12px 11px;
+    font-size: 16px;
+  }
+
+  .nb-tab {
+    margin: 0 0 12px 10px;
+    padding: 9px 12px 10px;
+    font-size: 15px;
+  }
+
+  .nb-body {
+    width: 100vw;
+    max-height: calc(100vh - var(--topbar) - 80px);
+    border-right: 0;
+    box-shadow: 0 -6px 0 var(--ink);
+  }
+
+  .book-tabs {
+    gap: 3px;
+  }
+
+  .bt {
+    flex: 1;
+    padding: 8px 4px 7px;
+    font-size: 14px;
+  }
+
+  .patrons {
+    grid-template-columns: 1fr;
+  }
+
+  .promises li {
+    grid-template-columns: 1fr auto;
+    gap: 2px 8px;
+  }
+
+  .pr-who {
+    grid-column: 1 / -1;
+    font-size: 13px;
+  }
+
+  .pr-text {
+    font-size: 17px;
+  }
+
+  .news {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .news-side {
+    padding: 10px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--ink);
+  }
+
+  .card h3.news-head {
+    font-size: 22px;
+  }
+
+  .ending strong {
+    font-size: 19px;
+  }
+
+  .ss-mark {
+    top: -8px;
+    right: -5px;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+
 /* ── 움직임 줄이기: 화면 넘김은 짧은 겹침으로, 반복 장식 움직임은 멈춤 ── */
 @media (prefers-reduced-motion: reduce) {
   .mix-view,
@@ -2841,7 +4067,12 @@ body[data-view="mix"] .wipe-edge {
   .clip,
   .order-card,
   .result-card,
-  .drawer-body.enter {
+  .drawer-body.enter,
+  .nb-body.enter,
+  .talk,
+  .tk-reply,
+  .tk-lines.fresh > *,
+  .tk-notes li {
     animation-name: fade-only;
   }
 

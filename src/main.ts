@@ -45,6 +45,7 @@ import {
   type AttrKey,
   type Customer,
   CUSTOMER_BY_ID,
+  CUSTOMERS,
   GARNISH_BY_ID,
   GARNISHES,
   type GarnishId,
@@ -91,13 +92,50 @@ import {
   SEATS,
   shiftStage,
 } from './shift';
-import { type GoodsStock, START_GOODS } from './goods';
+import { canOrderGood, goodCost, GOODS_MAX, goodsLeft, type GoodsStock, isFestival, isRainy, receiveGoods, START_GOODS, takeGood, wantsOf } from './goods';
 import { type Mood, rigFor } from './shop/art';
 import { ShopScene } from './shop/scene';
-import { emptyStory, fromSave as storyFromSave, type StoryState, toSave as storyToSave } from './story';
+import {
+  alleyGossip,
+  ARCS,
+  type Beat,
+  BEATS,
+  choicesOf,
+  type ChoiceView,
+  choose,
+  closeBook,
+  computeEndings,
+  confessed,
+  type Ctx,
+  deliverPosted,
+  type DrinkFacts,
+  emptyStory,
+  epilogueLine,
+  factsOf,
+  fromSave as storyFromSave,
+  heldFor,
+  IDLE,
+  josa,
+  ITEMS,
+  keyLit,
+  morningNews,
+  newDay,
+  nextBeat,
+  type Outcome as StoryOutcome,
+  post,
+  postable,
+  promisesOf,
+  served,
+  type StoryState,
+  toSave as storyToSave,
+  TRUST_MAX,
+  trustOf,
+  type When,
+} from './story';
 import { type GlassAnchor, Stage3D, type Target, type View as StageView } from './three/stage';
 import { icons } from './ui/icons2d';
 import { ransom } from './ui/ransom';
+import { GOOD_BY_ID, type GoodId, GOODS, LORE } from './world';
 
 /** 가게 안(손님이 스툴에 앉는 2D 화면) / 제조대(3D) */
 type View = 'shop' | 'mix';
@@ -105,6 +143,8 @@ type View = 'shop' | 'mix';
 type Phase = 'glass' | 'ice' | 'mix' | 'garnish' | 'result';
 type Mode = 'shift' | 'free';
 type Overlay = 'title' | 'book' | 'dayStart' | 'dayEnd' | 'shop' | 'final' | null;
+/** 레시피북의 쪽: 레시피 / 단골 수첩 / 약속 장부 / 이야기 기록 */
+type BookTab = 'recipes' | 'patrons' | 'promises' | 'log';
 /** 오늘 손님 한 명의 결과: 판정 / 돌려보냄 / 기다리다 떠남 */
 type Outcome = Grade | 'away' | 'left';
 
@@ -121,9 +161,18 @@ interface Seat {
   /** 오늘 손님 순번 */
   idx: number;
   key: string;
-  /** 남은 인내(1 → 0) */
+  /** 남은 인내(1 → 0). 잔을 받고 남은 손님(after)은 머물 시간 */
   patience: number;
-  status: 'waiting' | 'leaving';
+  /** 주문을 기다림 / 잔을 받고 할 말이 남음(또는 진열장을 기웃거림) / 떠나는 중 */
+  status: 'waiting' | 'after' | 'leaving';
+  /** 잔을 받기 전 이야기를 이미 들었다(다시 누르면 곧바로 주문) */
+  talked: boolean;
+  /** 이번에 진열장에서 산 물건(한 번 방문에 물건마다 하나) */
+  bought: GoodId[];
+  /** 방금 받은 잔(잔을 받은 뒤 이야기의 조건) */
+  drink?: DrinkFacts;
+  /** 잔을 받고 남은 손님이 머무는 게임 시간(분) */
+  linger: number;
   /** 아직 잔을 내준 적 없는 손님 */
   first: boolean;
   /** 초조하다는 말을 이미 했다 */
@@ -137,6 +186,28 @@ interface Clip extends ServeResult {
   name: string;
   line: string;
   n: number;
+  /** 잔을 받고 할 말이 남았다(after) / 진열장을 기웃거린다(shop) */
+  stay?: 'after' | 'shop';
+  /** 열쇠 맛을 켰다(아직 털어놓지 않은 손님) */
+  key?: string;
+}
+
+/** 카운터의 대화 카드: 스툴의 손님 한 명이 꺼내는 이야기(장면)와 바텐더의 선택 */
+interface Talk {
+  /** 스툴 번호 */
+  seat: number;
+  when: When;
+  /** 지금 장면(없으면 물건만 권한다) */
+  beat: Beat | null;
+  /** 고른 선택지 */
+  picked: number | null;
+  reply: string[];
+  /** 고른 결과(맡음·건넴·신뢰·돈) */
+  notes: string[];
+  /** 이번 대화에서 나온 장면 수(한 번에 TALK_MAX까지 잇는다) */
+  count: number;
+  /** 방금 진열장에서 판 물건 */
+  sold: GoodId | null;
 }
 
 interface State {
@@ -189,6 +260,11 @@ interface State {
   garnishSel: number;
   /** 레시피북을 열 때 강조할 레시피(레시피 이름 주문) */
   bookFocus: string | null;
+  bookTab: BookTab;
+  /** 열려 있는 대화 카드 */
+  talk: Talk | null;
+  /** 왼쪽 아래 수첩(맡은 것·소문)이 열려 있다 */
+  notebook: boolean;
 }
 
 const RECIPE_KEY = 'starcocktail.recipes';
@@ -198,6 +274,23 @@ const AWAY_LINE = '아쉽네요… 다음에 다시 올게요.';
 const WIPE_MS = 420;
 /** 반응을 마친 손님이 스툴에서 내려와 자리가 빌 때까지(ms) */
 const SEAT_FREE_MS = 2900;
+/** 이야기를 마친 손님이 일어나 자리가 빌 때까지(ms) */
+const DEPART_FREE_MS = 1200;
+/** 한 번 대화에서 이어지는 장면 수 */
+const TALK_MAX = 3;
+/** 잔을 받고 할 말이 남은 손님이 기다려 주는 게임 시간(분) / 물건만 기웃거리는 손님 */
+const AFTER_LINGER = 90;
+const SHOP_LINGER = 24;
+/** 손님이 진열장 물건을 받아 들며 하는 말 */
+const GOOD_LINES: Record<GoodId, string> = {
+  candy: '(별사탕 봉지를 받아 든다.) 달달한 게 필요했어요.',
+  umbrella: '마침 잘됐네요. 밖에 비가 쏟아지거든요.',
+  letter: '편지지라… 오늘 밤엔 뭔가 쓰고 싶어지네요.',
+  key: '태엽이라니, 별걸 다 파네요.',
+  mask: '축제엔 역시 가면이죠!',
+  jar: '꿈 보관병… 하나쯤 있어도 좋겠네요.',
+  postcard: '유성 엽서 한 장 주세요. 누구에게 보낼지는 비밀.',
+};
 
 function loadDiscovered(): Set<string> {
   try {
@@ -253,6 +346,9 @@ const state: State = {
   drawer: false,
   garnishSel: 0,
   bookFocus: null,
+  bookTab: 'recipes',
+  talk: null,
+  notebook: false,
 };
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -285,6 +381,8 @@ app.innerHTML = `
   <p class="prompt" id="prompt"></p>
   <section class="result-card" id="result"></section>
   <section class="clip" id="clip" aria-live="polite"></section>
+  <section class="talk" id="talk" role="dialog" aria-modal="false" hidden></section>
+  <aside class="notebook" id="notebook" hidden></aside>
   <aside class="drawer" id="drawer"></aside>
   <div class="tip-card" id="tip" hidden></div>
   <div class="overlay" id="overlay" hidden></div>
@@ -311,12 +409,65 @@ const isMobile = () => window.matchMedia('(max-width: 860px)').matches;
 const minute = () => Math.min(DAY_MINUTES, state.clockMs / REAL_MS_PER_MINUTE);
 /** 경향 축이 나오는 날인가 */
 const toneOn = () => state.day >= TONE_DAY;
+/** 지금 잔을 만들어 주는 손님에게 전할 것이 있다(잔의 경향이 고쳐 전할 말투가 되므로 경향을 보여 준다) */
+const deliveryTone = () => {
+  const v = activeVisit();
+  return !!v && deliveriesFor(v.customer).length > 0;
+};
+const toneShown = () => toneOn() || deliveryTone();
 /** 자유 제조에서는 병이 줄지 않는다. */
 const stockOf = (id: IngredientId) => (shift() ? stockLeft(state.stock, id) : STOCK_MAX);
 /** 아직 들어오지 않은 오늘 손님 수 */
 const comingCount = () => state.plan.visits.length - state.nextVisit;
 /** 스툴에서 주문을 기다리는 손님들 */
 const waitingSeats = () => state.seats.filter((s): s is Seat => !!s && s.status === 'waiting');
+/** 잔을 받고 할 말이 남은 손님들 */
+const afterSeats = () => state.seats.filter((s): s is Seat => !!s && s.status === 'after');
+
+// ── 이야기·진열장 ─────────────────────────────────────────
+
+/** 이야기 장면이 나오는 날(캠페인 7일). 무한 영업·자유 제조에는 장면이 없다. */
+const storyOn = () => shift() && state.day <= LAST_DAY;
+const nameOf = (who: string) => CUSTOMER_BY_ID[who]?.name ?? who;
+const seatWho = (s: Seat) => customerAt(s.idx).id;
+
+function talkCtx(s: Seat, when: When): Ctx {
+  return { day: state.day, who: seatWho(s), when, drink: when === 'after' ? s.drink : undefined, goods: state.goods, money: state.money };
+}
+
+/** 이 손님이 지금 꺼낼 이야기 */
+function beatFor(s: Seat, when: When): Beat | null {
+  return storyOn() ? nextBeat(state.story, talkCtx(s, when)) : null;
+}
+
+/** 이 손님에게 권할 수 있는 진열장 물건(찾는 물건 중 진열장에 있고 이번에 아직 사지 않은 것) */
+function offersFor(s: Seat, beat: Beat | null = null): GoodId[] {
+  if (!shift()) return [];
+  // 지금 장면이 파는 물건은 장면의 선택지로 판다.
+  const inBeat = new Set(beat?.choices.flatMap((c) => c.fx.flatMap((e) => (e.k === 'sell' ? [e.g] : []))) ?? []);
+  return wantsOf(seatWho(s), state.day).filter((g) => goodsLeft(state.goods, g) > 0 && !s.bought.includes(g) && !inBeat.has(g));
+}
+
+/** 이 손님에게 전할, 장면이 있는 맡은 것(전언·편지·서류·물건) */
+const deliveriesFor = (who: string) => (storyOn() ? heldFor(state.story, who).filter((it) => BEATS.some((b) => b.deliver === it.id)) : []);
+
+const stars = (n: number, max = TRUST_MAX) => `<span class="trust" aria-label="신뢰 ${n} / ${max}">${'★'.repeat(n)}<i>${'☆'.repeat(Math.max(0, max - n))}</i></span>`;
+
+/** 열쇠 맛을 알려 줄 만큼 친해졌다(완벽한 잔 한 번) */
+const keyKnown = (who: string) => trustOf(state.story, who) >= 1 || confessed(state.story, who);
+const keyLabel = (who: string) => {
+  const k = LORE[who]?.key;
+  return k ? keywordLabel(k.attr, k.side) : '';
+};
+
+/** 스툴 손님 머리 위 이름표 꼴을 이야기 상태에 맞춘다. */
+function syncTags() {
+  for (const s of state.seats) {
+    if (!s) continue;
+    if (s.status === 'waiting') shop.setTag(s.key, !s.talked && state.active !== s.idx && beatFor(s, 'before') ? 'talk' : 'order');
+    else if (s.status === 'after') shop.setTag(s.key, beatFor(s, 'after') ? 'after' : 'shop');
+  }
+}
 
 /** 손님 상반신(주문 카드)·얼굴(스툴 목록) 그림. 가게 그림과 같은 SVG를 잘라 쓴다. */
 function portrait(id: string, mood: Mood = 'idle', crop: 'bust' | 'head' = 'bust') {
@@ -424,8 +575,9 @@ function syncStage() {
 }
 
 function syncShop() {
-  shop.interactive = !state.overlay && state.view === 'shop' && shift() && state.open;
-  shop.setSelected(seatOfVisit(state.active)?.key ?? null);
+  shop.interactive = !state.overlay && !state.talk && state.view === 'shop' && shift() && state.open;
+  const talking = state.talk ? state.seats[state.talk.seat] : null;
+  shop.setSelected(talking?.key ?? seatOfVisit(state.active)?.key ?? null);
 }
 
 let anchor: GlassAnchor | null = null;
@@ -505,14 +657,18 @@ function render() {
   renderHud();
   renderResult();
   renderClip();
+  renderTalk();
+  renderNotebook();
   renderDrawer();
   renderOverlay();
   syncStage();
   syncShop();
+  syncTags();
   document.body.dataset.phase = state.phase;
   document.body.dataset.view = state.view;
   document.body.dataset.mode = state.mode;
   document.body.dataset.overlay = state.overlay ?? '';
+  document.body.dataset.talk = state.talk ? state.talk.when : '';
   layoutHud();
 }
 
@@ -523,14 +679,14 @@ function closeKind(): 'none' | 'early' | 'next' {
   return st === 'over' ? 'next' : st === 'closable' ? 'early' : 'none';
 }
 
-/** 지금 마감할 수 있는가: 스툴에서 기다리는 손님을 모두 보낸 뒤에 */
-const canCloseNow = () => waitingSeats().length === 0;
+/** 지금 마감할 수 있는가: 스툴에서 기다리는 손님(주문·이야기)을 모두 보낸 뒤에 */
+const canCloseNow = () => waitingSeats().length === 0 && afterSeats().length === 0 && !state.talk;
 
 function closeButton() {
   const kind = closeKind();
   if (kind === 'none') return '';
   const can = canCloseNow();
-  const title = can ? '' : 'title="스툴에서 기다리는 손님을 모두 보낸 뒤 마감할 수 있어요"';
+  const title = can ? '' : 'title="스툴에 앉은 손님을 모두 보낸 뒤 마감할 수 있어요"';
   if (kind === 'next') {
     return `<button class="primary close-btn pulse" data-act="close-day" ${can ? '' : 'disabled'} ${title}>다음 날로 →</button>`;
   }
@@ -627,18 +783,45 @@ function renderOrder() {
   }
   const c = CUSTOMER_BY_ID[v.customer];
   const seat = seatOfVisit(state.active);
-  const view = orderView(v, computeAttrs(state.drink));
+  const attrs = computeAttrs(state.drink);
+  const view = orderView(v, attrs);
   el.innerHTML = `
     <div class="oc-face">${portrait(c.id)}</div>
     <div class="oc-main">
       <div class="who">${ransom(c.name, { seed: c.id.charCodeAt(0) })}<span class="oc-title">${c.title}</span>${seat?.first ? '<span class="stamp">첫 손님</span>' : ''}</div>
       <p class="line">${view.line}</p>
       ${view.extra}
+      ${storyHints(c.id, attrs)}
     </div>
     <div class="oc-actions">
       <button class="ghost back-btn" data-act="to-shop-view" title="만들던 잔은 그대로 두고 가게를 둘러봐요">← 가게로</button>
       <button class="away-btn" data-act="turn-away" title="만들 수 없는 주문이면 사과하고 돌려보내요 (수입 없음)">돌려보내기</button>
     </div>`;
+}
+
+/** 주문 카드 아래 이야기 귀띔: 전할 것이 있으면 잔의 경향, 친해진 손님은 열쇠 맛 */
+function storyHints(who: string, attrs: ReturnType<typeof computeAttrs>) {
+  if (!storyOn()) return '';
+  const out: string[] = [];
+  const held = deliveriesFor(who);
+  if (held.length) {
+    const t = attrs.tone;
+    const now = !state.drink.pours.length ? '' : t < 0 ? ' · 지금 잔: <b>완곡하게</b>' : t > 0 ? ' · 지금 잔: <b>직설적으로</b>' : ' · 지금 잔: 경향 0(고칠 수 없음)';
+    out.push(`<li class="h-deliver">전할 것 「${held.map((it) => it.name).join('」, 「')}」 — 잔을 낸 뒤 건네요. 고쳐 전하면 잔의 <b>경향</b>이 말투가 돼요${now}</li>`);
+  }
+  if (!confessed(state.story, who) && keyKnown(who)) {
+    const lit = !!state.drink.pours.length && keyLit(who, attrs);
+    if (who === 'norma') {
+      out.push(
+        state.story.items.includes('g_sweet')
+          ? `<li class="h-key">노르마는 몰래 단 술을 좋아한다 — 주문을 완벽하게 맞추면 서비스 한 잔을 낼 기회가 와요</li>`
+          : `<li class="h-key">열쇠 맛 「${keyLabel(who)}」… 하지만 노르마의 주문은 늘 달지 않아요. 소문이 필요해요</li>`,
+      );
+    } else {
+      out.push(`<li class="h-key ${lit ? 'lit' : ''}">열쇠 맛 「${keyLabel(who)}」${lit ? ' ✓ 켜졌어요' : ''} — 주문을 완벽하게 맞추면서 함께 켜면 속마음을 털어놓을지도</li>`);
+    }
+  }
+  return out.length ? `<ul class="oc-story">${out.join('')}</ul>` : '';
 }
 
 /** 제조대 위쪽의 스툴 네 칸: 누가 앉아 있고 얼마나 참고 있는지. 눌러서 다른 손님으로 바꿀 수 있다. */
@@ -651,11 +834,15 @@ function renderSeatStrip() {
       if (!s) return `<span class="ss empty" aria-label="${i + 1}번 스툴 빈자리"><span class="ss-n num">${i + 1}</span></span>`;
       const c = customerAt(s.idx);
       const active = state.active === s.idx;
-      const gone = s.status !== 'waiting';
-      return `<button class="ss ${active ? 'active' : ''} ${gone ? 'gone' : ''} ${s.patience < IMPATIENT_AT ? 'low' : ''}" data-act="pick-seat" data-id="${i}" ${gone || active ? 'disabled' : ''}
-        aria-label="${i + 1}번 스툴 ${c.name}${active ? ', 지금 만드는 중' : gone ? ', 떠나는 중' : ', 눌러서 이 손님 주문 받기'}">
-        <span class="ss-face">${portrait(c.id, 'idle', 'head')}</span>
-        <span class="ss-name">${c.name}${active ? '<small>제조 중</small>' : ''}</span>
+      const gone = s.status === 'leaving';
+      const after = s.status === 'after';
+      const talk = after || (s.status === 'waiting' && !s.talked && !active && !!beatFor(s, 'before'));
+      const what = active ? ', 지금 만드는 중' : gone ? ', 떠나는 중' : after ? ', 잔을 받고 할 말이 남은 손님' : talk ? ', 할 말이 있는 손님 · 눌러서 듣기' : ', 눌러서 이 손님 주문 받기';
+      return `<button class="ss ${active ? 'active' : ''} ${gone ? 'gone' : ''} ${after ? 'after' : ''} ${talk ? 'talk' : ''} ${!after && s.patience < IMPATIENT_AT ? 'low' : ''}" data-act="pick-seat" data-id="${i}" ${gone || active ? 'disabled' : ''}
+        aria-label="${i + 1}번 스툴 ${c.name}${what}">
+        <span class="ss-face">${portrait(c.id, after ? (s.drink?.grade ?? 'idle') : 'idle', 'head')}</span>
+        <span class="ss-name">${c.name}${active ? '<small>제조 중</small>' : after ? '<small>이야기</small>' : ''}</span>
+        ${talk ? '<span class="ss-mark" aria-hidden="true">…</span>' : ''}
         <span class="ss-pat"><i style="transform:scaleX(${s.patience.toFixed(3)})"></i></span>
       </button>`;
     })
@@ -665,8 +852,8 @@ function renderSeatStrip() {
 /** 매 틱: 인내 막대만 고친다(가게 이름표와 스툴 목록). */
 function updatePatienceUi() {
   state.seats.forEach((s, i) => {
-    if (!s || s.status !== 'waiting') return;
-    shop.setPatience(s.key, s.patience, s.patience < IMPATIENT_AT);
+    if (!s || s.status === 'leaving') return;
+    shop.setPatience(s.key, s.patience, s.status === 'waiting' && s.patience < IMPATIENT_AT);
     const bar = document.querySelector<HTMLElement>(`#seats .ss[data-id="${i}"] .ss-pat i`);
     if (bar) bar.style.transform = `scaleX(${s.patience.toFixed(3)})`;
   });
@@ -679,7 +866,8 @@ const METER_MAX = 5;
 function meterKeys(): AttrKey[] {
   if (!shift()) return toneOn() ? ATTR_KEYS : ['sweet', 'strength', 'body'];
   const v = activeVisit();
-  return v && usesTone(v.order) ? ['sweet', 'tone', 'body'] : ['sweet', 'strength', 'body'];
+  if (v && usesTone(v.order)) return ['sweet', 'tone', 'body'];
+  return deliveryTone() ? ATTR_KEYS : ['sweet', 'strength', 'body'];
 }
 
 function renderMeters() {
@@ -739,7 +927,7 @@ function renderMeters() {
 
 function deltaChips(id: IngredientId) {
   const d = INGREDIENT_BY_ID[id].delta;
-  const keys = toneOn() ? ATTR_KEYS : ATTR_KEYS.filter((k) => k !== 'tone');
+  const keys = toneShown() ? ATTR_KEYS : ATTR_KEYS.filter((k) => k !== 'tone');
   return keys
     .filter((k) => d[k] !== 0)
     .map((k) => `<span class="delta ${k} ${d[k] > 0 ? 'up' : 'down'}">${ATTR_LABEL[k]} ${d[k] > 0 ? '+' : ''}${d[k]}</span>`)
@@ -755,12 +943,15 @@ const PROMPTS: Partial<Record<Phase, string>> = {
 
 function promptText(): string {
   if (state.view === 'mix') return PROMPTS[state.phase] ?? '';
-  if (!shift() || !state.open) return '';
+  if (!shift() || !state.open || state.talk) return '';
   const st = shiftStage(minute());
-  const waiting = waitingSeats().length;
+  const waiting = waitingSeats().length + afterSeats().length;
   if (st === 'over') {
     return waiting ? '04:00 · 새 손님은 오지 않아요 · 남은 손님을 모두 보내면 「다음 날로」' : '04:00, 영업 시간이 끝났어요 · 오른쪽 위 「다음 날로」를 눌러 마감하세요';
   }
+  if (afterSeats().some((s) => beatFor(s, 'after'))) return '잔을 받은 손님이 할 말이 남았대요 · 「…」 손님을 눌러 이야기를 들어요';
+  if (waitingSeats().some((s) => !s.talked && state.active !== s.idx && beatFor(s, 'before'))) return '머리 위 「…」은 할 말이 있다는 표시예요 · 눌러서 이야기를 듣고 주문을 받아요';
+  if (afterSeats().length && !waitingSeats().length) return '「✦」 손님이 진열장을 기웃거려요 · 눌러서 물건을 권해 보세요';
   if (waiting) return '스툴에 앉은 손님을 눌러 주문을 받으세요';
   if (comingCount() === 0) {
     return st === 'closable' ? '오늘 손님은 모두 다녀갔어요 · 오른쪽 위에서 조기 마감할 수 있어요' : '오늘 손님은 모두 다녀갔어요 · 01:00부터 마감할 수 있어요';
@@ -776,7 +967,7 @@ function renderHud() {
   const phase = state.phase;
   const text = free ? promptText() : '';
   const prompt = $('prompt');
-  prompt.innerHTML = text && state.view === 'shop' && shift() && state.open ? `${text}<small class="num">남은 손님 ${comingCount()} · 앉은 손님 ${waitingSeats().length}/${SEATS}</small>` : text;
+  prompt.innerHTML = text && state.view === 'shop' && shift() && state.open ? `${text}<small class="num">남은 손님 ${comingCount()} · 앉은 손님 ${waitingSeats().length + afterSeats().length}/${SEATS}</small>` : text;
   prompt.hidden = !text;
   prompt.classList.toggle('loud', state.view === 'shop' && closeKind() === 'next' && canCloseNow());
 
@@ -850,7 +1041,7 @@ let clipShown = -1;
 function renderClip() {
   const el = $('clip');
   const r = state.clip;
-  el.hidden = !r || !!state.overlay || state.view !== 'shop';
+  el.hidden = !r || !!state.overlay || state.view !== 'shop' || !!state.talk;
   if (el.hidden || !r) return;
   if (clipShown === r.n) return;
   clipShown = r.n;
@@ -863,7 +1054,156 @@ function renderClip() {
     <p class="clip-line">「${r.line}」</p>
     ${r.away ? '' : `<p class="money num">판매 +${r.sale} · 팁 +${r.tip}${r.cost ? ` · 장식 -${r.cost}` : ''}</p>`}
     <ul class="checks">${r.checks.map((c) => `<li class="${c.pass ? 'pass' : 'miss'}">${c.pass ? '✓' : '✗'} ${c.label}</li>`).join('')}</ul>
-    ${r.recipeName ? `<p class="named">이 잔의 이름은 <strong>「${r.recipeName}」</strong></p>` : ''}`;
+    ${r.recipeName ? `<p class="named">이 잔의 이름은 <strong>「${r.recipeName}」</strong></p>` : ''}
+    ${r.key ? `<p class="clip-story key">✓ 열쇠 맛 「${r.key}」을 켰어요</p>` : ''}
+    ${r.stay === 'after' ? `<p class="clip-story">「…」 ${r.name}에게 할 말이 남았어요 · 눌러서 들어요</p>` : r.stay === 'shop' ? `<p class="clip-story">「✦」 ${r.name}${josa(r.name, '이', '가')} 진열장을 기웃거려요</p>` : ''}`;
+}
+
+// ── 대화 카드·수첩 ─────────────────────────────────────────
+
+/** 대사 한 줄: 괄호로 시작하면 지문, 아니면 손님의 말 */
+const lineHtml = (line: string) => (line.startsWith('(') ? `<p class="tk-narr">${line}</p>` : `<p class="tk-say">${line}</p>`);
+
+const STYLE_BADGE: Partial<Record<string, string>> = { asis: '그대로', soft: '완곡', blunt: '직설', bury: '묻기' };
+
+function choiceHtml(v: ChoiceView, n: number) {
+  const c = v.choice;
+  const sell = c.fx.find((e) => e.k === 'sell');
+  const badge = sell && sell.k === 'sell' ? `✦${GOOD_BY_ID[sell.g].price}` : (STYLE_BADGE[c.style ?? ''] ?? '');
+  return `<li><button class="tk-choice st-${c.style ?? 'plain'}" data-act="talk-pick" data-id="${v.i}" ${v.ok ? '' : 'disabled'}>
+    <span class="tk-n num" aria-hidden="true">${n + 1}</span>
+    <span class="tk-cbody"><strong>${c.label}</strong>${c.hint && v.ok ? `<small>${c.hint}</small>` : ''}${!v.ok && v.reason ? `<small class="tk-lock">${v.reason}</small>` : ''}</span>
+    ${badge ? `<span class="tk-badge">${badge}</span>` : ''}
+  </button></li>`;
+}
+
+/** 대화 카드를 매번 다시 쓰지 않도록(움직임이 다시 시작되지 않게) 바뀔 때만 고친다. */
+let talkHtml = '';
+let talkFresh = false;
+
+function renderTalk() {
+  const el = $('talk');
+  const t = state.talk;
+  const s = t ? state.seats[t.seat] : null;
+  el.hidden = !t || !s || !!state.overlay || state.view !== 'shop';
+  if (el.hidden || !t || !s) {
+    talkHtml = '';
+    return;
+  }
+  const c = customerAt(s.idx);
+  const ctx = talkCtx(s, t.when);
+  const b = t.beat;
+  const done = !b || t.picked !== null;
+  const views = b && t.picked === null ? choicesOf(b, state.story, ctx) : [];
+  const more = done && !!b && t.count < TALK_MAX && !!beatFor(s, t.when);
+  const offers = done ? offersFor(s, b) : [];
+  const idle = IDLE[c.id] ?? [];
+  const lines = b ? b.lines : t.sold ? [] : idle;
+  const mood = t.when === 'after' ? (s.drink?.grade ?? 'idle') : 'idle';
+  // 고쳐 전하기가 걸린 장면에서는 방금 낸 잔의 경향을 보여 준다.
+  const toneChoice = !!b && t.when === 'after' && b.choices.some((x) => x.style === 'soft' || x.style === 'blunt');
+  const tone = s.drink?.attrs.tone ?? 0;
+  const toneNote = toneChoice
+    ? `<p class="tk-drink">방금 낸 잔의 경향 <b class="num">${tone > 0 ? '+' : ''}${tone}</b> · ${tone < 0 ? '「완곡함」 쪽 — 부드럽게 고쳐 전할 수 있어요' : tone > 0 ? '「직설적」 쪽 — 단도직입으로 고쳐 전할 수 있어요' : '경향 0 — 말투를 고칠 수 없어요'}</p>`
+    : '';
+  const picked = b && t.picked !== null ? b.choices[t.picked] : null;
+  const exit = t.when === 'before' ? '주문 받기 →' : '배웅하기';
+  const closable = t.when === 'before' ? !picked : done;
+  const foot = done
+    ? `<div class="tk-foot">
+        ${more ? `<button class="secondary" data-act="talk-done">${exit}</button><button class="primary" data-act="talk-next">다음 이야기 ▸</button>` : `<button class="primary" data-act="talk-done">${exit}</button>`}
+      </div>`
+    : '';
+  const html = `
+    ${masthead(`DAY ${state.day} · ${clockLabel(minute())}`, '카운터의 약속', t.when === 'before' ? '바 카운터에서 한 말은 바텐더가 맡는다' : '전할지, 묻어 둘지, 어떻게 전할지는 바텐더가 정한다')}
+    ${closable ? `<button class="clip-x tk-x" data-act="talk-close" aria-label="${t.when === 'before' ? '이야기는 다음에 듣기' : '배웅하기'}">✕</button>` : ''}
+    <div class="tk-head">
+      <div class="tk-face">${portrait(c.id, mood)}</div>
+      <div class="tk-who">
+        <div class="who">${ransom(c.name, { seed: c.id.charCodeAt(0) })}<span class="oc-title">${c.title}</span></div>
+        <div class="tk-meta"><span class="stamp">${b ? b.tag : '진열장'}</span>${stars(trustOf(state.story, c.id))}<small>${t.when === 'before' ? '잔을 내기 전' : '잔을 낸 뒤'}</small></div>
+      </div>
+    </div>
+    <div class="tk-lines ${talkFresh ? 'fresh' : ''}">${lines.map(lineHtml).join('')}</div>
+    ${toneNote}
+    ${views.length ? `<ol class="tk-choices" aria-label="바텐더의 선택">${views.map(choiceHtml).join('')}</ol>` : ''}
+    ${picked ? `<div class="tk-reply"><p class="tk-you">▸ ${picked.label}</p>${t.reply.map(lineHtml).join('')}</div>` : ''}
+    ${t.notes.length ? `<ul class="tk-notes">${t.notes.join('')}</ul>` : ''}
+    ${t.sold ? `<div class="tk-reply sold">${lineHtml(GOOD_LINES[t.sold])}</div>` : ''}
+    ${
+      offers.length
+        ? `<div class="tk-shelf"><span class="tk-shelf-h">진열장 <small>찾는 물건</small></span>${offers
+            .map(
+              (g) =>
+                `<button class="tk-good" data-act="talk-sell" data-id="${g}">${icon(`good:${g}`)}<span><strong>${GOOD_BY_ID[g].name}</strong><small>권하기 · <b class="num">✦${GOOD_BY_ID[g].price}</b> · 남은 ${goodsLeft(state.goods, g)}</small></span></button>`,
+            )
+            .join('')}</div>`
+        : ''
+    }
+    ${foot}`;
+  el.className = `talk paper when-${t.when}`;
+  el.setAttribute('aria-label', `${c.name}와 이야기`);
+  if (html !== talkHtml) {
+    talkHtml = html;
+    el.innerHTML = html;
+  }
+  talkFresh = false;
+}
+
+let notebookOpening = false;
+
+/** 왼쪽 아래 수첩: 카운터에 맡아 둔 것과 소문. 피피가 배달을 맡았으면 엽서로 부칠 수 있다. */
+function renderNotebook() {
+  const el = $('notebook');
+  el.hidden = !shift() || !state.started || !!state.overlay || state.view !== 'shop' || !!state.talk;
+  if (el.hidden) return;
+  const story = state.story;
+  const held = story.items.filter((id) => ITEMS[id] && ITEMS[id].kind !== 'gossip');
+  const gossip = story.items.filter((id) => ITEMS[id]?.kind === 'gossip');
+  const count = held.length + gossip.length;
+  const tab = `<button class="nb-tab" data-act="notebook" aria-expanded="${state.notebook}"><span class="nb-ic" aria-hidden="true"></span><span class="nb-label">수첩</span>${count ? `<b class="num">${count}</b>` : ''}</button>`;
+  if (!state.notebook) {
+    el.innerHTML = tab;
+    return;
+  }
+  const canPost = new Set(postable(story));
+  const cards = goodsLeft(state.goods, 'postcard');
+  const KIND: Record<string, string> = { msg: '전언', letter: '편지', doc: '서류', thing: '물건' };
+  const heldHtml = held
+    .map((id) => {
+      const it = ITEMS[id];
+      const posted = story.posted.includes(id);
+      const action = posted
+        ? '<span class="nb-posted">엽서로 부침 · 내일 아침 배달</span>'
+        : canPost.has(id)
+          ? `<button class="secondary nb-post" data-act="post" data-id="${id}" ${cards ? '' : 'disabled title="진열장에 유성 엽서가 없어요"'}>엽서로 부치기 <small>유성 엽서 1장 · 남은 ${cards}</small></button>`
+          : '';
+      return `<li class="nb-item k-${it.kind}">
+        <span class="nb-kind">${KIND[it.kind] ?? ''}</span>
+        <div><strong>「${it.name}」</strong><small class="nb-route">${nameOf(it.from)}${it.to ? ` → ${nameOf(it.to)}` : ''}</small>
+        <p>${it.desc}</p>${action}</div>
+      </li>`;
+    })
+    .join('');
+  const gossipHtml = gossip.map((id) => `<li><small>${nameOf(ITEMS[id].from)}에게서</small> 「${ITEMS[id].desc}」</li>`).join('');
+  const scroll = el.querySelector('.nb-body')?.scrollTop ?? 0;
+  el.innerHTML = `
+    <div class="nb-body paper ${notebookOpening ? 'enter' : ''}">
+      <h3>카운터의 약속 <small>맡아 둔 것 · 받는 사람이 잔을 받은 뒤 건네요</small></h3>
+      ${held.length ? `<ul class="nb-list">${heldHtml}</ul>` : `<p class="nb-empty">${storyOn() ? '아직 맡은 것이 없어요. 「…」 손님을 눌러 이야기를 들어 보세요.' : '이야기 장부는 닫혔어요. 레시피북의 「이야기 기록」에서 결말을 다시 볼 수 있어요.'}</p>`}
+      ${story.flags.has('pipi_post') && storyOn() ? '<p class="nb-tip">피피가 배달을 맡았어요: 전언·편지·서류는 유성 엽서로 부치면 다음 날 아침 「그대로」 전해져요.</p>' : ''}
+      <h3>소문 수첩 <small>완벽한 잔을 받은 손님이 흘린 말</small></h3>
+      ${gossip.length ? `<ul class="nb-gossip">${gossipHtml}</ul>` : '<p class="nb-empty">아직 들은 소문이 없어요.</p>'}
+      <div class="nb-links">
+        <button class="ghost" data-act="book" data-tab="patrons">단골 수첩</button>
+        <button class="ghost" data-act="book" data-tab="promises">약속 장부</button>
+        <button class="ghost" data-act="book" data-tab="log">이야기 기록</button>
+      </div>
+    </div>
+    ${tab}`;
+  const body = el.querySelector('.nb-body');
+  if (body) body.scrollTop = scroll;
+  notebookOpening = false;
 }
 
 /** 서랍을 막 열었다(열리는 움직임은 이때 한 번만) */
@@ -872,7 +1212,7 @@ let drawerOpening = false;
 /** 오른쪽 아래 서랍: 잔고·오늘 장부·리필·상점. 영업 중 언제든 열 수 있다. */
 function renderDrawer() {
   const el = $('drawer');
-  el.hidden = !shift() || !state.started || (!!state.overlay && state.overlay !== 'book');
+  el.hidden = !shift() || !state.started || (!!state.overlay && state.overlay !== 'book') || !!state.talk;
   if (el.hidden) return;
   el.classList.toggle('open', state.drawer);
   const low = [...unlocked().ingredients].filter((id) => stockOf(id) === 0 && !state.refills.has(id)).length;
@@ -901,7 +1241,10 @@ function ledgerRows(l: Ledger, rentLabel = '임대료·관리비') {
     <table class="ledger num">
       <tr><td>판매 수입</td><td>+${l.sales}</td></tr>
       <tr><td>팁</td><td>+${l.tips}</td></tr>
+      <tr><td>진열장 물건 판매</td><td>+${l.goods}</td></tr>
       <tr><td>리필·장식</td><td>-${l.supplies}</td></tr>
+      ${l.goodsCost ? `<tr><td>물건 들여오기</td><td>-${l.goodsCost}</td></tr>` : ''}
+      ${l.story ? `<tr class="story"><td>이야기로 오간 돈</td><td>${l.story > 0 ? '+' : ''}${l.story}</td></tr>` : ''}
       <tr><td>${rentLabel}</td><td>-${l.rent}</td></tr>
       <tr class="sum"><td>오늘 순이익</td><td>${profitOf(l) >= 0 ? '+' : ''}${profitOf(l)}</td></tr>
     </table>`;
@@ -948,6 +1291,7 @@ function shopLists() {
   const pending = [...state.pending];
   return `
     ${refillList()}
+    ${goodsList()}
     <h3>가게 꾸미기</h3>
     <ul class="goods">
       ${UPGRADES.map((g) => {
@@ -975,6 +1319,34 @@ function shopLists() {
            </ul>`
         : ''
     }`;
+}
+
+/** 진열장 물건 들여오기: 하나씩 주문하면 다음 날 아침 진열장에 놓인다. */
+function goodsList() {
+  return `
+    <h3>진열장 물건 <small>들여오면 다음 날 아침 진열 · 찾는 손님에게 권해 팔아요</small></h3>
+    <ul class="goods shelf">
+      ${GOODS.map((g) => {
+        const have = goodsLeft(state.goods, g.id);
+        const coming = state.goodsPending[g.id] ?? 0;
+        const cost = goodCost(g.id, state.upgrades);
+        const open = g.from <= state.day;
+        const can = open && canOrderGood(state.day, g.id, state.goods, state.goodsPending);
+        const pips = Array.from({ length: GOODS_MAX }, (_, i) => `<i class="${i < have ? 'on' : i < have + coming ? 'pend' : ''}"></i>`).join('');
+        return `<li class="${have === 0 && !coming ? 'out' : ''}">
+          <div class="with-icon">${icon(`good:${g.id}`)}<span><strong>${g.name} <small class="price num">판매 ✦${g.price}</small></strong>
+            <span>${g.note}</span>
+            <span class="stock-line"><span class="pips" aria-hidden="true">${pips}</span><small class="num">진열 ${have}${coming ? ` · 내일 +${coming}` : ''}</small></span></span></div>
+          ${
+            !open
+              ? `<button class="ghost" disabled>Day ${g.from}부터</button>`
+              : !can
+                ? '<button class="ghost" disabled>가득</button>'
+                : `<button class="secondary" data-act="order-good" data-id="${g.id}" ${state.money < cost ? 'disabled title="잔고가 모자라요"' : ''} aria-label="${g.name} 하나 들여오기 ✦${cost}">+1 ${coin(cost)}</button>`
+          }
+        </li>`;
+      }).join('')}
+    </ul>`;
 }
 
 function arrivalsList(day: number) {
@@ -1011,9 +1383,132 @@ function bookList() {
   }).join('');
 }
 
+const BOOK_TABS: { id: BookTab; label: string }[] = [
+  { id: 'recipes', label: '레시피' },
+  { id: 'patrons', label: '단골 수첩' },
+  { id: 'promises', label: '약속 장부' },
+  { id: 'log', label: '이야기 기록' },
+];
+
+function bookTabs(tab: BookTab) {
+  return `<nav class="book-tabs" role="tablist" aria-label="레시피북 쪽">${BOOK_TABS.map(
+    (t) => `<button role="tab" class="bt ${t.id === tab ? 'on' : ''}" aria-selected="${t.id === tab}" data-act="book-tab" data-id="${t.id}">${t.label}</button>`,
+  ).join('')}</nav>`;
+}
+
+function bookPage(tab: BookTab) {
+  const story = state.story;
+  switch (tab) {
+    case 'patrons': {
+      const metN = CUSTOMERS.filter((c) => state.met.has(c.id)).length;
+      return `
+        <h2>${ransom('단골 수첩', { seed: 6 })} <small class="num">만난 손님 ${metN} / ${CUSTOMERS.length}</small></h2>
+        <ul class="patrons">${CUSTOMERS.map((c) => {
+          const met = state.met.has(c.id);
+          const facts = factsOf(story, c.id);
+          return `<li class="pt ${met ? '' : 'unmet'}">
+            <div class="pt-face">${portrait(c.id, 'idle', 'head')}</div>
+            <div class="pt-main">
+              <p class="pt-name"><strong>${met ? c.name : '???'}</strong><small>${met ? c.title : '아직 만나지 않은 손님'}</small>${confessed(story, c.id) ? '<span class="stamp">고백</span>' : ''}</p>
+              ${
+                met
+                  ? `<p class="pt-meta">${stars(trustOf(story, c.id))}<span class="pt-key">열쇠 맛 ${keyKnown(c.id) ? `<b>「${keyLabel(c.id)}」</b>` : '<b>???</b> <small>완벽한 잔을 내면 알게 돼요</small>'}</span></p>
+                     ${facts.length ? `<ul class="pt-facts">${facts.map((f) => `<li>${f}</li>`).join('')}</ul>` : '<p class="pt-none">아직 아는 것이 없어요.</p>'}`
+                  : ''
+              }
+            </div>
+          </li>`;
+        }).join('')}</ul>`;
+    }
+    case 'promises': {
+      const list = promisesOf(story);
+      return `
+        <h2>${ransom('약속 장부', { seed: 8 })} <small class="num">줄 그은 약속 ${list.filter((p) => p.done).length} / ${list.length}</small></h2>
+        <p class="sub small">할이 남긴 장부. 단골마다 끝내지 못한 이야기가 한 줄씩 적혀 있다. 줄기를 끝내면 줄이 그어지고, 무한 영업에서는 끝낸 약속에 따라 단골의 말이 바뀌어요.</p>
+        <ol class="promises">${list
+          .map((p) => `<li class="${p.done ? 'done' : ''}"><span class="pr-who">${nameOf(p.who)}</span><span class="pr-text">${p.text}</span>${p.done ? '<span class="stamp">끝냄</span>' : ''}</li>`)
+          .join('')}</ol>`;
+    }
+    case 'log': {
+      const days = [...new Set(story.log.map((l) => l.day))].sort((a, b) => b - a);
+      const settled = Object.keys(story.endings).length > 0;
+      return `
+        <h2>${ransom('이야기 기록', { seed: 12 })} <small class="num">${story.log.length}건</small></h2>
+        ${settled ? `<h3>꿈의 축제 · 결말</h3>${endingsHtml()}` : ''}
+        ${
+          days.length
+            ? days
+                .map(
+                  (d) =>
+                    `<h3>DAY ${d}</h3><ul class="story-log">${story.log
+                      .filter((l) => l.day === d)
+                      .map((l) => `<li>${l.who ? `<b>${nameOf(l.who)}</b> ` : ''}${l.text}</li>`)
+                      .join('')}</ul>`,
+                )
+                .join('')
+            : '<p class="sub small">아직 기록된 이야기가 없어요. 손님 머리 위 「…」을 눌러 이야기를 들어 보세요.</p>'
+        }`;
+    }
+    default:
+      return `
+        <h2>${ransom('레시피북', { seed: 4 })} <small class="num">${state.discovered.size} / ${RECIPES.length}</small></h2>
+        <ul class="recipes">${bookList()}</ul>`;
+  }
+}
+
+/** 다섯 줄기의 결말(Day 7 마감 때 정해진다) */
+function endingsHtml() {
+  const e = computeEndings(state.story);
+  return `<ol class="endings">${ARCS.map((a) => {
+    const x = e[a.id];
+    return `<li class="ending e-${a.id}"><span class="arc">${a.name}</span><strong>${x.title}</strong><p>${x.text}</p>${x.extra.map((t) => `<p class="extra">${t}</p>`).join('')}</li>`;
+  }).join('')}</ol>`;
+}
+
+/** 녹턴 야간 신문 1면: 전날 밤 이야기(없으면 그날의 기본 기사), 피피의 배달 일지, 골목 소문 */
+function newsHtml() {
+  const news = morningNews(state.story, state.day);
+  const [lead, ...rest] = news;
+  const side = rest.filter((n) => n.head !== '피피의 배달 일지');
+  const posts = rest.filter((n) => n.head === '피피의 배달 일지');
+  const alley = alleyGossip(state.story);
+  return `
+    <section class="news" aria-label="오늘의 기사">
+      <article class="news-lead"><p class="kicker">1면</p><h3 class="news-head">${lead.head}</h3><p>${lead.body}</p></article>
+      ${
+        side.length || posts.length || alley.length
+          ? `<aside class="news-side">
+              ${side.map((n) => `<article><h4>${n.head}</h4><p>${n.body}</p></article>`).join('')}
+              ${posts.length ? `<article class="post"><h4>피피의 배달 일지</h4><ul>${posts.map((n) => `<li>${n.body}</li>`).join('')}</ul></article>` : ''}
+              ${alley.length ? `<article class="alley"><h4>골목 소문</h4><ul>${alley.map((a) => `<li>${a}</li>`).join('')}</ul></article>` : ''}
+            </aside>`
+          : ''
+      }
+    </section>`;
+}
+
+/** 하루 시작 화면의 진열장 한 줄: 진열한 개수와 오늘 잘 팔릴 물건 */
+function shelfFact() {
+  const n = GOODS.reduce((sum, g) => sum + goodsLeft(state.goods, g.id), 0);
+  const hot = [isRainy(state.day) ? '비 — 우산이 잘 팔려요' : '', isFestival(state.day) ? '축제 — 누구나 가면을 찾아요' : ''].filter(Boolean);
+  return `<span class="num">${n}개</span>${hot.length ? ` · <span class="hot">${hot.join(' · ')}</span>` : ''}`;
+}
+
+/** 하루 마감 화면: 오늘 이어진 이야기 */
+function todayStory() {
+  if (!shift()) return '';
+  const today = state.story.log.filter((l) => l.day === state.day);
+  if (!today.length) return '';
+  return `<h3>오늘의 이야기 <small>${today.length}건 · 레시피북 「이야기 기록」에 남아요</small></h3>
+    <ul class="story-log">${today
+      .slice(-8)
+      .map((l) => `<li>${l.who ? `<b>${nameOf(l.who)}</b> ` : ''}${l.text}</li>`)
+      .join('')}</ul>`;
+}
+
 /** 신문 머리(제호 띠) */
-const masthead = (right: string) =>
-  `<div class="masthead" aria-hidden="true"><span>녹턴 야간 신문</span><span class="mh-mid">유성 골목 7번지 · 막차 이후 발행</span><span>${right}</span></div>`;
+const masthead = (right: string, left = '녹턴 야간 신문', mid = '유성 골목 7번지 · 막차 이후 발행') =>
+  `<div class="masthead" aria-hidden="true"><span>${left}</span><span class="mh-mid">${mid}</span><span>${right}</span></div>`;
 
 const OUTCOME_VIEW: Record<Outcome, { stars: string; note?: string }> = {
   perfect: { stars: '★★★' },
@@ -1047,7 +1542,9 @@ function renderOverlay() {
             <li>앉은 손님을 <b>누르면</b> 그 손님의 잔을 만드는 제조대로 넘어가요. 다른 손님은 자리에서 기다려요(너무 오래 두면 화가 나서 나가요).</li>
             <li>쟁반에서 잔을 고르고, 진열대의 병을 잔 위로 <b>끌어다 놓아</b> <b>단맛·도수·바디</b>(Day 4부터 <b>경향</b>)를 맞춰요.</li>
             <li>제조 완료 → 장식을 골라 <b>서빙</b>하면 손님이 반응하고 잔을 들고 나가요.</li>
-            <li>병은 한 번 부을 때마다 20%씩 줄어요. 오른쪽 아래 <b>서랍</b>에서 리필을 주문하면 다음 날 아침 채워져요.</li>
+            <li>머리 위에 <b>「…」</b>가 뜬 손님은 할 말이 있어요. 눌러서 듣고, 맡은 말·물건·소문을 다른 손님에게 <b>이어 주세요</b>. 고쳐 전할 때는 그 잔의 <b>경향</b>이 말투가 돼요.</li>
+            <li>병은 한 번 부을 때마다 20%씩 줄어요. 오른쪽 아래 <b>서랍</b>에서 리필과 <b>진열장 물건</b>을 주문하면 다음 날 아침 도착해요. 물건은 찾는 손님(<b>✦</b>)에게 권해 팔아요.</li>
+            <li>왼쪽 아래 <b>수첩</b>에 맡은 것과 소문이, 레시피북의 <b>단골 수첩·약속 장부</b>에 알게 된 이야기가 쌓여요. 7일째 <b>꿈의 축제</b>에서 결말이 갈려요.</li>
           </ol>
           <div class="row center">
             ${
@@ -1061,25 +1558,29 @@ function renderOverlay() {
           ${state.started ? '<div class="row center"><button class="ghost" data-act="close">닫기</button></div>' : ''}
         </div>`;
       break;
-    case 'book':
+    case 'book': {
+      const tab = shift() ? state.bookTab : 'recipes';
       el.innerHTML = `
-        <div class="card book paper">
-          <h2>${ransom('레시피북', { seed: 4 })} <small class="num">${state.discovered.size} / ${RECIPES.length}</small></h2>
-          <ul class="recipes">${bookList()}</ul>
+        <div class="card book paper tab-${tab}">
+          ${shift() ? bookTabs(tab) : ''}
+          ${bookPage(tab)}
           <div class="row center"><button class="primary" data-act="close">닫기</button></div>
         </div>`;
       document.getElementById('bookFocus')?.scrollIntoView({ block: 'center' });
       break;
+    }
     case 'dayStart': {
       const plan = state.plan;
+      const news = shift() ? newsHtml() : '';
       el.innerHTML = `
-        <div class="card day-card paper">
+        <div class="card day-card paper ${news ? 'has-news' : ''}">
           ${masthead(state.day > LAST_DAY ? '무한 영업' : `${state.day} / ${LAST_DAY}`)}
           <div class="day-head">
             <div class="day-no">${ransom(`DAY ${state.day}`, { seed: state.day * 13 })}</div>
             <h2 class="headline">${plan.title}</h2>
           </div>
           <p class="lede">${plan.intro}</p>
+          ${news}
           ${arrivalsList(state.day)}
           ${lowStockList()}
           <ul class="facts">
@@ -1087,6 +1588,7 @@ function renderOverlay() {
             <li><span>조기 마감</span><strong class="num">01:00부터</strong></li>
             <li><span>예정 손님</span><strong class="num">${plan.visits.length}명 · 스툴 ${SEATS}개</strong></li>
             <li><span>마감 때 낼 임대료</span><strong>${coin(rentFor(state.day))}</strong></li>
+            <li><span>진열장 물건</span><strong>${shelfFact()}</strong></li>
             <li><span>가진 돈</span><strong class="${state.money < 0 ? 'debt' : ''}">${coin(state.money)}</strong></li>
           </ul>
           <div class="row center"><button class="primary" data-act="begin-day">영업 시작</button></div>
@@ -1113,6 +1615,7 @@ function renderOverlay() {
               .join('')}
           </ul>
           ${missed ? `<p class="sub small">마감이 빨라 ${missed}명은 오지 못했어요.</p>` : ''}
+          ${todayStory()}
           ${ledgerRows(state.ledger)}
           <p class="total">가진 돈 <strong class="${state.money < 0 ? 'debt' : ''}">${coin(state.money)}</strong></p>
           <div class="row center">
@@ -1140,15 +1643,19 @@ function renderOverlay() {
     }
     case 'final': {
       const rank = finalRank(state.money, state.perfectTotal);
+      const promises = promisesOf(state.story);
+      const settled = Object.keys(state.story.endings).length > 0;
       el.innerHTML = `
-        <div class="card end paper">
+        <div class="card end final paper">
           ${masthead('호외')}
           <h2 class="headline big">${ransom(rank, { seed: 31 })}</h2>
           <ul class="facts">
             <li><span>완벽한 잔</span><strong class="num">${state.perfectTotal} / ${TOTAL_VISITS}</strong></li>
             <li><span>남은 돈</span><strong class="${state.money < 0 ? 'debt' : ''}">${coin(state.money)}</strong></li>
             <li><span>꾸민 가게</span><strong class="num">${state.upgrades.size} / ${UPGRADES.length}</strong></li>
+            <li><span>약속 장부</span><strong class="num">${promises.filter((p) => p.done).length} / ${promises.length} 줄 그음</strong></li>
           </ul>
+          ${settled ? `<h3>꿈의 축제 결산 <small>다섯 줄기의 결말</small></h3>${endingsHtml()}` : ''}
           <p class="lede">별빛 바의 일주일이 끝났어요. 수고했어요, 바텐더.<br />단골들은 앞으로도 계속 찾아올 거예요.</p>
           <div class="row center">
             <button class="primary" data-act="go-infinite">무한 영업 이어가기 →</button>
@@ -1212,10 +1719,12 @@ function selectGarnish(i: number) {
   state.drink = { ...state.drink, garnish: GARNISHES[i].id };
 }
 
-function openBook(focus: string | null = activeVisit()?.recipe ?? null) {
+function openBook(focus: string | null = activeVisit()?.recipe ?? null, tab: BookTab = 'recipes') {
   state.bookFocus = focus;
+  state.bookTab = tab;
   state.overlay = 'book';
   state.drawer = false;
+  state.notebook = false;
   render();
 }
 
@@ -1246,12 +1755,14 @@ function maybeArrive(): boolean {
   const v = visitAt(k);
   const c = CUSTOMER_BY_ID[v.customer];
   const key = `${state.day}-${k}`;
-  state.seats[seat] = { idx: k, key, patience: 1, status: 'waiting', first: !state.met.has(c.id), grumbled: false, freeAt: 0 };
+  state.seats[seat] = { idx: k, key, patience: 1, status: 'waiting', first: !state.met.has(c.id), grumbled: false, freeAt: 0, talked: false, bought: [], linger: 0 };
   // 들어온 순간 만난 손님이 된다(돌려보내거나 기다리다 떠나도 다음에는 「첫 손님」이 아니다).
   state.met.add(c.id);
   state.nextVisit = k + 1;
   state.lastArrivalMin = m;
-  shop.enter(key, c, seat, c.lines.enter);
+  // 무한 영업에서는 축제의 결말에 따라 들어오며 하는 말이 바뀐다.
+  const line = state.day > LAST_DAY ? (epilogueLine(state.story, c.id) ?? c.lines.enter) : c.lines.enter;
+  shop.enter(key, c, seat, line);
   shop.setWaiting(key, true);
   return true;
 }
@@ -1263,10 +1774,124 @@ function dismissSeat(s: Seat, mood: Mood, line: string, glass: { glass: string; 
   shop.serve(s.key, mood, line, glass);
 }
 
-/** 스툴의 손님을 눌렀다: 그 손님의 잔을 만들러 제조대로 */
+/** 이야기를 마친 손님이 스툴에서 일어난다. */
+function departSeat(s: Seat, line = '') {
+  s.status = 'leaving';
+  s.freeAt = performance.now() + DEPART_FREE_MS + (line ? 900 : 0);
+  shop.depart(s.key, line, line ? 1400 : 500);
+}
+
+/**
+ * 스툴의 손님을 눌렀다: 잔을 받고 할 말이 남은 손님이면 이야기를, 잔을 받기 전 할 말이 있으면 이야기를 먼저,
+ * 아니면 그 손님의 잔을 만들러 제조대로.
+ */
 function pickPatron(i: number) {
   const s = state.seats[i];
-  if (!s || s.status !== 'waiting' || state.overlay || !shift()) return;
+  if (!s || state.overlay || !shift() || state.talk) return;
+  if (s.status === 'after') return openTalk(i, 'after');
+  if (s.status !== 'waiting') return;
+  if (!s.talked && state.active !== s.idx && beatFor(s, 'before')) return openTalk(i, 'before');
+  takeOrder(i);
+}
+
+function openTalk(i: number, when: When) {
+  const s = state.seats[i]!;
+  const beat = beatFor(s, when);
+  state.talk = { seat: i, when, beat, picked: null, reply: [], notes: [], count: beat ? 1 : 0, sold: null };
+  talkFresh = true;
+  state.drawer = false;
+  state.notebook = false;
+  goView('shop');
+  render();
+  // 첫 선택지(또는 닫기)에 초점을 둔다(키보드 1~9로도 고를 수 있다).
+  ($('talk').querySelector<HTMLButtonElement>('.tk-choice:not(:disabled), .tk-foot .primary') ?? null)?.focus({ preventScroll: true });
+}
+
+/** 바텐더가 선택지를 골랐다. */
+function talkPick(i: number) {
+  const t = state.talk;
+  const s = t ? state.seats[t.seat] : null;
+  if (!t || !s || !t.beat || t.picked !== null) return;
+  const ctx = talkCtx(s, t.when);
+  if (!choicesOf(t.beat, state.story, ctx).some((v) => v.i === i && v.ok)) return;
+  const out = choose(state.story, t.beat, i, ctx);
+  t.picked = i;
+  t.reply = out.reply;
+  t.notes = applyOutcome(s, out);
+}
+
+/** 이야기가 낸 결과를 가게에 반영한다: 돈(선불·후원)은 이야기 장부로, 판 물건은 진열장에서. 카드에 붙일 메모를 돌려준다. */
+function applyOutcome(s: Seat, out: StoryOutcome): string[] {
+  const notes: string[] = [];
+  for (const m of out.money) {
+    state.money += m.d;
+    state.ledger.story += m.d;
+    notes.push(`<li class="n-money">${m.label} <b class="num">${m.d > 0 ? '+' : '-'}✦${Math.abs(m.d)}</b></li>`);
+  }
+  for (const g of out.sold) {
+    const price = sellGood(s, g);
+    if (price) notes.push(`<li class="n-sold">${GOOD_BY_ID[g].name} 판매 <b class="num">+✦${price}</b></li>`);
+  }
+  for (const id of out.gained) {
+    const it = ITEMS[id];
+    notes.push(it.kind === 'gossip' ? '<li class="n-gain">소문을 수첩에 적었어요</li>' : `<li class="n-gain">맡음 「${it.name}」${it.to ? ` → ${nameOf(it.to)}에게` : ''}</li>`);
+  }
+  for (const id of out.lost) notes.push(`<li class="n-lost">건넴 「${ITEMS[id].name}」</li>`);
+  for (const t of out.trust) notes.push(`<li class="n-trust">${nameOf(t.who)}의 신뢰 ${t.d > 0 ? '+' : ''}${t.d} ${stars(trustOf(state.story, t.who))}</li>`);
+  return notes;
+}
+
+/** 진열장에서 하나 판다. 판 값(재고가 없으면 0) */
+function sellGood(s: Seat, g: GoodId): number {
+  if (goodsLeft(state.goods, g) <= 0) return 0;
+  const price = GOOD_BY_ID[g].price;
+  state.goods = takeGood(state.goods, g);
+  state.money += price;
+  state.ledger.goods += price;
+  s.bought.push(g);
+  return price;
+}
+
+/** 대화 카드의 진열장 줄: 손님이 찾는 물건을 권한다. */
+function talkSell(g: GoodId) {
+  const t = state.talk;
+  const s = t ? state.seats[t.seat] : null;
+  if (!t || !s || !offersFor(s, t.beat).includes(g)) return;
+  const price = sellGood(s, g);
+  if (!price) return;
+  t.sold = g;
+  toast(`<strong>${GOOD_BY_ID[g].name}</strong> 판매 ${coin(price)}`);
+}
+
+function talkNext() {
+  const t = state.talk;
+  const s = t ? state.seats[t.seat] : null;
+  if (!t || !s || t.count >= TALK_MAX) return;
+  const b = beatFor(s, t.when);
+  if (!b) return;
+  Object.assign(t, { beat: b, picked: null, reply: [], notes: [], count: t.count + 1, sold: null });
+  talkFresh = true;
+}
+
+/** 대화를 마친다: 잔을 받기 전이면 주문을 받으러, 받은 뒤면 배웅한다. */
+function talkDone(close = false) {
+  const t = state.talk;
+  if (!t) return;
+  state.talk = null;
+  const s = state.seats[t.seat];
+  if (!s) return;
+  if (t.when === 'before') {
+    s.talked = true;
+    if (!close && s.status === 'waiting') takeOrder(t.seat);
+  } else if (s.status === 'after') {
+    departSeat(s);
+  }
+}
+
+/** 그 손님의 잔을 만들러 제조대로 */
+function takeOrder(i: number) {
+  const s = state.seats[i];
+  if (!s || s.status !== 'waiting') return;
   if (state.active !== s.idx) {
     if (state.active !== null && state.drink.glass) {
       toast(`만들던 <strong>${customerAt(state.active).name}</strong>의 잔은 비웠어요`);
@@ -1306,9 +1931,24 @@ function serve() {
   state.outcomes[s.idx] = j.grade;
   if (j.grade === 'perfect') state.perfectTotal += 1;
   const line = c.reactions[j.grade];
-  state.clip = { ...j, tip, sale, cost: gCost, recipeName: matched[0]?.name ?? null, name: c.name, line, n: (state.clip?.n ?? 0) + 1 };
+  const attrs = computeAttrs(state.drink);
+  served(state.story, c.id, j.grade);
+  s.drink = { grade: j.grade, attrs };
+  // 잔을 받은 뒤 할 이야기가 있으면(또는 진열장에 찾는 물건이 있으면) 잔을 든 채 스툴에 남는다.
+  const stay = beatFor(s, 'after') ? 'after' : offersFor(s).length ? 'shop' : undefined;
+  const key = storyOn() && j.grade === 'perfect' && keyLit(c.id, attrs) && !confessed(state.story, c.id) ? keyLabel(c.id) : undefined;
+  state.clip = { ...j, tip, sale, cost: gCost, recipeName: matched[0]?.name ?? null, name: c.name, line, n: (state.clip?.n ?? 0) + 1, stay, key };
   stage.serveGlass();
-  dismissSeat(s, j.grade, line, { glass: state.drink.glass ?? 'rocks', color: drinkColor(state.drink) });
+  const glass = { glass: state.drink.glass ?? 'rocks', color: drinkColor(state.drink) };
+  if (stay) {
+    s.status = 'after';
+    s.patience = 1;
+    s.linger = stay === 'after' ? AFTER_LINGER : SHOP_LINGER;
+    shop.react(s.key, j.grade, line, glass);
+    shop.setTag(s.key, stay);
+  } else {
+    dismissSeat(s, j.grade, line, glass);
+  }
   state.active = null;
   newDrink();
   goView('shop');
@@ -1342,12 +1982,16 @@ function turnAway() {
 function giveUp(s: Seat) {
   const c = customerAt(s.idx);
   state.outcomes[s.idx] = 'left';
+  if (shift()) served(state.story, c.id, 'left');
   dismissSeat(s, 'angry', c.lines.angry, null);
   toast(`<strong>${c.name}</strong> 손님이 기다리다 지쳐 나갔어요`);
 }
 
 function endDay() {
   state.open = false;
+  state.talk = null;
+  // Day 7 마감: 다섯 줄기의 결말을 정하고 이야기 장부를 닫는다.
+  if (storyOn() && state.day === LAST_DAY) closeBook(state.story, state.day);
   const rent = rentFor(state.day);
   state.ledger.rent = rent;
   state.money -= rent;
@@ -1385,6 +2029,8 @@ function setDay(day: number) {
 /** 영업을 쉬는 상태(손님 없음, 빈 스툴)로 되돌린다. */
 function resetFloor() {
   state.open = false;
+  state.talk = null;
+  state.notebook = false;
   state.seats = emptySeats();
   state.active = null;
   state.clip = null;
@@ -1438,11 +2084,17 @@ function beginDay() {
 
 /** 밤이 지나 다음 날 아침: 주문한 재료와 리필이 도착하고, 진행을 저장한다. */
 function advanceDay() {
-  setDay(state.day + 1);
+  const prev = state.day;
+  setDay(prev + 1);
   for (const ing of state.pending) state.early.add(ing);
   state.pending.clear();
   state.stock = refill(state.stock, state.refills);
   state.refills.clear();
+  state.goods = receiveGoods(state.goods, state.goodsPending);
+  state.goodsPending = {};
+  // 밤사이 피피가 엽서를 배달한다(아침 신문 「피피의 배달 일지」).
+  newDay(state.story);
+  if (prev <= LAST_DAY) deliverPosted(state.story, prev, state.goods, state.money);
   writeSave(snapshot());
 }
 
@@ -1451,6 +2103,7 @@ function startFree() {
   state.overlay = null;
   state.started = true;
   state.drawer = false;
+  state.notebook = false;
   resetFloor();
   // 자유 제조는 영업으로 입고한 재료까지만 쓸 수 있다. 병은 줄지 않고 시계도 없다.
   const s = loadSave();
@@ -1526,12 +2179,57 @@ document.addEventListener('click', (e) => {
       newDrink();
       break;
     case 'book':
-      openBook(id ?? activeVisit()?.recipe ?? null);
+      openBook(id ?? activeVisit()?.recipe ?? null, (btn.dataset.tab as BookTab | undefined) ?? 'recipes');
       return;
+    case 'book-tab':
+      state.bookTab = id as BookTab;
+      state.bookFocus = null;
+      break;
     case 'drawer':
       state.drawer = !state.drawer;
       drawerOpening = state.drawer;
+      if (state.drawer) state.notebook = false;
       break;
+    case 'notebook':
+      state.notebook = !state.notebook;
+      notebookOpening = state.notebook;
+      if (state.notebook) state.drawer = false;
+      break;
+    case 'post': {
+      const it = ITEMS[id ?? ''];
+      if (it && goodsLeft(state.goods, 'postcard') > 0 && postable(state.story).includes(it.id)) {
+        post(state.story, it.id);
+        state.goods = takeGood(state.goods, 'postcard');
+        toast(`「${it.name}」${josa(it.name, '을', '를')} 유성 엽서로 부쳤어요 · 내일 아침 피피가 ${nameOf(it.to ?? '')}에게 배달해요`);
+      }
+      break;
+    }
+    case 'talk-pick':
+      talkPick(Number(id));
+      break;
+    case 'talk-sell':
+      talkSell(id as GoodId);
+      break;
+    case 'talk-next':
+      talkNext();
+      break;
+    case 'talk-done':
+      talkDone();
+      break;
+    case 'talk-close':
+      talkDone(true);
+      break;
+    case 'order-good': {
+      const g = id as GoodId;
+      const cost = goodCost(g, state.upgrades);
+      if (canOrderGood(state.day, g, state.goods, state.goodsPending) && state.money >= cost) {
+        state.money -= cost;
+        state.ledger.goodsCost += cost;
+        state.goodsPending = { ...state.goodsPending, [g]: (state.goodsPending[g] ?? 0) + 1 };
+        toast(`<strong>${GOOD_BY_ID[g].name}</strong> 하나 주문 (${coin(cost)}) · 내일 아침 진열장에 놓여요`);
+      }
+      break;
+    }
     case 'menu':
       state.overlay = 'title';
       state.drawer = false;
@@ -1603,6 +2301,31 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
+  // 대화 카드: 1~9로 선택지, Enter로 다음(주문 받기·배웅), Esc로 닫기
+  if (state.talk && !state.overlay) {
+    const card = $('talk');
+    if (/^[1-9]$/.test(e.key)) {
+      const b = card.querySelectorAll<HTMLButtonElement>('.tk-choice')[Number(e.key) - 1];
+      if (b && !b.disabled) {
+        e.preventDefault();
+        b.click();
+      }
+      return;
+    }
+    if (e.key === 'Enter' && !(e.target as HTMLElement).closest('button')) {
+      card.querySelector<HTMLButtonElement>('.tk-foot .primary')?.click();
+      return;
+    }
+    if (e.key === 'Escape') {
+      card.querySelector<HTMLButtonElement>('.tk-x')?.click();
+      return;
+    }
+  }
+  if (e.key === 'Escape' && state.notebook) {
+    state.notebook = false;
+    render();
+    return;
+  }
   if (e.key === 'Escape' && (state.overlay === 'book' || (state.overlay === 'title' && state.started))) {
     state.overlay = null;
     render();
@@ -1640,7 +2363,8 @@ $('garnish').addEventListener(
 
 let lastTick = performance.now();
 function clockRunning() {
-  return shift() && state.open && !state.overlay && !document.hidden;
+  // 손님과 이야기하는 동안에도 시계가 멈춘다(카운터에서 한 말은 시간을 잡아먹지 않는다).
+  return shift() && state.open && !state.overlay && !state.talk && !document.hidden;
 }
 
 function tick() {
@@ -1659,6 +2383,15 @@ function tick() {
     state.clockMs = Math.min(DAY_MINUTES * REAL_MS_PER_MINUTE, state.clockMs + dt);
     const dtMin = dt / REAL_MS_PER_MINUTE;
     for (const s of state.seats) {
+      // 잔을 받고 남은 손님은 잠시 머물다(인내가 아니라 머무는 시간) 조용히 일어난다.
+      if (s && s.status === 'after') {
+        s.patience = Math.max(0, s.patience - dtMin / s.linger);
+        if (s.patience <= 0) {
+          departSeat(s, s.linger === AFTER_LINGER ? '…그럼, 다음에 또 이야기해요.' : '');
+          changed = true;
+        }
+        continue;
+      }
       // 지금 잔을 만들어 주는 손님은 기다리지 않는다.
       if (!s || s.status !== 'waiting' || s.idx === state.active) continue;
       s.patience = drainPatience(s.patience, dtMin);
@@ -1692,4 +2425,43 @@ debug.__patronAt = (seat: number) => {
   const s = state.seats[seat];
   return s ? shop.screenOf(s.key) : null;
 };
-debug.__seats = () => state.seats.map((s) => (s ? { customer: customerAt(s.idx).id, status: s.status, patience: s.patience } : null));
+debug.__seats = () =>
+  state.seats.map((s) => (s ? { customer: customerAt(s.idx).id, status: s.status, patience: s.patience, talk: s.status === 'waiting' && !s.talked && !!beatFor(s, 'before') } : null));
+debug.__talk = () => {
+  const t = state.talk;
+  const s = t ? state.seats[t.seat] : null;
+  if (!t || !s) return null;
+  return {
+    who: seatWho(s),
+    when: t.when,
+    beat: t.beat?.id ?? null,
+    picked: t.picked,
+    choices: t.beat && t.picked === null ? choicesOf(t.beat, state.story, talkCtx(s, t.when)).map((v) => ({ i: v.i, label: v.choice.label, ok: v.ok })) : [],
+    offers: offersFor(s, t.beat),
+  };
+};
+debug.__story = () => ({ flags: [...state.story.flags], items: [...state.story.items], trust: { ...state.story.trust }, endings: { ...state.story.endings }, goods: { ...state.goods } });
+
+// 주소에 ?debug가 있을 때만: 지금 손님의 주문을 완벽하게 맞춘 잔을 곧바로 낸다(화면 검증용). 경향 부호·열쇠 맛을 덧붙일 수 있다.
+if (new URLSearchParams(location.search).has('debug')) {
+  debug.__perfect = async (opt: { key?: boolean; tone?: -1 | 0 | 1 } = {}) => {
+    const v = activeVisit();
+    if (!v || state.view !== 'mix') return false;
+    const { solve } = await import('./solver');
+    const conds = [...v.order];
+    const k = LORE[v.customer].key;
+    if (opt.key) conds.push({ kind: 'keyword', attr: k.attr, side: k.side });
+    if (opt.tone === -1) conds.push({ kind: 'attr', attr: 'tone', op: '<=', value: -1 });
+    if (opt.tone === 1) conds.push({ kind: 'attr', attr: 'tone', op: '>=', value: 1 });
+    if (opt.tone === 0) conds.push({ kind: 'attr', attr: 'tone', op: '==', value: 0 });
+    const u = unlocked();
+    const stock = Object.fromEntries([...u.ingredients].map((id) => [id, stockOf(id)]));
+    const d = solve(conds, { ingredients: u.ingredients, glasses: u.glasses, garnishes: u.garnishes, stock });
+    if (!d) return false;
+    state.drink = d;
+    for (const id of d.pours) state.stock = usePour(state.stock, id);
+    serve();
+    render();
+    return true;
+  };
+}

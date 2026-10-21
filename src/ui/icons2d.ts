@@ -1,9 +1,10 @@
-// 화면(DOM)에 쓰는 작은 2D 아이콘: 재료 병·잔·얼음·장식.
+// 화면(DOM)에 쓰는 작은 2D 아이콘: 재료 병·잔·얼음·장식·진열장 물건.
 // 가게 그림과 같은 화풍으로 굵은 먹선 + 종이색 바탕 + 빨간 포인트로 그린다. 외부 이미지 없이 SVG 문자열만 만든다.
-// 열쇠: `ing:<재료>`, `glass:<잔>`, `ice:<얼음>`, `garnish:<장식>`
+// 열쇠: `ing:<재료>`, `glass:<잔>`, `ice:<얼음>`, `garnish:<장식>`, `good:<물건>`
 
 import { GARNISHES, GLASSES, ICES, INGREDIENTS, type IngredientId } from '../data';
 import { BOTTLE_KIND } from '../three/models';
+import { GOODS } from '../world';
 
 const INK = '#151313';
 const PAPER = '#f7f2e8';
@@ -149,6 +150,85 @@ function garnishIcon(id: string) {
   }
 }
 
+/** 별 모양 꼭짓점(가운데 cx, cy, 바깥 r, 안쪽 r) */
+function starPts(cx: number, cy: number, r: number, ri: number) {
+  const pts: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+    const k = i % 2 ? ri : r;
+    pts.push(`${(cx + Math.cos(a) * k).toFixed(1)},${(cy + Math.sin(a) * k).toFixed(1)}`);
+  }
+  return `M${pts.join(' L')} Z`;
+}
+
+function goodIcon(id: string) {
+  switch (id) {
+    case 'candy':
+      // 입구를 끈으로 묶은 봉지 + 별사탕
+      return svg(
+        p('M16,26 Q14,58 20,58 H44 Q50,58 48,26 Z', PAPER, INK, 3) +
+          p('M20,26 L16,12 L26,18 L32,10 L38,18 L48,12 L44,26', PAPER, INK, 3) +
+          `<path d="M18,26 H46" stroke="${RED}" stroke-width="4" stroke-linecap="round"/>` +
+          p(starPts(32, 42, 9, 4), RED, INK, 2),
+        'ic-good',
+      );
+    case 'umbrella':
+      return svg(
+        p('M8,30 Q32,2 56,30 Q50,26 44,30 Q38,26 32,30 Q26,26 20,30 Q14,26 8,30 Z', INK, INK, 3) +
+          `<path d="M32,8 V30 M20,28 Q26,14 32,9 M44,28 Q38,14 32,9" fill="none" stroke="${PAPER}" stroke-width="1.6"/>` +
+          `<path d="M32,30 V52 Q32,58 26,58 Q21,58 21,53" fill="none" stroke="${INK}" stroke-width="4" stroke-linecap="round"/>` +
+          `<path d="M32,4 V9" stroke="${RED}" stroke-width="4" stroke-linecap="round"/>`,
+        'ic-good',
+      );
+    case 'letter':
+      return svg(
+        p('M8,18 H56 V50 H8 Z', PAPER, INK, 3) +
+          `<path d="M8,18 L32,38 L56,18 M8,50 L26,33 M56,50 L38,33" fill="none" stroke="${INK}" stroke-width="2.5" stroke-linejoin="round"/>` +
+          `<circle cx="32" cy="37" r="7" fill="${RED}" stroke="${INK}" stroke-width="2"/>` +
+          shade('M44,18 H56 V50 H46 Z'),
+        'ic-good',
+      );
+    case 'key':
+      // 오르골 태엽: 나비 손잡이 + 축
+      return svg(
+        p('M32,30 Q14,8 10,22 Q8,34 32,30 Z', PAPER, INK, 3) +
+          p('M32,30 Q50,8 54,22 Q56,34 32,30 Z', PAPER, INK, 3) +
+          `<path d="M32,30 V56" stroke="${INK}" stroke-width="5" stroke-linecap="round"/>` +
+          `<path d="M28,44 H36 M28,51 H36" stroke="${PAPER}" stroke-width="2"/>` +
+          `<circle cx="32" cy="29" r="5" fill="${RED}" stroke="${INK}" stroke-width="2.5"/>`,
+        'ic-good',
+      );
+    case 'mask':
+      return svg(
+        p('M6,26 Q32,16 58,26 Q58,46 44,46 Q36,46 32,38 Q28,46 20,46 Q6,46 6,26 Z', PAPER, INK, 3) +
+          p('M14,30 Q20,26 26,31 Q20,37 14,30 Z', INK, INK, 2) +
+          p('M38,31 Q44,26 50,30 Q44,37 38,31 Z', INK, INK, 2) +
+          p('M46,22 Q50,8 60,6 Q56,14 52,23', RED, INK, 2.5) +
+          `<path d="M6,27 L2,40" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>`,
+        'ic-good',
+      );
+    case 'jar':
+      return svg(
+        p('M22,6 H42 V14 H22 Z', '#b07a4a', INK, 3) +
+          p('M20,14 H44 Q50,18 50,26 V54 Q50,60 44,60 H20 Q14,60 14,54 V26 Q14,18 20,14 Z', '#dff4ff', INK, 3) +
+          `<path d="M22,44 Q26,30 34,36 Q42,42 40,28" fill="none" stroke="${RED}" stroke-width="3" stroke-linecap="round"/>` +
+          p(starPts(26, 50, 4.5, 2), PAPER, INK, 1.5) +
+          shade('M42,18 Q50,20 50,26 V54 Q50,60 44,60 H42 Z'),
+        'ic-good',
+      );
+    case 'postcard':
+    default:
+      return svg(
+        p('M6,16 H58 V50 H6 Z', PAPER, INK, 3) +
+          `<rect x="42" y="21" width="11" height="13" fill="${RED}" stroke="${INK}" stroke-width="2"/>` +
+          `<path d="M33,20 V46 M38,40 H53 M38,45 H50" stroke="${INK}" stroke-width="2"/>` +
+          `<path d="M10,40 Q16,26 28,22" fill="none" stroke="${INK}" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="1 5"/>` +
+          p(starPts(22, 32, 6, 2.6), INK, INK, 1.2),
+        'ic-good',
+      );
+  }
+}
+
 let cache: Record<string, string> | null = null;
 
 /** 모든 아이콘을 한 번만 만들어 둔다. */
@@ -159,6 +239,7 @@ export function icons(): Record<string, string> {
   for (const g of GLASSES) out[`glass:${g.id}`] = glassIcon(g.id);
   for (const i of ICES) out[`ice:${i.id}`] = iceIcon(i.id);
   for (const g of GARNISHES) out[`garnish:${g.id}`] = garnishIcon(g.id);
+  for (const g of GOODS) out[`good:${g.id}`] = goodIcon(g.id);
   cache = out;
   return out;
 }

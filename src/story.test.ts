@@ -10,6 +10,7 @@ import {
   type Beat,
   choicesOf,
   choose,
+  closeBook,
   type Cond,
   computeEndings,
   type Ctx,
@@ -449,6 +450,20 @@ describe('이야기 규칙', () => {
     s.news.push({ day: 3, head: '월광관 가수, 잃어버린 자장가를 되찾다', body: '…' });
     expect(morningNews(s, 4)[0].head).toBe('월광관 가수, 잃어버린 자장가를 되찾다');
     expect(morningNews(s, 5)[0].head).not.toBe('월광관 가수, 잃어버린 자장가를 되찾다');
+  });
+
+  it('Day 7 마감: 결말을 정하고, 끝내 전하지 못한 것은 기록에 남긴 채 카운터를 비운다', () => {
+    const s = emptyStory();
+    s.items = ['musicbox', 'g_sweet', 'permit'];
+    s.posted = ['permit'];
+    const left = closeBook(s, 7);
+    expect(left).toEqual([ITEMS.musicbox.name, ITEMS.permit.name]);
+    expect(s.items).toEqual([]);
+    expect(s.posted).toEqual([]);
+    for (const a of ARCS) expect(s.endings[a.id]).toBe(ENDINGS[a.id][ENDINGS[a.id].length - 1].id);
+    expect(s.log.filter((l) => l.day === 7).length).toBe(2);
+    // 무한 영업에서는 어느 손님에게도 이야기 장면이 열리지 않는다(장면은 모두 Day 1~7)
+    for (const b of BEATS) expect(b.days?.[1] ?? 99, b.id).toBeLessThanOrEqual(7);
   });
 
   it('저장: 이야기를 그대로 옮기고, 모르는 장면·맡은 것·깨진 값은 버린다', () => {

@@ -1917,6 +1917,19 @@ export function settleEndings(s: StoryState) {
   for (const { id } of ARCS) s.endings[id] = e[id].id;
 }
 
+/**
+ * Day 7 마감: 결말을 정하고 이야기 장부를 닫는다. 무한 영업에는 이야기 장면이 없으므로
+ * 끝내 전하지 못한 것은 기록에 남기고 카운터(맡은 것·소문·엽서)를 비운다. 전하지 못한 것들의 이름을 돌려준다.
+ */
+export function closeBook(s: StoryState, day: number): string[] {
+  settleEndings(s);
+  const left = s.items.filter((id) => ITEMS[id] && ITEMS[id].kind !== 'gossip').map((id) => ITEMS[id].name);
+  for (const n of left) s.log.push({ day, who: '', text: `끝내 전하지 못한 것 — 「${n}」` });
+  s.items = [];
+  s.posted = [];
+  return left;
+}
+
 const plainCtx = (): Ctx => ({ day: 7, who: '', when: 'before', goods: {}, money: 0 });
 
 export function promisesOf(s: StoryState): { who: string; text: string; done: boolean }[] {
