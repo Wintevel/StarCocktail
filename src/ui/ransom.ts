@@ -1,4 +1,4 @@
-// 협박 편지풍 제목: 글자마다 글꼴·반전 상자·기울기를 바꿔 오려 붙인 것처럼 보이게 한다.
+// 네온 스티커 제목: 글자마다 색·그림자·기울기를 바꿔 오락실 점수판 글자처럼 보이게 한다(이름은 v5의 협박 편지풍에서 왔다).
 // 같은 글은 늘 같은 모양으로 나온다(글자와 위치로 정한 해시). 화면 읽기 프로그램에는 원래 글만 읽힌다.
 
 /** style.css의 .rn-0 ~ .rn-5 */
@@ -19,7 +19,8 @@ export function ransom(text: string, opts: { seed?: number; cls?: string } = {})
       prev = v;
       const rot = ((h >>> 16) % 11) - 5;
       const lift = ((h >>> 20) % 5) - 2;
-      return `<span class="rn rn-${v}" style="--r:${rot}deg;--y:${lift}px">${esc(ch)}</span>`;
+      const digit = ch >= '0' && ch <= '9' ? ' rn-d' : '';
+      return `<span class="rn rn-${v}${digit}" style="--r:${rot}deg;--y:${lift}px">${esc(ch)}</span>`;
     })
     .join('');
   return `<span class="ransom ${opts.cls ?? ''}"><span class="sr-only">${esc(text)}</span><span class="rn-row" aria-hidden="true">${letters}</span></span>`;

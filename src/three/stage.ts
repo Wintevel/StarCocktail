@@ -1,6 +1,6 @@
 // 3D 제조대: 잔과 병 진열대·잔 쟁반을 놓고, 게임 상태(Drink)가 바뀔 때마다 붓기·젓기·얼음·장식 연출을 재생한다.
-// 2D 가게와 화풍을 맞추려고 셀 셰이딩 재질에 먹선·하프톤 후처리(post.ts)를 쓰고, 배경은 투명하게 두어
-// 캔버스 뒤 DOM 콜라주 배경이 비치게 한다. 손님은 2D 가게 화면(src/shop)에만 나온다.
+// 2D 가게와 화풍을 맞추려고 셀 셰이딩 재질에 남보라 선·네온 테두리빛 후처리(post.ts)를 쓰고, 배경은 투명하게 두어
+// 캔버스 뒤 DOM 노을 배경(줄무늬 해·별가루·네온 판)이 비치게 한다. 손님은 2D 가게 화면(src/shop)에만 나온다.
 // 제조 화면이 아닐 때는 그리기를 멈춘다(setActive).
 
 import * as THREE from 'three';
@@ -8,13 +8,13 @@ import { type GarnishId, GLASS_BY_ID, type GlassId, ICE_BY_ID, INGREDIENT_BY_ID,
 import { type Drink, visibleLayers } from '../mix';
 import { makeGlass } from './glassware';
 import { fxOf, type LiquidBand, liquidGeometry, liquidMaterials, setCap, SurfaceSpray } from './liquid';
-import { fxTime, inkMaterial, PAPER, redMaterial, steelMaterial, toonMaterial } from './materials';
+import { fxTime, inkMaterial, neonCyanMaterial, neonPinkMaterial, redMaterial, steelMaterial, toonMaterial } from './materials';
 import { fillDepth, GLASS_SHAPES, type GlassShape, iceMaterial, makeBottle, makeGarnish, makeIce, rimY } from './models';
 import { InkRenderer } from './post';
 import { GlassShelf } from './props';
 import { quality, setQuality } from './quality';
 import { BOTTLE_SCALE, BottleRack, type RackBottle } from './rack';
-import { shadowTexture } from './textures';
+import { counterTexture, shadowTexture } from './textures';
 
 const POUR_MS = 1500;
 /** 잔은 손님·병과 어울리는 크기로 줄여 둔다. 모양 치수(models.ts)는 잔 기준 단위 그대로 쓴다. */
@@ -405,12 +405,19 @@ export class Stage3D {
     return this.pourAnim !== null || this.stirAnim !== null;
   }
 
-  /** 셀 셰이딩은 빛이 단순할수록 2D답다: 고른 바탕빛 + 왼쪽 위 열쇠빛 하나 */
+  /**
+   * 셀 셰이딩은 빛이 단순할수록 2D답다: 라벤더 바탕빛 + 왼쪽 위 분홍빛이 도는 열쇠빛.
+   * 뒤쪽 양옆에서 시안(왼쪽)·마젠타(오른쪽) 빛을 약하게 비춰, 그림자 쪽 가장자리에 네온 띠가 생긴다.
+   */
   private addLights() {
-    this.scene.add(new THREE.AmbientLight(0xffffff, 1.1));
-    const key = new THREE.DirectionalLight(0xffffff, 2.2);
+    this.scene.add(new THREE.AmbientLight(0xe4d8ff, 1.0));
+    const key = new THREE.DirectionalLight(0xfff0fa, 2.1);
     key.position.set(-2.5, 4.5, 3.5);
-    this.scene.add(key);
+    const cyan = new THREE.DirectionalLight(0x4feaff, 1.1);
+    cyan.position.set(-5, 1.6, -3);
+    const magenta = new THREE.DirectionalLight(0xff4fc0, 1.0);
+    magenta.position.set(5, 1.4, -2.5);
+    this.scene.add(key, cyan, magenta);
   }
 
   private resize(container: HTMLElement) {
@@ -929,7 +936,7 @@ function makeCoaster() {
   const g = new THREE.Group();
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.66, 0.02, 64), inkMaterial);
   base.position.y = 0.001;
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.022, 8, 96), redMaterial);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.022, 8, 96), neonPinkMaterial);
   ring.rotation.x = Math.PI / 2;
   ring.position.y = 0.014;
   g.add(base, ring);
@@ -937,15 +944,19 @@ function makeCoaster() {
   return g;
 }
 
-/** 카운터: 회색 윗면(하프톤 점이 앉는다)에 종이색 앞 가장자리, 검은 앞면에 빨간 띠 */
+/** 카운터: 옅은 격자가 깔린 짙은 보라 윗면, 시안 네온 앞 가장자리, 남보라 앞면에 마젠타 네온 띠 */
 function makeCounter() {
   const g = new THREE.Group();
-  const top = new THREE.Mesh(new THREE.BoxGeometry(16, 0.12, 4.2), toonMaterial(0x8f8a83));
+  const grid = counterTexture();
+  grid.repeat.set(16 / 0.6, 4.2 / 0.6);
+  const topMat = toonMaterial(0xffffff, { emissive: 0x1a0a40, glow: 0.35 });
+  topMat.map = grid;
+  const top = new THREE.Mesh(new THREE.BoxGeometry(16, 0.12, 4.2), topMat);
   top.position.set(0.5, -0.06, -0.6);
-  const lip = new THREE.Mesh(new THREE.BoxGeometry(16, 0.13, 0.12), toonMaterial(PAPER));
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(16, 0.13, 0.12), neonCyanMaterial);
   lip.position.set(0.5, -0.06, 1.44);
   g.add(lip);
-  const front = new THREE.Mesh(new THREE.BoxGeometry(16, 1.6, 0.1), toonMaterial(0x232221));
+  const front = new THREE.Mesh(new THREE.BoxGeometry(16, 1.6, 0.1), toonMaterial(0x24104f, { emissive: 0x12062e, glow: 0.4 }));
   front.position.set(0.5, -0.92, 1.5);
   const band = new THREE.Mesh(new THREE.BoxGeometry(16, 0.08, 0.03), redMaterial);
   band.position.set(0.5, -0.32, 1.57);
