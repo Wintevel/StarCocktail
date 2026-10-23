@@ -594,6 +594,9 @@ function stageFrame(): Frame {
     // 잔 아래 초기화 버튼 자리를 남긴다.
     bottom = H - 66;
   }
+  // 자유 제조의 「완성!」 카드가 잔을 가리지 않게 그 위에 놓는다.
+  const result = rect('result');
+  if (result) bottom = Math.min(bottom, result.top - GAP);
   const w = Math.max(120, right - left - BAR_ROOM);
   return { x: left, y: top, w, h: Math.max(120, bottom - top) };
 }

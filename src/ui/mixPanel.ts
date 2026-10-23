@@ -92,7 +92,7 @@ function head(c: PanelCtx) {
       sub = d.stirAt !== null ? '저었어요 · 젓기는 한 번뿐이에요' : '저으면 층이 하나로 섞이고 바디 -1 · 젓지 않으면 층이 남아요';
       break;
     case 'garnish':
-      sub = '카드를 눌러 고른 뒤 내요 · ←/→ 키로도 고를 수 있어요';
+      sub = '하나 골라 올린 뒤 내요 · ←/→ 키로도 골라요';
       break;
   }
   const s = STEPS[stepIndex(c.step)];
