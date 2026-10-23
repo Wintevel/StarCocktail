@@ -3691,6 +3691,8 @@ body:not([data-talk=""]) .p-tag {
   grid-template-areas:
     "lead side"
     "cols side";
+  /* 옆 칸이 길어도 남는 높이는 아래 기사 칸이 받는다(1면과 기사 사이가 벌어지지 않게) */
+  grid-template-rows: auto 1fr;
   align-items: start;
   gap: 16px 22px;
 }
@@ -4412,6 +4414,7 @@ body:not([data-talk=""]) .p-tag {
       "lead"
       "cols"
       "side";
+    grid-template-rows: auto;
   }
 
   .pp-cols {

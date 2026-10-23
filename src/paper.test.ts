@@ -38,8 +38,11 @@ describe('아침 신문', () => {
   it('선택이 없는 날은 그날의 기본 기사와 거리 소식·광고로 채운다', () => {
     const ed = morningEdition(emptyStory(), 4);
     expect(ed.lead.head).toContain('비');
-    expect(ed.articles).toEqual([]);
+    // 조용한 아침에도 지면이 비지 않게 거리 소식 두 편이 기사 칸에 오른다(원인·결과 기사는 없음)
+    expect(ed.articles.length).toBe(2);
+    expect(ed.articles.every((a) => !a.cause && a.body)).toBe(true);
     expect(ed.briefs.length).toBe(2);
+    expect(new Set([ed.lead, ...ed.articles, ...ed.briefs].map((a) => a.head)).size).toBe(5);
     expect(ed.ads.length).toBe(2);
     expect(ed.weather).toContain('비');
     // 같은 날은 늘 같은 지면

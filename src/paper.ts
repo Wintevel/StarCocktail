@@ -448,13 +448,16 @@ export function morningEdition(s: StoryState, day: number): Edition {
   }
   // 축제 전날·당일은 정해진 축제 기사를 단신으로라도 싣는다
   const fixed = (day === 6 || day === 7) && uniq.length ? [defaultLead(s, day)] : [];
+  // 실을 기사가 모자란 조용한 아침은 거리 소식 두 편을 기사 칸으로 올린다
+  const city = briefsFor(day, 4, [lead.head]);
+  const filler = rest.length + follow.length < 2 ? city.splice(0, 2) : [];
   return {
     day,
     weather: weatherOf(day),
     lead,
-    articles: rest.slice(0, 6),
+    articles: [...rest, ...filler].slice(0, 6),
     follow,
-    briefs: [...fixed, ...briefsFor(day, uniq.length > 3 ? 1 : 2, [lead.head])],
+    briefs: [...fixed, ...city.slice(0, uniq.length > 3 ? 1 : 2)],
     ads: adsFor(day),
     night,
   };
