@@ -1,4 +1,5 @@
 import './style.css';
+import './mix-panel.css';
 import '@fontsource/jetbrains-mono/500.css';
 import '@fontsource/jetbrains-mono/700.css';
 import {
@@ -9,8 +10,6 @@ import {
   emptyLedger,
   finalRank,
   garnishCost,
-  GARNISH_DAY,
-  GLASS_DAY,
   income,
   INGREDIENT_DAY,
   LAST_DAY,
@@ -49,7 +48,7 @@ import {
   GARNISHES,
   type GarnishId,
   GLASS_BY_ID,
-  ICES,
+  type GlassId,
   type IceId,
   INGREDIENT_BY_ID,
   type IngredientId,
@@ -60,7 +59,6 @@ import {
 } from './data';
 import {
   canPour,
-  canStir,
   capacityOf,
   check,
   computeAttrs,
@@ -131,15 +129,17 @@ import {
   trustOf,
   type When,
 } from './story';
-import { type GlassAnchor, Stage3D, type Target, type View as StageView } from './three/stage';
+import { canLeave, chooseGlass, chooseIce, glassChangeLoses, type MixStep, nextStep, prevStep, reachable } from './mixSteps';
+import { type Frame, type GlassAnchor, Stage3D } from './three/stage';
 import { icons } from './ui/icons2d';
+import { renderPanel, resetPanel } from './ui/mixPanel';
 import { ransom } from './ui/ransom';
 import { GOOD_BY_ID, type GoodId, GOODS, LORE } from './world';
 
 /** 가게 안(손님이 스툴에 앉는 2D 화면) / 제조대(3D) */
 type View = 'shop' | 'mix';
-/** 제조 단계. result는 자유 제조에서만 쓴다(영업 중에는 서빙하면 곧바로 가게로 돌아간다). */
-type Phase = 'glass' | 'ice' | 'mix' | 'garnish' | 'result';
+/** 제조 단계(① 잔 → ② 얼음 → ③ 재료 → ④ 젓기 → ⑤ 장식). result는 자유 제조에서만 쓴다(영업 중에는 서빙하면 곧바로 가게로 돌아간다). */
+type Phase = MixStep | 'result';
 type Mode = 'shift' | 'free';
 type Overlay = 'title' | 'book' | 'dayStart' | 'dayEnd' | 'shop' | 'final' | null;
 /** 레시피북의 쪽: 레시피 / 단골 수첩 / 약속 장부 / 이야기 기록 */
@@ -255,8 +255,10 @@ interface State {
   discovered: Set<string>;
   started: boolean;
   drawer: boolean;
-  /** 장식 화면에서 가운데에 놓인 장식 카드 */
+  /** 장식 단계에서 고른 장식 카드(←/→ 키로 넘길 때의 기준) */
   garnishSel: number;
+  /** 휴대폰에서 주문 카드를 펼쳐 보는 중(접으면 한 줄) */
+  orderOpen: boolean;
   /** 레시피북을 열 때 강조할 레시피(레시피 이름 주문) */
   bookFocus: string | null;
   bookTab: BookTab;
@@ -344,6 +346,7 @@ const state: State = {
   started: false,
   drawer: false,
   garnishSel: 0,
+  orderOpen: false,
   bookFocus: null,
   bookTab: 'recipes',
   talk: null,
@@ -353,7 +356,7 @@ const state: State = {
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <div class="shop-view" id="shop" aria-label="별빛 바 가게 안: 스툴 네 개에 손님이 앉는다"></div>
-  <section class="mix-view" id="mixView" aria-label="제조대: 왼쪽 잔 쟁반, 가운데 잔, 오른쪽 병 진열대">
+  <section class="mix-view" id="mixView" aria-label="제조대: 가운데 잔, 오른쪽 단계별 카드">
     <div class="mix-bg" aria-hidden="true">
       <div class="mb-paper"></div>
       <div class="mb-slab"></div>
@@ -372,18 +375,17 @@ app.innerHTML = `
   <section class="order-card" id="order" aria-live="polite"></section>
   <div class="hud" id="hud">
     <div class="meters" id="meters"></div>
-    <div class="pourbar" id="pourbar"></div>
-    <div class="ice-pick" id="ice"></div>
-    <div class="garnish-arc" id="garnish"></div>
+    <div class="pourbar" id="pourbar" role="img"></div>
     <div class="glass-actions" id="actions"></div>
   </div>
+  <aside class="mix-panel" id="mixPanel" aria-label="제조 단계"></aside>
+  <p class="sr-only" id="mixLive" aria-live="polite"></p>
   <p class="prompt" id="prompt"></p>
   <section class="result-card" id="result"></section>
   <section class="clip" id="clip" aria-live="polite"></section>
   <section class="talk" id="talk" role="dialog" aria-modal="false" tabindex="-1" hidden></section>
   <aside class="notebook" id="notebook" hidden></aside>
   <aside class="drawer" id="drawer"></aside>
-  <div class="tip-card" id="tip" hidden></div>
   <div class="overlay" id="overlay" hidden></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 `;
@@ -480,22 +482,6 @@ function portrait(id: string, mood: Mood = 'idle', crop: 'bust' | 'head' = 'bust
 // ── 3D 제조대와 연결 ─────────────────────────────────────────
 
 stage.onIdle = () => render();
-stage.onBottleDrop = (id) => {
-  if (state.view !== 'mix' || state.phase !== 'mix' || state.overlay || stage.busy || !canPour(state.drink) || stockOf(id) <= 0) return false;
-  showTip(null, 0, 0);
-  doPour(id);
-  render();
-  return true;
-};
-stage.onGlassPick = (id) => {
-  if (state.view !== 'mix' || state.phase !== 'glass' || state.overlay) return;
-  if (!unlocked().glasses.has(id)) return;
-  state.drink = { ...emptyDrink(), glass: id };
-  state.phase = 'ice';
-  showTip(null, 0, 0);
-  render();
-};
-stage.onHover = (t, x, y) => showTip(t, x, y);
 stage.onLayout = (a) => layoutHud(a);
 
 // ── 가게 화면과 연결 ─────────────────────────────────────────
@@ -510,7 +496,6 @@ let viewTimer = 0;
 function goView(v: View) {
   if (state.view === v) return;
   state.view = v;
-  showTip(null, 0, 0);
   clearTimeout(viewTimer);
   if (v === 'mix') {
     stage.setActive(true);
@@ -526,52 +511,9 @@ function stockPips(id: IngredientId) {
   return `<span class="pips" aria-hidden="true">${Array.from({ length: STOCK_MAX }, (_, i) => `<i class="${i < left ? 'on' : ''}"></i>`).join('')}</span>`;
 }
 
-function showTip(t: Target | null, x: number, y: number) {
-  const el = $('tip');
-  if (!t || state.overlay || state.view !== 'mix') {
-    el.hidden = true;
-    return;
-  }
-  if (t.kind === 'bottle') {
-    const ing = INGREDIENT_BY_ID[t.id];
-    const left = stockOf(t.id);
-    const stockLine = shift()
-      ? `<span class="stock-line ${left === 0 ? 'empty' : left <= 1 ? 'low' : ''}">${stockPips(t.id)}<small>잔량 <b class="num">${stockPercent(state.stock, t.id)}%</b>${state.refills.has(t.id) ? ' · 내일 아침 리필' : ''}</small></span>`
-      : '';
-    const how =
-      left === 0
-        ? '<small class="empty-note">비었어요 · 서랍에서 리필을 주문하면 내일 아침 채워져요</small>'
-        : state.phase === 'mix'
-          ? '<small class="how">잔 위로 끌어다 놓으면 부어요</small>'
-          : '';
-    el.innerHTML = `
-      <strong>${ing.name}</strong><small>${ing.kind}</small>
-      <span class="deltas">${deltaChips(t.id)}</span>
-      ${stockLine}${how}`;
-  } else {
-    const g = GLASS_BY_ID[t.id];
-    const open = unlocked().glasses.has(t.id);
-    el.innerHTML = `<strong>${g.name}</strong><small>${open ? `재료 ${g.capacity}번까지` : `<span class="lock">Day ${GLASS_DAY[t.id]} 입고</span>`}</small>`;
-  }
-  el.hidden = false;
-  const w = el.offsetWidth;
-  el.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, x + 16))}px`;
-  el.style.top = `${Math.max(8, y - el.offsetHeight - 12)}px`;
-}
-
-/** 지금 단계에 맞는 3D 카메라 시선 */
-function stageView(): StageView {
-  if (state.phase === 'glass') return 'pick';
-  return state.phase === 'garnish' || state.phase === 'result' ? 'garnish' : 'mix';
-}
-
-/** 병 진열대·잔 쟁반·카메라처럼 DOM 밖(3D)에 반영할 것들 */
+/** 잔을 놓을 화면 영역 등 DOM 밖(3D)에 반영할 것들 */
 function syncStage() {
-  const free = !state.overlay && state.view === 'mix';
-  stage.setStock(shift() ? Object.fromEntries([...unlocked().ingredients].map((id) => [id, stockOf(id) / STOCK_MAX])) : null);
-  stage.setPourable(state.phase === 'mix' && free && canPour(state.drink) && !stage.busy);
-  stage.setGlassShelf(unlocked().glasses, state.drink.glass, state.phase === 'glass' && free);
-  stage.setView(stageView());
+  if (state.view === 'mix' && !state.overlay) stage.setFrame(stageFrame());
 }
 
 function syncShop() {
@@ -587,99 +529,31 @@ const place = (el: HTMLElement, left: number, top: number) => {
 };
 const clampX = (x: number, w: number) => Math.max(8, Math.min(window.innerWidth - w - 8, x));
 
-/** 잔의 화면 위치에 맞춰 게이지(왼쪽)·횟수 바(오른쪽)·버튼(아래)·장식 카드(위)를 붙인다. */
+/** 잔의 화면 위치에 맞춰 부은 횟수 바(오른쪽)와 초기화 버튼(아래)을 붙인다. */
 function layoutHud(a: GlassAnchor | null = anchor) {
   if (!a) return;
   anchor = a;
   const glassH = Math.max(60, a.bottom - a.top);
   const midY = (a.top + a.bottom) / 2;
 
-  const meters = $('meters');
-  if (!meters.classList.contains('compact')) {
-    const w = meters.offsetWidth;
-    const room = a.x - a.half - 28;
-    const docked = room < w + 8 || isMobile();
-    meters.classList.toggle('docked', docked);
-    if (docked) {
-      meters.style.left = meters.style.top = '';
-    } else {
-      const h = meters.offsetHeight;
-      let y = Math.max(midY - h / 2, 250);
-      // 주문 카드(이야기 귀띔이 붙어 길어질 수 있다)와 겹치면 그 아래로
-      const card = orderRect();
-      if (card && overlaps(card, room - w, y, w, h)) y = card.bottom + GAP;
-      place(meters, room - w, y);
-    }
-  }
-
   const bar = $('pourbar');
-  const barH = Math.min(220, Math.max(110, glassH * 0.9));
+  const barH = Math.min(200, Math.max(90, glassH * 0.8));
   bar.style.height = `${barH}px`;
-  place(bar, a.x + a.half + 20, midY - barH / 2);
+  place(bar, a.x + a.half + 18, midY - barH / 2);
 
   const actions = $('actions');
-  place(
-    actions,
-    clampX(a.x - actions.offsetWidth / 2, actions.offsetWidth),
-    Math.min(window.innerHeight - actions.offsetHeight - 70, a.bottom + 40),
-  );
-
-  // 얼음 고르기는 잔 바로 위 가운데. 주문 카드와 겹치면 카드 오른쪽으로 비켜 서고, 자리가 없으면 카드 아래로 내린다.
-  const ice = $('ice');
-  if (!ice.hidden) {
-    const w = ice.offsetWidth;
-    const h = ice.offsetHeight;
-    let x = clampX(a.x - w / 2, w);
-    let y = Math.max(isMobile() ? 230 : 120, a.top - h - 24);
-    const card = orderRect();
-    if (card && overlaps(card, x, y, w, h)) {
-      const right = card.right + GAP;
-      if (right + w <= window.innerWidth - 8) x = right;
-      else y = card.bottom + GAP;
-    }
-    place(ice, x, y);
-  }
-
-  // 장식 카드는 잔 위 한 점(사북)을 축으로 부채꼴로 펼친다. 가운데 카드가 가장 높고 크다.
-  // 축(#garnish)만 잔을 따라 매 프레임 옮기고, 카드는 축 기준 자리라서 카메라가 움직여도 흔들리지 않는다.
-  const arc = $('garnish');
-  if (!arc.hidden) {
-    const cards = [...arc.querySelectorAll<HTMLElement>('.g-card')];
-    const R = Math.min(300, window.innerWidth * (isMobile() ? 0.32 : 0.36));
-    const cy = Math.max(isMobile() ? 300 : 190, a.top - 30);
-    arc.style.transform = `translate(${Math.round(a.x)}px, ${Math.round(cy)}px)`;
-    const fresh = arc.dataset.fresh === '1';
-    // 새로 만든 카드는 전환 없이 제자리에 놓는다(왼쪽 위 모서리에서 날아오지 않게)
-    if (fresh) arc.classList.add('snap');
-    cards.forEach((c, i) => {
-      const k = i - state.garnishSel;
-      const th = k * 0.42;
-      const x = Math.sin(th) * R;
-      const y = -Math.cos(th) * 70;
-      c.style.transform = `translate(${Math.round(x - c.offsetWidth / 2)}px, ${Math.round(y - c.offsetHeight)}px) scale(${k === 0 ? 1 : 0.8}) rotate(${(th * 14).toFixed(2)}deg)`;
-      c.style.opacity = Math.abs(k) > 2 ? '0' : k === 0 ? '1' : '0.8';
-      c.style.pointerEvents = Math.abs(k) > 2 ? 'none' : '';
-      c.tabIndex = Math.abs(k) > 2 ? -1 : 0;
-    });
-    const arrows = arc.querySelectorAll<HTMLElement>('.g-arrow');
-    if (arrows.length === 2) {
-      place(arrows[0], Math.max(8, a.x - R - 70) - a.x, -70);
-      place(arrows[1], Math.min(window.innerWidth - 52, a.x + R + 26) - a.x, -70);
-    }
-    if (fresh) {
-      void arc.offsetWidth;
-      arc.classList.remove('snap');
-      delete arc.dataset.fresh;
-    }
-    if (garnishFanIn) {
-      garnishFanIn = false;
-      fanInGarnish(arc);
-    }
-  }
+  place(actions, clampX(a.x - actions.offsetWidth / 2, actions.offsetWidth), Math.min(window.innerHeight - actions.offsetHeight - 14, a.foot + 10));
 }
 
 /** 화면 요소끼리 띄울 간격 */
 const GAP = 14;
+/** 잔 오른쪽에 부은 횟수 바가 들어갈 자리 */
+const BAR_ROOM = 64;
+/** 휴대폰에서 왼쪽 맛 게이지 기둥이 차지하는 폭(mix-panel.css의 게이지 폭 + 여백) */
+const PHONE_METERS = 138;
+/** 휴대폰에서 접힌 주문 카드의 아래 끝(펼쳐 볼 때 잔이 움직이지 않도록 접혔을 때 값을 쓴다) */
+let orderLineBottom = 0;
+
 /** 보이는 주문 카드의 화면 상자(기울어진 카드는 바깥 상자) */
 function orderRect(): DOMRect | null {
   const el = $('order');
@@ -687,9 +561,47 @@ function orderRect(): DOMRect | null {
   const r = el.getBoundingClientRect();
   return r.width && r.height ? r : null;
 }
-const overlaps = (r: DOMRect, x: number, y: number, w: number, h: number) =>
-  x < r.right + GAP && x + w > r.left - GAP && y < r.bottom + GAP && y + h > r.top - GAP;
-window.addEventListener('resize', () => layoutHud());
+
+/**
+ * 잔을 놓을 화면 영역. 넓은 화면은 왼쪽 주문 카드·맛 게이지와 오른쪽 단계 판 사이,
+ * 휴대폰은 위쪽 자리 띠·주문 줄과 아래 단계 판 사이(왼쪽은 게이지 기둥)다. 오른쪽에는 횟수 바 자리를 남긴다.
+ */
+function stageFrame(): Frame {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const rect = (id: string) => {
+    const el = $(id);
+    return el.hidden ? null : el.getBoundingClientRect();
+  };
+  const panel = rect('mixPanel');
+  const seats = rect('seats');
+  const card = orderRect();
+  const topbar = $('topbar').getBoundingClientRect().bottom;
+  let top = Math.max(topbar, seats?.bottom ?? 0) + GAP;
+  let left: number;
+  let right: number;
+  let bottom: number;
+  if (isMobile()) {
+    if (card && !state.orderOpen) orderLineBottom = card.bottom;
+    if (card) top = Math.max(top, (orderLineBottom || card.top + 52) + 8);
+    left = PHONE_METERS;
+    right = W - 6;
+    bottom = (panel ? panel.top : H) - 8;
+  } else {
+    const meters = rect('meters');
+    left = Math.max(card?.right ?? 0, meters?.right ?? 0) + GAP;
+    right = (panel ? panel.left : W) - GAP;
+    // 잔 아래 초기화 버튼 자리를 남긴다.
+    bottom = H - 66;
+  }
+  const w = Math.max(120, right - left - BAR_ROOM);
+  return { x: left, y: top, w, h: Math.max(120, bottom - top) };
+}
+
+window.addEventListener('resize', () => {
+  syncStage();
+  layoutHud();
+});
 
 // ── 화면 그리기 ─────────────────────────────────────────────
 
@@ -702,6 +614,7 @@ function render() {
   renderOrder();
   renderMeters();
   renderHud();
+  renderMixPanel();
   renderResult();
   renderClip();
   renderTalk();
@@ -793,9 +706,14 @@ function orderView(v: Visit, attrs: ReturnType<typeof computeAttrs>) {
     case 'recipe': {
       const r = RECIPES.find((x) => x.id === v.recipe)!;
       const all = started && v.order.every((_, i) => ok(i));
+      // 레시피북과 같은 것을 카드에 바로 보여 준다: 아는 레시피는 조건, 모르는 레시피는 힌트
+      const known = state.discovered.has(r.id);
+      const hints = known
+        ? `<ul class="chips oc-hints" aria-label="레시피 조건">${v.order.map((o, i) => `<li class="chip ${ok(i) ? 'ok' : ''}">${describe(o, true)}</li>`).join('')}</ul>`
+        : `<p class="oc-hint"><b>레시피 힌트</b> ${r.hint}</p>`;
       return {
         line: v.greeting.replace(`「${r.name}」`, mark(`「${r.name}」`, all, '레시피북에서 조건을 확인하세요')),
-        extra: `<div class="order-extra"><button class="chip book-chip" data-act="book" data-id="${r.id}">레시피북에서 「${r.name}」 보기</button></div>`,
+        extra: `<div class="order-extra oc-recipe"><button class="chip book-chip" data-act="book" data-id="${r.id}" aria-label="레시피북에서 「${r.name}」 보기">「${r.name}」<small>${known ? '레시피북' : '???'}</small></button>${hints}</div>`,
       };
     }
     case 'vague':
@@ -809,12 +727,15 @@ function orderView(v: Visit, attrs: ReturnType<typeof computeAttrs>) {
   }
 }
 
-/** 제조대 위 주문 카드: 손님 얼굴·이름·칭호와 주문 */
+/** 휴대폰에서 주문 카드를 한 줄로 접고 펴는 단추 */
+const orderToggle = () =>
+  `<button class="oc-toggle" data-act="order-toggle" aria-expanded="${state.orderOpen}" aria-controls="order" aria-label="${state.orderOpen ? '주문 카드 접기' : '주문 카드 펼치기'}"><span aria-hidden="true">${state.orderOpen ? '▴' : '▾'}</span></button>`;
+
+/** 제조대 왼쪽 위에 고정된 주문 카드: 손님 얼굴·이름·칭호와 주문(대사·조건 칩·레시피 힌트·이야기 귀띔) */
 function renderOrder() {
   const el = $('order');
   const v = activeVisit();
-  const corner = state.phase === 'garnish';
-  el.className = `order-card ${corner ? 'corner' : ''} ${state.phase === 'mix' || state.phase === 'ice' ? 'slim' : ''} style-${v?.style ?? 'free'}`;
+  el.className = `order-card style-${v?.style ?? 'free'} ${state.orderOpen ? 'open' : ''}`;
   if (state.overlay || state.view !== 'mix' || state.phase === 'result') {
     el.hidden = true;
     return;
@@ -825,7 +746,8 @@ function renderOrder() {
       <div class="oc-main">
         <div class="who">${ransom('자유 제조', { seed: 9 })}<span class="oc-title">주문 없이 실험하기</span></div>
         <p class="line">마음대로 섞어 보세요. 이름 있는 조합을 만들면 레시피북에 기록돼요. 병은 줄지 않고 시계도 흐르지 않아요.</p>
-      </div>`;
+      </div>
+      ${orderToggle()}`;
     return;
   }
   const c = CUSTOMER_BY_ID[v.customer];
@@ -843,7 +765,8 @@ function renderOrder() {
     <div class="oc-actions">
       <button class="ghost back-btn" data-act="to-shop-view" title="만들던 잔은 그대로 두고 가게를 둘러봐요">← 가게로</button>
       <button class="away-btn" data-act="turn-away" title="만들 수 없는 주문이면 사과하고 돌려보내요 (수입 없음)">돌려보내기</button>
-    </div>`;
+    </div>
+    ${orderToggle()}`;
 }
 
 /** 주문 카드 아래 이야기 귀띔: 전할 것이 있으면 잔의 경향, 친해진 손님은 열쇠 맛 */
@@ -917,13 +840,11 @@ function meterKeys(): AttrKey[] {
   return deliveryTone() ? ATTR_KEYS : ['sweet', 'strength', 'body'];
 }
 
+/** 왼쪽 아래 현재 맛 게이지: 잔을 고른 뒤부터 보인다. */
 function renderMeters() {
   const el = $('meters');
-  const show = !state.overlay && state.view === 'mix' && ['ice', 'mix', 'garnish'].includes(state.phase);
+  const show = !state.overlay && state.view === 'mix' && state.phase !== 'result' && state.drink.glass !== null;
   el.hidden = !show;
-  el.classList.toggle('compact', state.phase === 'garnish');
-  if (state.phase === 'garnish') el.classList.remove('docked');
-  if (state.phase === 'garnish') el.style.left = el.style.top = '';
   if (!show) return;
   const attrs = computeAttrs(state.drink);
   const v = activeVisit();
@@ -936,7 +857,7 @@ function renderMeters() {
     return side ? [`<span class="kw-pill">${keywordLabel(k, side)}</span>`] : [];
   });
   el.innerHTML =
-    `<h3><span>${state.phase === 'garnish' ? '현재 맛' : '맛 게이지'}</span>${active.join('')}</h3>` +
+    `<h3><span>현재 맛</span>${active.join('')}</h3>` +
     keys
       .map((k) => {
         const val = attrs[k];
@@ -972,25 +893,9 @@ function renderMeters() {
       .join('');
 }
 
-function deltaChips(id: IngredientId) {
-  const d = INGREDIENT_BY_ID[id].delta;
-  const keys = toneShown() ? ATTR_KEYS : ATTR_KEYS.filter((k) => k !== 'tone');
-  return keys
-    .filter((k) => d[k] !== 0)
-    .map((k) => `<span class="delta ${k} ${d[k] > 0 ? 'up' : 'down'}">${ATTR_LABEL[k]} ${d[k] > 0 ? '+' : ''}${d[k]}</span>`)
-    .join('');
-}
-
-const PROMPTS: Partial<Record<Phase, string>> = {
-  glass: '카운터 왼쪽 쟁반에서 잔을 눌러 고르세요',
-  ice: '얼음을 고르세요',
-  mix: '오른쪽 진열대의 병을 잔 위로 끌어다 놓아 부으세요',
-  garnish: '← → 로 장식을 넘기고 눌러 고른 뒤 서빙하세요',
-};
-
+/** 아래 가운데 안내 띠(가게 화면). 제조대에서는 오른쪽 단계 판이 할 일을 알려 준다. */
 function promptText(): string {
-  if (state.view === 'mix') return PROMPTS[state.phase] ?? '';
-  if (!shift() || !state.open || state.talk) return '';
+  if (state.view === 'mix' || !shift() || !state.open || state.talk) return '';
   const st = shiftStage(minute());
   const waiting = waitingSeats().length + afterSeats().length;
   if (st === 'over') {
@@ -1006,26 +911,19 @@ function promptText(): string {
   return '손님을 기다리는 중… 그동안 서랍에서 리필을 주문해 둘 수 있어요';
 }
 
-/** 잔 둘레에 붙는 조작: 얼음 고르기, 부은 횟수 바, 제조 완료·젓기, 장식 부채꼴 */
+/** 안내 띠와 잔 둘레에 붙는 것: 부은 횟수 바(오른쪽), 초기화 버튼(아래) */
 function renderHud() {
   const d = state.drink;
   const free = !state.overlay;
-  const mix = free && state.view === 'mix';
-  const phase = state.phase;
+  const mix = free && state.view === 'mix' && state.phase !== 'result';
   const text = free ? promptText() : '';
   const prompt = $('prompt');
   prompt.innerHTML = text && state.view === 'shop' && shift() && state.open ? `${text}<small class="num">남은 손님 ${comingCount()} · 앉은 손님 ${waitingSeats().length + afterSeats().length}/${SEATS}</small>` : text;
   prompt.hidden = !text;
   prompt.classList.toggle('loud', state.view === 'shop' && closeKind() === 'next' && canCloseNow());
 
-  const ice = $('ice');
-  ice.hidden = !mix || phase !== 'ice';
-  ice.innerHTML = ICES.map(
-    (i) => `<button class="ice-chip" data-act="ice" data-id="${i.id}">${icon(`ice:${i.id}`)}<strong>${i.name}</strong><small>${i.note}</small></button>`,
-  ).join('');
-
   const bar = $('pourbar');
-  bar.hidden = !mix || !['ice', 'mix'].includes(phase);
+  bar.hidden = !mix || !d.glass;
   const cap = d.glass ? capacityOf(d) : 0;
   bar.innerHTML = `
     <div class="slots">${Array.from({ length: cap }, (_, i) => `<i class="${i < d.pours.length ? 'on' : ''}"></i>`).join('')}</div>
@@ -1033,92 +931,40 @@ function renderHud() {
   bar.setAttribute('aria-label', `부은 횟수 ${d.pours.length} / ${cap}`);
 
   const actions = $('actions');
-  actions.hidden = !mix || !['ice', 'mix', 'garnish'].includes(phase);
-  if (phase === 'garnish') {
-    const g = GARNISHES[state.garnishSel];
-    const cost = shift() ? garnishCost(g.id, state.upgrades) : 0;
-    actions.innerHTML = `
-      <button class="ghost" data-act="back-mix">← 재료로</button>
-      <button class="primary" data-act="serve">${shift() ? '서빙' : '완성'}${cost ? ` <small>${coin(cost)}</small>` : ''}</button>`;
-  } else {
-    const busy = stage.busy;
-    actions.innerHTML = `
-      <button class="ghost" data-act="restart" title="처음부터 다시${shift() && d.pours.length ? ' (부은 재료는 버려져요)' : ''}">↺ 다시</button>
-      ${phase === 'mix' ? `<button class="secondary" data-act="stir" ${canStir(d) && !busy ? '' : 'disabled'}>${d.stirAt === null ? '젓기 <small>바디 -1</small>' : '저었어요 ✓'}</button>` : ''}
-      ${phase === 'mix' ? `<button class="primary" data-act="to-garnish" ${d.pours.length && !busy ? '' : 'disabled'}>제조 완료 →</button>` : ''}`;
-  }
-
-  const arc = $('garnish');
-  const showArc = mix && phase === 'garnish';
-  arc.hidden = !showArc;
-  if (showArc) renderGarnish(arc);
-  // 장식 단계에 들어올 때마다 한 번 부채꼴을 펼친다(layoutHud에서 자리를 잡은 뒤)
-  if (showArc && !garnishOpen) garnishFanIn = true;
-  garnishOpen = showArc;
-}
-
-/** 장식 부채꼴이 보이는 중인가 / 다음 배치 때 펼침 연출을 할 것인가 */
-let garnishOpen = false;
-let garnishFanIn = false;
-
-/**
- * 장식 카드는 내용(열림·값)이 바뀔 때만 새로 만든다. 고르기만 바뀌면 클래스만 바꿔서,
- * 같은 카드가 제자리에서 부드럽게 돌아가게 한다(다시 만들면 카드가 순간이동한다).
- */
-function renderGarnish(arc: HTMLElement) {
-  const u = unlocked();
-  const key = GARNISHES.map((g) => `${g.id}:${u.garnishes.has(g.id) ? 1 : 0}:${shift() ? garnishCost(g.id, state.upgrades) : 0}`).join('|');
-  if (arc.dataset.key !== key) {
-    arc.dataset.key = key;
-    arc.dataset.fresh = '1';
-    arc.innerHTML =
-      `<button class="g-arrow" data-act="g-prev" aria-label="이전 장식">‹</button><button class="g-arrow" data-act="g-next" aria-label="다음 장식">›</button>` +
-      GARNISHES.map((g) => {
-        const open = u.garnishes.has(g.id);
-        const cost = garnishCost(g.id, state.upgrades);
-        return `<button class="g-card" data-act="garnish" data-id="${g.id}" ${open ? '' : 'disabled'}>
-          ${icon(`garnish:${g.id}`)}<strong>${g.name}</strong>
-          ${open ? (shift() && cost ? `<small>${coin(cost)}</small>` : '<small>&nbsp;</small>') : `<small class="lock">Day ${GARNISH_DAY[g.id]} 입고</small>`}
-        </button>`;
-      }).join('');
-  }
-  arc.querySelectorAll<HTMLElement>('.g-card').forEach((c, i) => {
-    const on = i === state.garnishSel;
-    c.classList.toggle('selected', on);
-    c.setAttribute('aria-pressed', String(on));
-  });
-  const opens = GARNISHES.map((g) => u.garnishes.has(g.id));
-  const [prev, next] = arc.querySelectorAll<HTMLButtonElement>('.g-arrow');
-  prev.disabled = !opens.slice(0, state.garnishSel).some(Boolean);
-  next.disabled = !opens.slice(state.garnishSel + 1).some(Boolean);
+  actions.hidden = !mix || !d.glass;
+  const restart = `<button class="ghost" data-act="restart" ${stage.busy ? 'aria-disabled="true"' : ''} title="잔부터 다시${shift() && d.pours.length ? ' (부은 재료는 버려져요)' : ''}">↺ 초기화</button>`;
+  if (actions.innerHTML !== restart) actions.innerHTML = restart;
 }
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/**
- * 장식 단계에 들어올 때: 카드가 잔 위 한 점(부채의 사북)에 모여 있다가 가운데 카드부터 차례로 제자리로 펼쳐진다.
- * 움직임 줄이기에서는 제자리에서 흐리게 나타나기만 한다.
- */
-function fanInGarnish(arc: HTMLElement) {
-  const reduce = reducedMotion();
-  const ease = 'cubic-bezier(0.23, 1, 0.32, 1)';
-  arc.querySelectorAll<HTMLElement>('.g-card').forEach((c, i) => {
-    const k = Math.abs(i - state.garnishSel);
-    const to = c.style.transform;
-    const op = Number(c.style.opacity || 1);
-    if (op === 0) return;
-    const from = reduce ? to : `translate(${Math.round(-c.offsetWidth / 2)}px, ${Math.round(-c.offsetHeight + 46)}px) scale(0.86) rotate(0deg)`;
-    c.animate(
-      [
-        { transform: from, opacity: 0 },
-        { transform: to, opacity: op },
-      ],
-      { duration: reduce ? 180 : 300, delay: reduce ? 0 : k * 45, easing: ease, fill: 'backwards' },
-    );
-  });
-  arc.querySelectorAll<HTMLElement>('.g-arrow').forEach((b) => {
-    b.animate([{ opacity: 0 }, { opacity: getComputedStyle(b).opacity }], { duration: 200, delay: reduce ? 0 : 120, easing: 'ease', fill: 'backwards' });
-  });
+/** 오른쪽 단계 판: 지금 단계의 카드와 「이전」·「다음 단계」 */
+function renderMixPanel() {
+  const el = $('mixPanel');
+  const step = state.phase;
+  el.hidden = !!state.overlay || state.view !== 'mix' || step === 'result';
+  if (el.hidden || step === 'result') {
+    resetPanel();
+    return;
+  }
+  renderPanel(
+    el,
+    {
+      step,
+      drink: state.drink,
+      free: !shift(),
+      unlocked: unlocked(),
+      stockLeft: stockOf,
+      stockPercent: (id) => (shift() ? stockPercent(state.stock, id) : 100),
+      refillOrdered: (id) => state.refills.has(id),
+      garnishCost: (id) => (shift() ? garnishCost(id, state.upgrades) : 0),
+      toneShown: toneShown(),
+      busy: stage.busy,
+      icon,
+      coin,
+    },
+    reducedMotion(),
+  );
 }
 
 const GRADE_VIEW: Record<Grade, { label: string; stars: string }> = {
@@ -1317,10 +1163,10 @@ function renderNotebook() {
 /** 서랍을 막 열었다(열리는 움직임은 이때 한 번만) */
 let drawerOpening = false;
 
-/** 오른쪽 아래 서랍: 잔고·오늘 장부·리필·상점. 영업 중 언제든 열 수 있다. */
+/** 오른쪽 아래 서랍: 잔고·오늘 장부·리필·상점. 영업 중 가게 화면에서 언제든 열 수 있다(제조대는 단계 판이 오른쪽을 쓴다). */
 function renderDrawer() {
   const el = $('drawer');
-  el.hidden = !shift() || !state.started || (!!state.overlay && state.overlay !== 'book') || !!state.talk;
+  el.hidden = !shift() || !state.started || (!!state.overlay && state.overlay !== 'book') || !!state.talk || (state.view === 'mix' && state.overlay !== 'book');
   if (el.hidden) return;
   el.classList.toggle('open', state.drawer);
   const low = [...unlocked().ingredients].filter((id) => stockOf(id) === 0 && !state.refills.has(id)).length;
@@ -1631,7 +1477,6 @@ const OUTCOME_VIEW: Record<Outcome, { stars: string; note?: string }> = {
 
 function renderOverlay() {
   const el = $('overlay');
-  if (state.overlay) showTip(null, 0, 0);
   if (!state.overlay) {
     el.hidden = true;
     el.innerHTML = '';
@@ -1651,10 +1496,10 @@ function renderOverlay() {
           <ol class="howto">
             <li>가게는 <b>18:00~04:00</b>. 손님은 띄엄띄엄 들어와 빈 <b>스툴(4개)</b>에 앉아요. 01:00부터 조기 마감할 수 있어요.</li>
             <li>앉은 손님을 <b>누르면</b> 그 손님의 잔을 만드는 제조대로 넘어가요. 다른 손님은 자리에서 기다려요(너무 오래 두면 화가 나서 나가요).</li>
-            <li>쟁반에서 잔을 고르고, 진열대의 병을 잔 위로 <b>끌어다 놓아</b> <b>단맛·도수·바디</b>(Day 4부터 <b>경향</b>)를 맞춰요.</li>
-            <li>제조 완료 → 장식을 골라 <b>서빙</b>하면 손님이 반응하고 잔을 들고 나가요.</li>
+            <li>오른쪽 카드에서 <b>잔 → 얼음 → 재료 → 젓기 → 장식</b>을 한 단계씩 골라요. 재료 카드를 누를 때마다 한 번 부어 <b>단맛·도수·바디</b>(Day 4부터 <b>경향</b>)를 맞춰요.</li>
+            <li>마지막 단계에서 <b>내기</b>를 누르면 손님이 반응하고 잔을 들고 나가요.</li>
             <li>머리 위에 <b>「…」</b>가 뜬 손님은 할 말이 있어요. 눌러서 듣고, 맡은 말·물건·소문을 다른 손님에게 <b>이어 주세요</b>. 고쳐 전할 때는 그 잔의 <b>경향</b>이 말투가 돼요.</li>
-            <li>병은 한 번 부을 때마다 20%씩 줄어요. 오른쪽 아래 <b>서랍</b>에서 리필과 <b>진열장 물건</b>을 주문하면 다음 날 아침 도착해요. 물건은 찾는 손님(<b>✦</b>)에게 권해 팔아요.</li>
+            <li>병은 한 번 부을 때마다 20%씩 줄어요(재료 카드에 남은 양이 보여요). 오른쪽 아래 <b>서랍</b>에서 리필과 <b>진열장 물건</b>을 주문하면 다음 날 아침 도착해요. 물건은 찾는 손님(<b>✦</b>)에게 권해 팔아요.</li>
             <li>왼쪽 아래 <b>수첩</b>에 맡은 것과 소문이, 레시피북의 <b>단골 수첩·약속 장부</b>에 알게 된 이야기가 쌓여요. 7일째 <b>꿈의 축제</b>에서 결말이 갈려요.</li>
           </ol>
           <div class="row center">
@@ -1792,12 +1637,26 @@ function toast(html: string) {
 
 // ── 동작 ───────────────────────────────────────────────────
 
-/** 잔을 비우고 잔 고르기부터 */
+/** 잔을 비우고 ① 잔 고르기부터 */
 function newDrink() {
   state.drink = emptyDrink();
   state.phase = 'glass';
   state.result = null;
   state.garnishSel = 0;
+}
+
+/** 단계를 옮긴다. 장식 단계에 들어오면 고른 장식이 없을 때 「장식 없음」을 골라 둔다(곧바로 낼 수 있게). */
+function goStep(step: MixStep) {
+  state.phase = step;
+  if (step === 'garnish') {
+    const cur = GARNISHES.findIndex((g) => g.id === (state.drink.garnish ?? 'none'));
+    selectGarnish(Math.max(0, cur));
+  }
+}
+
+/** 화면 읽기 프로그램에 붓기 결과를 알린다. */
+function announce(text: string) {
+  $('mixLive').textContent = text;
 }
 
 function spend(n: number) {
@@ -1810,6 +1669,8 @@ function doPour(id: IngredientId) {
   if (!unlocked().ingredients.has(id) || !canPour(state.drink) || stockOf(id) <= 0) return;
   state.drink = pour(state.drink, id);
   if (shift()) state.stock = usePour(state.stock, id);
+  const name = INGREDIENT_BY_ID[id].name;
+  announce(`${name}${josa(name, '을', '를')} 부었어요 · ${state.drink.pours.length} / ${capacityOf(state.drink)}`);
 }
 
 /** 장식 카드를 한 칸 넘긴다. 아직 입고되지 않은 장식은 건너뛴다. */
@@ -2173,7 +2034,6 @@ function loadCampaign(s: Save | null) {
   resetFloor();
   writeSave(snapshot());
   goView('shop');
-  stage.setShelf(unlocked().ingredients, false);
   state.overlay = 'dayStart';
 }
 
@@ -2185,7 +2045,6 @@ function beginDay() {
   state.outcomes = [];
   state.overlay = null;
   goView('shop');
-  stage.setShelf(unlocked().ingredients, false);
   const a = arrivalsOn(state.day);
   const names = [
     ...a.ingredients.map((id) => INGREDIENT_BY_ID[id].name),
@@ -2222,7 +2081,6 @@ function startFree() {
   const s = loadSave();
   setDay(s?.day ?? 1);
   state.early = new Set(s?.early ?? []);
-  stage.setShelf(unlocked().ingredients, false);
   goView('mix');
 }
 
@@ -2241,37 +2099,60 @@ document.addEventListener('click', (e) => {
   if (!btn || btn.disabled) return;
   const act = btn.dataset.act!;
   const id = btn.dataset.id;
-  // 붓기·젓기 연출 중에는 술을 바꾸는 입력을 받지 않는다.
-  if (stage.busy && ['stir', 'to-garnish', 'restart', 'turn-away', 'pick-seat'].includes(act)) return;
+  // 붓기·젓기 연출 중에는 단계를 넘기거나 잔을 바꾸는 입력을 받지 않는다(붓기는 이어서 할 수 있다).
+  const steady = ['glass', 'ice', 'stir', 'no-stir', 'mp-next', 'mp-prev', 'mp-step', 'serve', 'restart', 'turn-away', 'pick-seat'];
+  if (stage.busy && steady.includes(act)) return;
+  const mixing = state.view === 'mix' && !state.overlay;
 
   switch (act) {
-    case 'ice':
-      state.drink = { ...state.drink, ice: id as IceId };
-      state.phase = 'mix';
-      break;
-    case 'stir':
-      state.drink = stir(state.drink);
-      break;
-    case 'to-garnish': {
-      state.phase = 'garnish';
-      const cur = GARNISHES.findIndex((g) => g.id === (state.drink.garnish ?? 'none'));
-      selectGarnish(Math.max(0, cur));
+    case 'glass': {
+      const g = id as GlassId;
+      if (!mixing || state.phase !== 'glass' || !unlocked().glasses.has(g)) break;
+      if (glassChangeLoses(state.drink, g)) toast('잔을 바꿔서 <strong>부은 재료를 비웠어요</strong>');
+      state.drink = chooseGlass(state.drink, g);
+      // 하나만 고르는 단계는 고르면 다음 단계로 넘어간다.
+      goStep('ice');
       break;
     }
+    case 'ice':
+      if (!mixing || state.phase !== 'ice') break;
+      state.drink = chooseIce(state.drink, id as IceId);
+      goStep('pour');
+      break;
+    case 'pour':
+      if (mixing && state.phase === 'pour') doPour(id as IngredientId);
+      break;
+    case 'stir':
+      if (mixing && state.phase === 'stir') state.drink = stir(state.drink);
+      break;
+    case 'no-stir':
+      if (mixing && state.phase === 'stir') goStep('garnish');
+      break;
+    case 'mp-next': {
+      if (!mixing || state.phase === 'result' || !canLeave(state.phase, state.drink)) break;
+      const to = nextStep(state.phase);
+      if (to) goStep(to);
+      break;
+    }
+    case 'mp-prev': {
+      if (!mixing || state.phase === 'result') break;
+      const to = prevStep(state.phase);
+      if (to) goStep(to);
+      break;
+    }
+    case 'mp-step': {
+      const to = id as MixStep;
+      if (mixing && state.phase !== 'result' && reachable(to, state.drink)) goStep(to);
+      break;
+    }
+    case 'order-toggle':
+      state.orderOpen = !state.orderOpen;
+      break;
     case 'garnish':
-      selectGarnish(GARNISHES.findIndex((g) => g.id === (id as GarnishId)));
-      break;
-    case 'g-prev':
-      stepGarnish(-1);
-      break;
-    case 'g-next':
-      stepGarnish(1);
-      break;
-    case 'back-mix':
-      state.phase = 'mix';
+      if (mixing && state.phase === 'garnish') selectGarnish(GARNISHES.findIndex((g) => g.id === (id as GarnishId)));
       break;
     case 'serve':
-      serve();
+      if (mixing && state.phase === 'garnish') serve();
       break;
     case 'turn-away':
       turnAway();
@@ -2449,26 +2330,15 @@ document.addEventListener('keydown', (e) => {
     goView('shop');
     render();
   } else if (!state.overlay && state.view === 'mix' && state.phase === 'garnish' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    // 장식 단계: ←/→ 로 장식을 넘기고, 초점도 고른 카드로 옮긴다.
     e.preventDefault();
     stepGarnish(e.key === 'ArrowLeft' ? -1 : 1);
     render();
+    if ($('mixPanel').contains(document.activeElement)) {
+      $('mixPanel').querySelector<HTMLElement>(`[data-act="garnish"][data-id="${GARNISHES[state.garnishSel].id}"]`)?.focus();
+    }
   }
 });
-
-// 장식 부채꼴 위에서 휠을 굴리면 좌우로 넘긴다.
-let wheelAt = 0;
-$('garnish').addEventListener(
-  'wheel',
-  (e) => {
-    e.preventDefault();
-    const now = performance.now();
-    if (now - wheelAt < 180) return;
-    wheelAt = now;
-    stepGarnish((e.deltaY || e.deltaX) > 0 ? 1 : -1);
-    render();
-  },
-  { passive: false },
-);
 
 // ── 영업 시계 ───────────────────────────────────────────────
 // 실제 시간으로 흐른다(게임 1시간 = 30초). 메뉴·레시피북·하루 시작/마감 화면이 열려 있거나
@@ -2528,12 +2398,11 @@ document.addEventListener('visibilitychange', () => {
   lastTick = performance.now();
 });
 
-stage.setShelf(unlocksFor(loadSave()?.day ?? 1).ingredients, false);
 render();
 
-// 테스트·디버그용: 진열대 병·스툴 손님의 화면 좌표, 스툴 상태
+// 테스트·디버그용: 스툴 손님의 화면 좌표, 스툴 상태, 제조 단계
 const debug = window as unknown as Record<string, unknown>;
-debug.__bottleAt = (id: IngredientId) => stage.screenOf(id);
+debug.__mix = () => ({ step: state.phase, drink: { ...state.drink }, busy: stage.busy });
 debug.__patronAt = (seat: number) => {
   const s = state.seats[seat];
   return s ? shop.screenOf(s.key) : null;
@@ -2557,6 +2426,15 @@ debug.__story = () => ({ flags: [...state.story.flags], items: [...state.story.i
 
 // 주소에 ?debug가 있을 때만: 지금 손님의 주문을 완벽하게 맞춘 잔을 곧바로 낸다(화면 검증용). 경향 부호·열쇠 맛을 덧붙일 수 있다.
 if (new URLSearchParams(location.search).has('debug')) {
+  // 화면을 차례로 눌러 보는 검증용: 지금 손님의 주문을 맞추는 잔을 찾기만 한다(내지 않는다).
+  debug.__solve = async () => {
+    const v = activeVisit();
+    if (!v) return null;
+    const { solve } = await import('./solver');
+    const u = unlocked();
+    const stock = Object.fromEntries([...u.ingredients].map((id) => [id, stockOf(id)]));
+    return solve([...v.order], { ingredients: u.ingredients, glasses: u.glasses, garnishes: u.garnishes, stock });
+  };
   debug.__perfect = async (opt: { key?: boolean; tone?: -1 | 0 | 1 } = {}) => {
     const v = activeVisit();
     if (!v || state.view !== 'mix') return false;

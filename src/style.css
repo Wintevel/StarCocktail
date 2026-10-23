@@ -1419,25 +1419,6 @@ body[data-view="mix"] .wipe-edge {
   }
 }
 
-/* 장식 단계: 카드를 작게 */
-.order-card.corner {
-  width: min(360px, calc(100vw - 32px));
-  grid-template-columns: 64px 1fr;
-}
-
-.order-card.corner .oc-face {
-  width: 64px;
-  height: 78px;
-}
-
-.order-card.corner .line {
-  font-size: 16px;
-}
-
-.order-card.corner .who .ransom {
-  font-size: 21px;
-}
-
 @keyframes card-in {
   from {
     opacity: 0;
@@ -1604,44 +1585,6 @@ body[data-view="mix"] .wipe-edge {
   font-weight: 900;
 }
 
-.meters.docked {
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
-  width: auto;
-  max-width: 440px;
-  gap: 4px;
-  padding: 8px 12px 10px;
-  transform: none;
-}
-
-.meters.compact {
-  left: 18px;
-  top: 52%;
-  width: 196px;
-  gap: 6px;
-  padding: 10px 12px;
-  transform: translateY(-50%) rotate(-1deg);
-}
-
-.meters.compact .meter {
-  grid-template-columns: 30px 1fr 30px;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.meters.compact .track {
-  height: 8px;
-}
-
-.meters.compact .track .kw {
-  display: none;
-}
-
-.meters.compact .track {
-  margin-top: 4px;
-}
-
 /* 부은 횟수 */
 .pourbar {
   width: 36px;
@@ -1694,171 +1637,6 @@ body[data-view="mix"] .wipe-edge {
   font-size: 16px;
 }
 
-/* 얼음 고르기 */
-.ice-pick {
-  display: flex;
-  gap: 14px;
-}
-
-.ice-chip {
-  width: 112px;
-  display: grid;
-  justify-items: center;
-  gap: 2px;
-  padding: 8px 6px 10px;
-  background: linear-gradient(170deg, var(--white), var(--paper-2));
-  color: var(--ink);
-  border: 3px solid var(--ink);
-  border-radius: 10px;
-  box-shadow: 5px 5px 0 var(--red);
-  transform: rotate(-2deg);
-  transition:
-    transform 160ms var(--ease-out),
-    box-shadow 160ms var(--ease-out);
-}
-
-.ice-chip:nth-child(2) {
-  transform: rotate(1.6deg);
-}
-
-.ice-chip:nth-child(3) {
-  transform: rotate(-0.8deg);
-}
-
-.ice-chip strong {
-  font: 400 16px var(--font-title-ko);
-}
-
-.ice-chip small {
-  font: 600 11px var(--font-ui);
-  color: #6a5a9a;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .ice-chip:hover {
-    transform: translate(-2px, -4px) rotate(0deg);
-    box-shadow:
-      -4px -3px 0 var(--cyan),
-      7px 7px 0 var(--red),
-      0 0 18px rgba(255, 90, 200, 0.35);
-  }
-}
-
-.ice-chip:active {
-  transform: scale(0.97);
-}
-
-/* 장식 부채꼴: 상자는 크기가 0인 축(잔 위 한 점)이고, 카드는 그 축을 기준으로 펼친다.
-   카메라가 움직이는 동안에는 축만 잔을 따라가고(전환 없음), 카드는 고를 때만 부드럽게 돈다. */
-.garnish-arc {
-  left: 0;
-  top: 0;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-}
-
-.g-card,
-.g-arrow {
-  position: absolute;
-  left: 0;
-  top: 0;
-  pointer-events: auto;
-}
-
-/* 새로 만든 카드를 제자리에 놓는 순간에는 전환을 끈다 */
-.garnish-arc.snap .g-card {
-  transition: none;
-}
-
-.g-card {
-  width: 108px;
-  display: grid;
-  justify-items: center;
-  gap: 2px;
-  padding: 8px 6px 10px;
-  background: linear-gradient(170deg, var(--white), var(--paper-2));
-  color: var(--ink);
-  border: 3px solid var(--ink);
-  border-radius: 10px;
-  box-shadow: 5px 5px 0 var(--red);
-  font: 400 15px/1.15 var(--font-title-ko);
-  text-align: center;
-  transform-origin: 50% 100%;
-  transition:
-    transform 260ms var(--ease-in-out),
-    opacity 200ms ease,
-    box-shadow 160ms var(--ease-out),
-    background-color 160ms ease;
-}
-
-.g-card strong {
-  word-break: keep-all;
-}
-
-.g-card small {
-  font: 600 11px var(--font-ui);
-  color: #6a5a9a;
-}
-
-.g-card.selected {
-  background: linear-gradient(160deg, #d81b84, var(--violet));
-  color: var(--white);
-  border-color: var(--white);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    -4px -4px 0 2px var(--cyan),
-    7px 7px 0 2px var(--ink),
-    0 0 26px rgba(255, 90, 200, 0.55);
-}
-
-.g-card.selected small {
-  color: #ffe0f4;
-}
-
-/* 아직 안 들어온 장식: 카드 자체의 투명도는 부채꼴 배치(인라인)가 정하므로 속만 흐리게 */
-.g-card:disabled {
-  background: linear-gradient(170deg, rgba(255, 250, 255, 0.7), rgba(231, 220, 255, 0.7));
-  border-style: dashed;
-}
-
-.g-card:disabled > * {
-  opacity: 0.5;
-}
-
-.g-card .icon2d .ic {
-  width: 62px;
-  height: 62px;
-}
-
-.g-arrow {
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  background: var(--panel);
-  color: var(--white);
-  border: 2px solid var(--pink);
-  border-radius: 50%;
-  box-shadow:
-    3px 3px 0 var(--red),
-    0 0 14px rgba(255, 90, 200, 0.4);
-  font: 600 28px/1 var(--font-display);
-  transition:
-    background-color 160ms ease,
-    opacity 200ms ease;
-}
-
-.g-arrow:disabled {
-  opacity: 0.35;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .g-arrow:not(:disabled):hover {
-    background: var(--red-text-bg);
-  }
-}
-
 /* ── 안내 띠·설명·알림 ─────────────────────── */
 .prompt {
   position: fixed;
@@ -1895,42 +1673,6 @@ body[data-view="mix"] .wipe-edge {
   box-shadow:
     5px 5px 0 var(--cyan),
     0 0 24px rgba(255, 90, 200, 0.55);
-}
-
-.tip-card {
-  position: fixed;
-  z-index: 7;
-  display: grid;
-  gap: 4px;
-  max-width: 250px;
-  padding: 10px 12px;
-  background-color: var(--paper);
-  background-image: var(--grain), linear-gradient(170deg, #fdfaff 0%, var(--paper) 50%, var(--paper-2) 100%);
-  color: var(--ink);
-  border: 3px solid var(--ink);
-  border-radius: 10px;
-  box-shadow: 5px 5px 0 var(--red);
-  pointer-events: none;
-  font-size: 13px;
-}
-
-.tip-card strong {
-  font: 400 18px var(--font-title-ko);
-}
-
-.tip-card small {
-  font-size: 12px;
-  color: var(--ink-2);
-}
-
-.tip-card .how {
-  color: var(--red-deep);
-  font-weight: 700;
-}
-
-.tip-card .empty-note {
-  color: var(--red-deep);
-  font-weight: 700;
 }
 
 .toast {
@@ -3989,124 +3731,14 @@ body:not([data-talk=""]) .p-tag {
     font-size: 13px;
   }
 
-  .order-card {
-    top: calc(var(--topbar) + 58px);
-    left: 8px;
-    right: 8px;
-    width: auto;
-    grid-template-columns: 58px 1fr;
-    gap: 0 10px;
-    padding: 9px 10px 9px 9px;
-    transform: rotate(-0.6deg);
-    box-shadow:
-      5px 5px 0 var(--red),
-      0 8px 24px rgba(10, 2, 30, 0.45);
-  }
-
-  body[data-mode="free"] .order-card {
-    top: calc(var(--topbar) + 8px);
-  }
-
-  .oc-face,
-  .order-card.corner .oc-face {
-    width: 58px;
-    height: 70px;
-  }
-
-  .who .ransom,
-  .order-card.corner .who .ransom {
-    font-size: 19px;
-  }
-
-  .order-card .line,
-  .order-card.corner .line {
-    margin: 6px 0 2px;
-    font-size: 16px;
-  }
-
-  .order-card.slim .line,
-  .order-card.corner .line {
-    display: none;
-  }
-
-  .order-card.slim.style-speech .line,
-  .order-card.slim.style-recipe .line,
-  .order-card.slim.style-vague .line,
-  .order-card.corner.style-speech .line,
-  .order-card.corner.style-vague .line {
-    display: block;
-    font-size: 14px;
-  }
-
-  .order-card.corner {
-    width: auto;
-  }
-
-  .oc-actions {
-    margin-top: 6px;
-  }
-
-  .oc-actions .ghost {
-    padding: 5px 9px 6px;
-    font-size: 13px;
-  }
-
   .chip {
     font-size: 12px;
     padding: 2px 7px 3px;
   }
 
-  /* 오른쪽 아래 서랍 탭 위로 올려 둔다(탭이 게이지 숫자를 가리지 않게) */
-  .meters.docked {
-    left: 8px;
-    right: 8px;
-    bottom: 62px;
-  }
-
-  .meters.compact {
-    top: auto;
-    bottom: 8px;
-    left: 8px;
-    transform: rotate(-1deg);
-    width: 170px;
-  }
-
-  .ice-pick {
-    gap: 8px;
-  }
-
-  .ice-chip {
-    width: 100px;
-  }
-
   .icon2d .ic {
     width: 46px;
     height: 46px;
-  }
-
-  .g-card {
-    width: 84px;
-    font-size: 13px;
-  }
-
-  .g-card .icon2d .ic {
-    width: 46px;
-    height: 46px;
-  }
-
-  .glass-actions {
-    gap: 9px;
-  }
-
-  .glass-actions button {
-    padding: 8px 11px 9px;
-    font-size: 14px;
-  }
-
-  body[data-view="mix"][data-phase="ice"] .prompt,
-  body[data-view="mix"][data-phase="mix"] .prompt,
-  body[data-view="mix"][data-phase="garnish"] .prompt {
-    display: none;
   }
 
   .prompt {
@@ -4399,12 +4031,6 @@ body:not([data-talk=""]) .p-tag {
   .tk-notes li,
   .patron .emo {
     animation-name: fade-only;
-  }
-
-  .g-card {
-    transition:
-      opacity 200ms ease,
-      box-shadow 160ms ease;
   }
 }
 
