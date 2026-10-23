@@ -1210,7 +1210,7 @@ export const BEATS: Beat[] = [
     id: 'leila_permit',
     who: 'leila',
     when: 'before',
-    days: [4, 6],
+    days: [3, 6],
     need: [F('fest_started'), NF('permit_asked')],
     prio: 55,
     tag: '축제',
@@ -1311,8 +1311,8 @@ export const BEATS: Beat[] = [
     id: 'leila_funds',
     who: 'leila',
     when: 'before',
-    days: [5, 7],
-    need: [F('fest_started'), NF('fest_funded'), NF('funds_asked'), ANY(DAYS_(6), F('conf_leila'))],
+    days: [3, 7],
+    need: [F('fest_started'), NF('fest_funded'), NF('funds_asked'), ANY(DAYS_(5), F('conf_leila'))],
     prio: 50,
     tag: '축제',
     lines: ['…솔직히 말할게. 축제 자금이 모자라. 무대 조명 값만 ✦60이야.', '웃으면서 사람 모으는 것도 이제 좀 지쳤어.'],
@@ -1334,11 +1334,11 @@ export const BEATS: Beat[] = [
     id: 'serena_d7',
     who: 'serena',
     when: 'before',
-    days: [7, 7],
+    days: [6, 7],
     need: [F('fest_singer')],
     prio: 50,
     tag: '축제',
-    lines: ['오늘 밤이에요. 피날레… 손이 떨려요.', '한 잔만, 용기가 나는 걸로 부탁해요.'],
+    lines: ['축제 무대가 코앞이에요. 피날레… 벌써 손이 떨려요.', '한 잔만, 용기가 나는 걸로 부탁해요.'],
     choices: [
       { label: '당신 노래니까 괜찮아요', reply: ['…네. 내 노래니까.'], fx: [trust('serena', 1), log('피날레를 앞둔 세레나를 응원했다')] },
       {
@@ -1354,11 +1354,11 @@ export const BEATS: Beat[] = [
     id: 'norma_d7',
     who: 'norma',
     when: 'before',
-    days: [7, 7],
+    days: [6, 7],
     need: [F('fest_permit')],
     prio: 40,
     tag: '축제',
-    lines: ['오늘은 비번입니다.', '…축제는 보러 갈 겁니다. 기록에는 남기지 마십시오.'],
+    lines: ['축제 날은 비번입니다.', '…축제는 보러 갈 겁니다. 기록에는 남기지 마십시오.'],
     choices: [{ label: '맨 앞줄 비워 둘게요', reply: ['…규정상 괜찮습니다.'], fx: [trust('norma', 1), log('비번인 노르마가 축제를 보러 가기로 했다')] }],
   },
   {
@@ -1846,6 +1846,8 @@ function applyFx(s: StoryState, fx: Effect[], ctx: Ctx, out: Outcome) {
 
 /** 잔을 내준 결과로 신뢰가 바뀐다: 완벽하면 +1, 기다리다 지쳐 나가면 -1 */
 export function served(s: StoryState, who: string, result: Grade | 'away' | 'left') {
+  // 신뢰는 단골에게만 쌓인다(지나가는 손님은 이야기에 나오지 않는다).
+  if (!LORE[who]) return;
   const d = result === 'perfect' ? 1 : result === 'left' ? -1 : 0;
   if (d) s.trust[who] = Math.max(0, Math.min(TRUST_MAX, trustOf(s, who) + d));
 }

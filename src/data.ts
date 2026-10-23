@@ -2,6 +2,8 @@
 // 수치는 모두 정수이며, 네 가지 속성(단맛/도수/바디/경향)의 합으로 완성된 술의 성격이 정해진다.
 // 경향(완곡함 ↔ 직설적)은 Day 4부터 손님 주문에 등장한다.
 
+import { guestCustomer, isGuest } from './guests';
+
 export type AttrKey = 'sweet' | 'strength' | 'body' | 'tone';
 
 export interface Attrs {
@@ -251,7 +253,15 @@ export const CUSTOMERS: Customer[] = [
   },
 ];
 
-export const CUSTOMER_BY_ID = Object.fromEntries(CUSTOMERS.map((c) => [c.id, c])) as Record<string, Customer>;
+const NAMED_BY_ID = Object.fromEntries(CUSTOMERS.map((c) => [c.id, c])) as Record<string, Customer>;
+
+/**
+ * 손님 id → 손님. 단골 여덟 명이 아니면 지나가는 손님(src/guests.ts)을 id에서 만들어 돌려준다.
+ * 그래서 화면 코드는 단골인지 지나가는 손님인지 가리지 않고 CUSTOMER_BY_ID[id]를 그대로 쓸 수 있다.
+ */
+export const CUSTOMER_BY_ID: Record<string, Customer> = new Proxy(NAMED_BY_ID, {
+  get: (t, id) => (typeof id !== 'string' ? undefined : (t[id] ?? (isGuest(id) ? guestCustomer(id) : undefined))),
+});
 
 export interface Recipe {
   id: string;

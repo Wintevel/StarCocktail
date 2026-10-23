@@ -70,6 +70,7 @@ import {
   RECIPES,
   TONE_DAY,
 } from './data';
+import { guestSmallTalk, isGuest } from './guests';
 import {
   canPour,
   canStir,
@@ -364,7 +365,7 @@ const state: State = {
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
-  <div class="shop-view" id="shop" aria-label="별빛 바 가게 안: 스툴 네 개에 손님이 앉는다"></div>
+  <div class="shop-view" id="shop" aria-label="가게 안: 스툴 네 개에 손님이 앉는다"></div>
   <section class="mix-view" id="mixView" aria-label="제조대: 왼쪽 잔 쟁반, 가운데 잔, 오른쪽 병 진열대">
     <div class="mix-bg" aria-hidden="true">
       <div class="mb-paper"></div>
@@ -1214,7 +1215,9 @@ function renderTalk() {
   const views = b && t.picked === null ? choicesOf(b, state.story, ctx) : [];
   const more = done && !!b && t.count < TALK_MAX && !!beatFor(s, t.when);
   const offers = done ? offersFor(s, b) : [];
-  const idle = IDLE[c.id] ?? [];
+  // 지나가는 손님은 이야기·신뢰가 없고 짧은 잡담만 한다.
+  const guest = isGuest(c.id);
+  const idle = guest ? guestSmallTalk(c.id) : (IDLE[c.id] ?? []);
   const lines = b ? b.lines : t.sold ? [] : idle;
   const mood = t.when === 'after' ? (s.drink?.grade ?? 'idle') : 'idle';
   // 고쳐 전하기가 걸린 장면에서는 방금 낸 잔의 경향을 보여 준다.
@@ -1238,7 +1241,7 @@ function renderTalk() {
       <div class="tk-face">${portrait(c.id, mood)}</div>
       <div class="tk-who">
         <div class="who">${ransom(c.name, { seed: c.id.charCodeAt(0) })}<span class="oc-title">${c.title}</span></div>
-        <div class="tk-meta"><span class="stamp">${b ? b.tag : '진열장'}</span>${stars(trustOf(state.story, c.id))}<small>${t.when === 'before' ? '잔을 내기 전' : '잔을 낸 뒤'}</small></div>
+        <div class="tk-meta"><span class="stamp">${b ? b.tag : guest ? '잡담' : '진열장'}</span>${guest ? '<small>지나가는 손님</small>' : stars(trustOf(state.story, c.id))}<small>${t.when === 'before' ? '잔을 내기 전' : '잔을 낸 뒤'}</small></div>
       </div>
     </div>
     <div class="tk-lines ${talkFresh ? 'fresh' : ''}">${lines.map(lineHtml).join('')}</div>
@@ -1641,6 +1644,18 @@ const OUTCOME_VIEW: Record<Outcome, { stars: string; note?: string }> = {
   left: { stars: '☆☆☆', note: '기다리다 떠남' },
 };
 
+/** 마감 정산의 지나가는 손님 한 줄: 몇 명이 왔고 잔이 어땠는지 등급별로 센다. */
+function guestTally(visits: Visit[]) {
+  const got = visits.flatMap((v, i) => (isGuest(v.customer) && state.outcomes[i] ? [state.outcomes[i]!] : []));
+  if (!got.length) return '';
+  const order: Outcome[] = ['perfect', 'good', 'fail', 'left', 'away'];
+  const parts = order.flatMap((o) => {
+    const n = got.filter((x) => x === o).length;
+    return n ? [`${OUTCOME_VIEW[o].note ? `<small>${OUTCOME_VIEW[o].note}</small>` : OUTCOME_VIEW[o].stars} <b class="num">×${n}</b>`] : [];
+  });
+  return `<li class="o-guests"><span>지나가는 손님 <b class="num">${got.length}</b>명</span><span>${parts.join(' · ')}</span></li>`;
+}
+
 function renderOverlay() {
   const el = $('overlay');
   if (state.overlay) showTip(null, 0, 0);
@@ -1666,7 +1681,7 @@ function renderOverlay() {
             <li>쟁반에서 잔을 고르고, 진열대의 병을 잔 위로 <b>끌어다 놓아</b> <b>단맛·도수·바디</b>(Day 4부터 <b>경향</b>)를 맞춰요.</li>
             <li>제조 완료 → 장식을 골라 <b>서빙</b>하면 손님이 반응하고 잔을 들고 나가요.</li>
             <li>머리 위에 <b>「…」</b>가 뜬 손님은 할 말이 있어요. 눌러서 듣고, 맡은 말·물건·소문을 다른 손님에게 <b>이어 주세요</b>. 고쳐 전할 때는 그 잔의 <b>경향</b>이 말투가 돼요.</li>
-            <li>병은 한 번 부을 때마다 20%씩 줄어요. 오른쪽 아래 <b>서랍</b>에서 리필과 <b>진열장 물건</b>을 주문하면 다음 날 아침 도착해요. 물건은 찾는 손님(<b>✦</b>)에게 권해 팔아요.</li>
+            <li>병은 한 번 부을 때마다 10%씩 줄어요(한 병에 열 번). 오른쪽 아래 <b>서랍</b>에서 리필과 <b>진열장 물건</b>을 주문하면 다음 날 아침 도착해요. 물건은 찾는 손님(<b>✦</b>)에게 권해 팔아요.</li>
             <li>왼쪽 아래 <b>수첩</b>에 맡은 것과 소문이, 레시피북의 <b>단골 수첩·약속 장부</b>에 알게 된 이야기가 쌓여요. 7일째 <b>꿈의 축제</b>에서 결말이 갈려요.</li>
           </ol>
           <div class="row center">
@@ -1731,11 +1746,13 @@ function renderOverlay() {
           <ul class="summary">
             ${plan.visits
               .map((v, i) => {
+                if (isGuest(v.customer)) return '';
                 const o = state.outcomes[i];
                 const view = o ? OUTCOME_VIEW[o] : null;
                 return `<li class="${o ? `o-${o}` : 'missed'}"><span>${CUSTOMER_BY_ID[v.customer].name}</span><span>${view ? `${view.note ? `<small>${view.note}</small> ` : ''}${view.stars}` : '오지 않음'}</span></li>`;
               })
               .join('')}
+            ${guestTally(plan.visits)}
           </ul>
           ${missed ? `<p class="sub small">마감이 빨라 ${missed}명은 오지 못했어요.</p>` : ''}
           ${todayStory()}
@@ -2139,7 +2156,7 @@ function snapshot(): Save {
     early: [...state.early],
     perfect: state.perfectTotal,
     stock: state.stock,
-    met: [...state.met],
+    met: [...state.met].filter((id) => !isGuest(id)),
     goods: state.goods,
     story: storyToSave(state.story),
   };
@@ -2574,8 +2591,8 @@ if (new URLSearchParams(location.search).has('debug')) {
     if (!v || state.view !== 'mix') return false;
     const { solve } = await import('./solver');
     const conds = [...v.order];
-    const k = LORE[v.customer].key;
-    if (opt.key) conds.push({ kind: 'keyword', attr: k.attr, side: k.side });
+    const k = LORE[v.customer]?.key;
+    if (opt.key && k) conds.push({ kind: 'keyword', attr: k.attr, side: k.side });
     if (opt.tone === -1) conds.push({ kind: 'attr', attr: 'tone', op: '<=', value: -1 });
     if (opt.tone === 1) conds.push({ kind: 'attr', attr: 'tone', op: '>=', value: 1 });
     if (opt.tone === 0) conds.push({ kind: 'attr', attr: 'tone', op: '==', value: 0 });

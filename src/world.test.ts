@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DAYS } from './campaign';
 import { CUSTOMERS } from './data';
+import { isGuest } from './guests';
 import { GOODS, LORE } from './world';
 
 describe('세계관 데이터', () => {
@@ -28,8 +29,9 @@ describe('세계관 데이터', () => {
     }
   });
 
-  it('캠페인에 나오는 단골은 모두 세계관에 있다', () => {
-    for (const d of DAYS) for (const v of d.visits) expect(LORE[v.customer]).toBeDefined();
+  it('캠페인에 나오는 단골은 모두 세계관에 있다(지나가는 손님은 세계관 밖)', () => {
+    for (const d of DAYS) for (const v of d.visits) if (!isGuest(v.customer)) expect(LORE[v.customer], v.customer).toBeDefined();
+    for (const d of DAYS) expect(d.visits.some((v) => !isGuest(v.customer))).toBe(true);
   });
 
   it('판매 물건은 이름과 값이 있다', () => {
