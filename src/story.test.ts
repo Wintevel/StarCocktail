@@ -27,7 +27,6 @@ import {
   heldFor,
   ITEMS,
   keyLit,
-  morningNews,
   newDay,
   nextBeat,
   post,
@@ -437,7 +436,8 @@ describe('이야기 규칙', () => {
     expect(s.flags.has('song_lyrics')).toBe(true);
     expect(s.flags.has('ev_anon')).toBe(true);
     expect(s.items).not.toContain('letter_e');
-    expect(morningNews(s, 4).some((n) => n.head === '피피의 배달 일지')).toBe(true);
+    // 배달은 그날 밤의 선택(엽서 표시)으로 남아 다음 날 아침 신문에 실린다
+    expect(s.deeds).toEqual([{ day: 3, beat: s.deeds[0].beat, i: s.deeds[0].i, post: true }]);
   });
 
   it('신뢰는 완벽한 잔에 오르고 기다리다 떠나면 내려가며, 0~5 사이에 머문다', () => {
@@ -448,14 +448,6 @@ describe('이야기 규칙', () => {
     expect(trustOf(s, 'mio')).toBe(4);
     served(s, 'grey', 'left');
     expect(trustOf(s, 'grey')).toBe(0);
-  });
-
-  it('아침 신문: 전날 밤 일이 기사로 실리고, 없으면 그날의 기본 기사', () => {
-    const s = emptyStory();
-    expect(morningNews(s, 4)[0].head).toContain('비');
-    s.news.push({ day: 3, head: '월광관 가수, 잃어버린 자장가를 되찾다', body: '…' });
-    expect(morningNews(s, 4)[0].head).toBe('월광관 가수, 잃어버린 자장가를 되찾다');
-    expect(morningNews(s, 5)[0].head).not.toBe('월광관 가수, 잃어버린 자장가를 되찾다');
   });
 
   it('Day 7 마감: 결말을 정하고, 끝내 전하지 못한 것은 기록에 남긴 채 카운터를 비운다', () => {

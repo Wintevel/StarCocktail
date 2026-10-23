@@ -130,8 +130,9 @@ import {
   josa,
   ITEMS,
   keyLit,
-  morningNews,
   newDay,
+  noteNight,
+  noteSale,
   nextBeat,
   type Outcome as StoryOutcome,
   post,
@@ -144,6 +145,7 @@ import {
   trustOf,
   type When,
 } from './story';
+import { type Article, type Edition, morningEdition } from './paper';
 import { type GlassAnchor, Stage3D, type Target, type View as StageView } from './three/stage';
 import { icons } from './ui/icons2d';
 import { ransom } from './ui/ransom';
@@ -154,7 +156,7 @@ type View = 'shop' | 'mix';
 /** 제조 단계. result는 자유 제조에서만 쓴다(영업 중에는 서빙하면 곧바로 가게로 돌아간다). */
 type Phase = 'glass' | 'ice' | 'mix' | 'garnish' | 'result';
 type Mode = 'shift' | 'free';
-type Overlay = 'title' | 'book' | 'dayStart' | 'dayEnd' | 'shop' | 'final' | null;
+type Overlay = 'title' | 'book' | 'paper' | 'dayStart' | 'dayEnd' | 'shop' | 'final' | null;
 /** 레시피북의 쪽: 레시피 / 단골 수첩 / 약속 장부 / 이야기 기록 */
 type BookTab = 'recipes' | 'patrons' | 'promises' | 'log';
 /** 오늘 손님 한 명의 결과: 판정 / 돌려보냄 / 기다리다 떠남 */
@@ -1556,6 +1558,7 @@ function bookPage(tab: BookTab) {
       return `
         <h2>${ransom('이야기 기록', { seed: 12 })} <small class="num">${story.log.length}건</small></h2>
         ${settled ? `<h3>꿈의 축제 · 결말</h3>${endingsHtml()}` : ''}
+        ${paperArchive()}
         ${
           days.length
             ? days
@@ -1586,29 +1589,139 @@ function endingsHtml() {
   }).join('')}</ol>`;
 }
 
-/** 녹턴 야간 신문 1면: 전날 밤 이야기(없으면 그날의 기본 기사), 피피의 배달 일지, 골목 소문 */
-function newsHtml() {
-  const news = morningNews(state.story, state.day);
-  const [lead, ...rest] = news;
-  const side = rest.filter((n) => n.head !== '피피의 배달 일지');
-  const posts = rest.filter((n) => n.head === '피피의 배달 일지');
-  const alley = alleyGossip(state.story);
-  // 어젯밤 카운터에서 이어진 이야기(소문 듣기는 빼고) 세 줄
-  const counter = state.story.log.filter((l) => l.day === state.day - 1 && l.who && !l.text.startsWith('소문을 들었다')).slice(-3);
+// ── 아침 신문 ─────────────────────────────────────────
+
+/** 기록 탭에서 다시 펼친 지난 신문의 날짜. null이면 오늘 아침 신문(다 읽으면 하루 시작 화면으로) */
+let paperBack: number | null = null;
+
+const paperOf = (day: number) => state.story.papers.find((p) => p.day === day) ?? null;
+
+/** 오늘 아침 신문이 아직 없으면 만들어 둔다: 어젯밤 선택들이 기사가 된다. */
+function ensurePaper() {
+  if (!paperOf(state.day)) state.story.papers.push(morningEdition(state.story, state.day));
+}
+
+/** 기사 하나: 어깨 제목·제목·「어젯밤 바텐더가 … → 그 결과 …」·작은 도장 */
+function articleHtml(a: Article, cls: string, photo = false) {
+  const text = a.cause
+    ? `<p class="pp-cause">${a.cause}</p><p class="pp-effect"><b class="pp-arrow">→ 그 결과</b> ${a.effect ?? ''}</p>`
+    : `<p class="pp-body">${a.body ?? ''}</p>`;
+  const pic = photo && a.who ? `<figure class="pp-photo">${portrait(a.who, 'idle')}<figcaption>${nameOf(a.who)}</figcaption></figure>` : '';
+  const notes = a.notes?.length ? `<p class="pp-notes">${a.notes.map((n) => `<span>${n}</span>`).join('')}</p>` : '';
+  return `<article class="${cls}"><p class="pp-kicker">${a.kicker}</p><h3 class="pp-head">${a.head}</h3>${pic}<div class="pp-text">${text}${notes}</div></article>`;
+}
+
+/** 「어젯밤 카운터」 칸: 손님 수·완벽한 잔·판 물건 */
+function nightBox(ed: Edition) {
+  const n = ed.night;
+  if (!n) return '';
+  const sold = Object.entries(n.sold).filter(([, k]) => (k ?? 0) > 0);
+  return `<section class="pp-box pp-night"><h4>어젯밤 카운터</h4><ul>
+    <li><span>잔을 받은 손님</span><b class="num">${n.served}명</b></li>
+    <li><span>단골 · 지나가는 손님</span><b class="num">${n.regulars.length} · ${n.guests}</b></li>
+    <li><span>완벽한 잔</span><b class="num">${n.perfect}잔</b></li>
+    ${n.left ? `<li><span>그냥 돌아간 손님</span><b class="num">${n.left}명</b></li>` : ''}
+    <li><span>진열장</span><b>${sold.length ? sold.map(([g, k]) => `${GOOD_BY_ID[g as GoodId].name} ×${k}`).join(', ') : '판 것 없음'}</b></li>
+  </ul></section>`;
+}
+
+/** 신문 한 면 */
+function paperHtml(ed: Edition, back: boolean) {
+  const til = ed.day < LAST_DAY ? `꿈의 축제까지 ${LAST_DAY - ed.day}일` : ed.day === LAST_DAY ? '오늘 밤 꿈의 축제' : '축제가 끝난 녹턴';
+  const foot = back
+    ? '<button class="primary" data-act="paper-close">신문 접기</button>'
+    : `<button class="primary" data-act="paper-next">신문을 접고 오늘 영업 준비 ▸</button>`;
   return `
-    <section class="news" aria-label="오늘의 기사">
-      <article class="news-lead"><p class="kicker">1면</p><h3 class="news-head">${lead.head}</h3><p>${lead.body}</p></article>
-      ${
-        side.length || posts.length || alley.length || counter.length
-          ? `<aside class="news-side">
-              ${side.map((n) => `<article><h4>${n.head}</h4><p>${n.body}</p></article>`).join('')}
-              ${counter.length ? `<article class="counter"><h4>어젯밤 카운터 일지</h4><ul>${counter.map((l) => `<li><b>${nameOf(l.who)}</b> ${l.text}</li>`).join('')}</ul></article>` : ''}
-              ${posts.length ? `<article class="post"><h4>피피의 배달 일지</h4><ul>${posts.map((n) => `<li>${n.body}</li>`).join('')}</ul></article>` : ''}
-              ${alley.length ? `<article class="alley"><h4>골목 소문</h4><ul>${alley.map((a) => `<li>${a}</li>`).join('')}</ul></article>` : ''}
-            </aside>`
-          : ''
-      }
-    </section>`;
+    <div class="paper-page" role="document" aria-label="녹턴 야간 신문 ${ed.day}일 아침">
+      <header class="pp-mast">
+        <p class="pp-ear">제 <b class="num">${ed.day}</b>호<br />DAY ${ed.day} 아침</p>
+        <h1 class="pp-name">녹턴 야간 신문</h1>
+        <p class="pp-ear r">날씨 · ${ed.weather}<br />막차 이후 발행</p>
+      </header>
+      <p class="pp-dateline"><span>유성 골목 7번지 소식</span><span>${til}</span><span>값 ✦1</span></p>
+      <div class="pp-grid">
+        ${articleHtml(ed.lead, 'pp-lead', true)}
+        <div class="pp-cols">
+          ${ed.articles.map((a) => articleHtml(a, 'pp-art', false)).join('')}
+          ${ed.follow.length ? `<section class="pp-follow"><h4 class="pp-sec">후속 보도</h4>${ed.follow.map((a) => articleHtml(a, 'pp-art small', false)).join('')}</section>` : ''}
+        </div>
+        <aside class="pp-side">
+          ${nightBox(ed)}
+          ${ed.briefs.length ? `<section class="pp-box pp-briefs"><h4>거리 소식</h4>${ed.briefs.map((a) => `<p><b>${a.head}</b> ${a.body ?? ''}</p>`).join('')}</section>` : ''}
+          ${ed.ads.map((ad) => `<section class="pp-ad"><b>${ad.head}</b><span>${ad.body}</span></section>`).join('')}
+        </aside>
+      </div>
+      <footer class="pp-foot">${foot}<small>Enter 키로도 넘길 수 있어요</small></footer>
+    </div>`;
+}
+
+/** 기록 탭의 「지난 신문」 목록: 날짜를 누르면 그날 아침 신문을 다시 펼친다 */
+function paperArchive() {
+  const list = [...state.story.papers].sort((a, b) => b.day - a.day);
+  if (!list.length) return '';
+  return `<h3>지난 신문 <small>누르면 다시 펼쳐요</small></h3>
+    <ul class="pp-archive">${list
+      .map((p) => `<li><button class="ghost" data-act="paper-open" data-id="${p.day}"><span class="num">DAY ${p.day}</span><span>${p.lead.head}</span></button></li>`)
+      .join('')}</ul>`;
+}
+
+/** 신문을 넘기거나 접는다: 오늘 신문이면 하루 시작 화면으로, 지난 신문이면 기록 탭으로 */
+function leavePaper() {
+  if (paperBack !== null) {
+    paperBack = null;
+    state.bookTab = 'log';
+    state.overlay = 'book';
+  } else {
+    state.overlay = 'dayStart';
+  }
+}
+
+function showPaper(day: number | null) {
+  paperBack = day;
+  state.overlay = 'paper';
+  render();
+  $('overlay').scrollTop = 0;
+}
+
+// 신문 화면의 버튼(아래 공용 클릭 처리보다 먼저 받아서 끝낸다)
+document.addEventListener('click', (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-act^="paper-"]');
+  if (!btn) return;
+  e.stopImmediatePropagation();
+  switch (btn.dataset.act) {
+    case 'paper-next':
+    case 'paper-close':
+      leavePaper();
+      render();
+      $('overlay').scrollTop = 0;
+      break;
+    case 'paper-again':
+      showPaper(null);
+      break;
+    case 'paper-open': {
+      const day = Number(btn.dataset.id);
+      if (paperOf(day)) showPaper(day);
+      break;
+    }
+  }
+});
+
+// 신문 화면: Enter로 넘기고 Esc로 접는다. 스페이스는 끝까지 내려 읽은 뒤에만 넘긴다.
+document.addEventListener('keydown', (e) => {
+  if (state.overlay !== 'paper' || (e.target as HTMLElement).closest('button')) return;
+  const el = $('overlay');
+  const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
+  if (e.key === 'Enter' || e.key === 'Escape' || (e.key === ' ' && atEnd)) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    el.querySelector<HTMLButtonElement>('.pp-foot .primary')?.click();
+  }
+});
+
+/** 하루 시작 화면의 카운터 메모: 축제 준비·맡은 것·수첩의 소문 */
+function memoHtml() {
+  const memo = alleyGossip(state.story);
+  return memo.length ? `<ul class="day-memo" aria-label="카운터 메모">${memo.map((m) => `<li>${m}</li>`).join('')}</ul>` : '';
 }
 
 /** 하루 시작 화면의 진열장 한 줄: 진열한 개수와 오늘 잘 팔릴 물건 */
@@ -1705,18 +1818,27 @@ function renderOverlay() {
       document.getElementById('bookFocus')?.scrollIntoView({ block: 'center' });
       break;
     }
+    case 'paper': {
+      const ed = paperOf(paperBack ?? state.day);
+      if (!ed) {
+        state.overlay = 'dayStart';
+        renderOverlay();
+        return;
+      }
+      el.innerHTML = paperHtml(ed, paperBack !== null);
+      break;
+    }
     case 'dayStart': {
       const plan = state.plan;
-      const news = shift() ? newsHtml() : '';
       el.innerHTML = `
-        <div class="card day-card paper ${news ? 'has-news' : ''}">
-          ${masthead(state.day > LAST_DAY ? '무한 영업' : `${state.day} / ${LAST_DAY}`, news ? '녹턴 야간 신문' : undefined)}
+        <div class="card day-card paper">
+          ${masthead(state.day > LAST_DAY ? '무한 영업' : `${state.day} / ${LAST_DAY}`)}
           <div class="day-head">
             <div class="day-no">${ransom(`DAY ${state.day}`, { seed: state.day * 13 })}</div>
             <h2 class="headline">${plan.title}</h2>
           </div>
           <p class="lede">${plan.intro}</p>
-          ${news}
+          ${memoHtml()}
           ${arrivalsList(state.day)}
           ${lowStockList()}
           <ul class="facts">
@@ -1727,7 +1849,7 @@ function renderOverlay() {
             <li><span>진열장 물건</span><strong>${shelfFact()}</strong></li>
             <li><span>가진 돈</span><strong class="${state.money < 0 ? 'debt' : ''}">${coin(state.money)}</strong></li>
           </ul>
-          <div class="row center"><button class="primary" data-act="begin-day">영업 시작</button></div>
+          <div class="row center">${paperOf(state.day) ? '<button class="secondary" data-act="paper-again">아침 신문 다시 보기</button>' : ''}<button class="primary" data-act="begin-day">영업 시작</button></div>
         </div>`;
       break;
     }
@@ -1989,6 +2111,7 @@ function sellGood(s: Seat, g: GoodId): number {
   state.money += price;
   state.ledger.goods += price;
   s.bought.push(g);
+  noteSale(state.story, state.day, g);
   return price;
 }
 
@@ -2132,6 +2255,7 @@ function endDay() {
   state.talk = null;
   // Day 7 마감: 다섯 줄기의 결말을 정하고 이야기 장부를 닫는다.
   if (storyOn() && state.day === LAST_DAY) closeBook(state.story, state.day);
+  if (shift()) noteNightOf();
   const rent = rentFor(state.day);
   state.ledger.rent = rent;
   state.money -= rent;
@@ -2143,6 +2267,19 @@ function endDay() {
   goView('shop');
   state.drawer = false;
   state.overlay = 'dayEnd';
+}
+
+/** 마감: 그날 밤 손님 수를 이야기 장부에 적어 둔다(다음 날 아침 신문 「어젯밤 카운터」) */
+function noteNightOf() {
+  const came = state.plan.visits.flatMap((v, i) => (state.outcomes[i] ? [{ who: v.customer, o: state.outcomes[i]! }] : []));
+  noteNight(state.story, {
+    day: state.day,
+    served: came.filter((x) => x.o !== 'left' && x.o !== 'away').length,
+    perfect: came.filter((x) => x.o === 'perfect').length,
+    left: came.filter((x) => x.o === 'left' || x.o === 'away').length,
+    guests: came.filter((x) => isGuest(x.who)).length,
+    regulars: [...new Set(came.filter((x) => !isGuest(x.who)).map((x) => x.who))],
+  });
 }
 
 function snapshot(): Save {
@@ -2198,10 +2335,13 @@ function loadCampaign(s: Save | null) {
   state.started = true;
   state.ledger = emptyLedger();
   resetFloor();
+  // 아침 신문을 먼저 펼친다(저장된 그날 신문이 없으면 지금 만든다).
+  ensurePaper();
   writeSave(snapshot());
   goView('shop');
   stage.setShelf(unlocked().ingredients, false);
-  state.overlay = 'dayStart';
+  paperBack = null;
+  state.overlay = 'paper';
 }
 
 function beginDay() {
@@ -2235,6 +2375,8 @@ function advanceDay() {
   // 밤사이 피피가 엽서를 배달한다(아침 신문 「피피의 배달 일지」).
   newDay(state.story);
   if (prev <= LAST_DAY) deliverPosted(state.story, prev, state.goods, state.money);
+  // 어젯밤의 선택들로 오늘 아침 신문을 찍어 둔다.
+  ensurePaper();
   writeSave(snapshot());
 }
 
@@ -2398,7 +2540,8 @@ document.addEventListener('click', (e) => {
       state.overlay = 'final';
       break;
     case 'go-infinite':
-      state.overlay = 'dayStart';
+      paperBack = null;
+      state.overlay = 'paper';
       break;
     case 'buy': {
       const g = UPGRADES.find((x) => x.id === id);
@@ -2431,7 +2574,8 @@ document.addEventListener('click', (e) => {
     }
     case 'next-day':
       advanceDay();
-      state.overlay = 'dayStart';
+      paperBack = null;
+      state.overlay = 'paper';
       break;
     case 'start-free':
       startFree();
@@ -2498,7 +2642,7 @@ $('garnish').addEventListener(
 );
 
 // ── 영업 시계 ───────────────────────────────────────────────
-// 실제 시간으로 흐른다(게임 1시간 = 30초). 메뉴·레시피북·하루 시작/마감 화면이 열려 있거나
+// 실제 시간으로 흐른다(게임 1시간 = 45초). 메뉴·레시피북·하루 시작/마감 화면이 열려 있거나
 // 탭을 떠나 있으면 멈춘다. 서랍은 열어 둬도 시간이 흐른다.
 
 let lastTick = performance.now();

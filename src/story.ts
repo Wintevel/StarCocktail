@@ -13,6 +13,7 @@
 import type { Attrs } from './data';
 import type { Grade } from './mix';
 import { keywordSide } from './mix';
+import type { Edition } from './paper';
 import { GOOD_BY_ID, type GoodId, LORE } from './world';
 
 // ── 형식 ─────────────────────────────────────────────
@@ -113,6 +114,30 @@ export interface NewsEntry {
 
 export type ArcId = 'musicbox' | 'song' | 'hal' | 'family' | 'festival';
 
+/** 바텐더가 고른 선택 하나(아침 신문 기사의 재료). post면 유성 엽서 배달로 적용된 「그대로 전하기」 */
+export interface Deed {
+  day: number;
+  beat: string;
+  i: number;
+  post?: boolean;
+}
+
+/** 하룻밤 장사 기록(아침 신문 「어젯밤 카운터」 칸) */
+export interface NightNote {
+  day: number;
+  /** 잔을 받은 손님 */
+  served: number;
+  perfect: number;
+  /** 기다리다 떠나거나 돌려보낸 손님 */
+  left: number;
+  /** 지나가는 손님 수 */
+  guests: number;
+  /** 다녀간 단골 */
+  regulars: string[];
+  /** 진열장에서 판 물건 */
+  sold: Partial<Record<GoodId, number>>;
+}
+
 export interface StoryState {
   flags: Set<string>;
   /** 단골별 바텐더에 대한 신뢰(0~5) */
@@ -129,6 +154,12 @@ export interface StoryState {
   news: NewsEntry[];
   /** Day 7 마감 때 정해진 결말 */
   endings: Partial<Record<ArcId, string>>;
+  /** 바텐더의 선택들(신문 기사·후속 기사의 재료) */
+  deeds: Deed[];
+  /** 밤마다의 장사 기록 */
+  nights: NightNote[];
+  /** 지난 아침 신문(레시피북 「이야기 기록」에서 다시 본다) */
+  papers: Edition[];
 }
 
 /** 방금 낸 잔 */
@@ -410,7 +441,7 @@ const CONFESSIONS: Record<string, Confession> = {
   },
 };
 
-const NAME: Record<string, string> = { mio: '미오', grey: '그레이', serena: '세레나', evan: '에반', bolt: '볼트 선장', norma: '노르마', pipi: '피피', leila: '레일라' };
+export const NAME: Record<string, string> = { mio: '미오', grey: '그레이', serena: '세레나', evan: '에반', bolt: '볼트 선장', norma: '노르마', pipi: '피피', leila: '레일라' };
 
 // ── 장면 ─────────────────────────────────────────────
 
@@ -1691,7 +1722,7 @@ export const IDLE: Record<string, string[]> = {
 // ── 계산 ─────────────────────────────────────────────
 
 export function emptyStory(): StoryState {
-  return { flags: new Set(), trust: {}, items: [], seen: new Set(), today: new Set(), posted: [], log: [], news: [], endings: {} };
+  return { flags: new Set(), trust: {}, items: [], seen: new Set(), today: new Set(), posted: [], log: [], news: [], endings: {}, deeds: [], nights: [], papers: [] };
 }
 
 export const trustOf = (s: StoryState, who: string) => Math.max(0, Math.min(TRUST_MAX, s.trust[who] ?? 0));
@@ -1800,7 +1831,29 @@ export function choose(s: StoryState, b: Beat, i: number, ctx: Ctx): Outcome {
   applyFx(s, c.fx, ctx, out);
   if (!b.repeat) s.seen.add(b.id);
   s.today.add(b.id);
+  if (c.fx.length) s.deeds.push({ day: ctx.day, beat: b.id, i });
   return out;
+}
+
+/** 그날 밤의 장사 기록(없으면 새로 만든다) */
+function nightOf(s: StoryState, day: number): NightNote {
+  let n = s.nights.find((x) => x.day === day);
+  if (!n) {
+    n = { day, served: 0, perfect: 0, left: 0, guests: 0, regulars: [], sold: {} };
+    s.nights.push(n);
+  }
+  return n;
+}
+
+/** 진열장에서 물건 하나를 팔았다(아침 신문 「어젯밤 카운터」에 실린다) */
+export function noteSale(s: StoryState, day: number, g: GoodId) {
+  const n = nightOf(s, day);
+  n.sold[g] = (n.sold[g] ?? 0) + 1;
+}
+
+/** 마감: 그날 밤 손님 수를 적어 둔다 */
+export function noteNight(s: StoryState, note: Omit<NightNote, 'sold'>) {
+  Object.assign(nightOf(s, note.day), note);
 }
 
 function applyFx(s: StoryState, fx: Effect[], ctx: Ctx, out: Outcome) {
@@ -1895,6 +1948,7 @@ export function deliverPosted(s: StoryState, day: number, goods: Partial<Record<
     const view = choicesOf(b, s, ctx).find((c) => c.ok && c.choice.style === 'asis');
     if (!view) continue;
     applyFx(s, view.choice.fx, ctx, { money: [], sold: [], gained: [], lost: [], trust: [], reply: [] });
+    s.deeds.push({ day, beat: b.id, i: view.i, post: true });
     s.log.push({ day, who: it.to, text: `피피가 유성 엽서로 「${it.name}」${josa(it.name.replace(/[」]/g, ''), '을', '를')} ${NAME[it.to]}에게 배달했다` });
     s.news.push({ day, head: '피피의 배달 일지', body: `「${it.name}」 → ${NAME[it.to]}, 배달 완료!` });
     done.push(it.name);
@@ -1952,44 +2006,6 @@ export function epilogueLine(s: StoryState, who: string): string | null {
 /** 고백했는가 */
 export const confessed = (s: StoryState, who: string) => s.flags.has(`conf_${who}`);
 
-/** day일차 아침 신문에 실을 기사: 전날 밤의 일들(엽서 배달 포함). 없으면 그날의 기본 기사. */
-export function morningNews(s: StoryState, day: number): NewsEntry[] {
-  const fresh = s.news.filter((n) => n.day === day - 1);
-  // 같은 제목은 한 번만
-  const seen = new Set<string>();
-  const uniq = fresh.filter((n) => (seen.has(n.head + n.body) ? false : (seen.add(n.head + n.body), true)));
-  const story = uniq.filter((n) => n.head !== '피피의 배달 일지').reverse();
-  const post = uniq.filter((n) => n.head === '피피의 배달 일지');
-  const lead = story.length ? story : [defaultNews(s, day)];
-  return [...lead.slice(0, 2), ...post];
-}
-
-function defaultNews(s: StoryState, day: number): NewsEntry {
-  const tally = FEST_CHECKLIST.filter((c) => s.flags.has(c.flag)).map((c) => c.label);
-  switch (day) {
-    case 1:
-      return { day, head: '별빛 바, 1년 만에 다시 불을 켜다', body: '사라진 주인 할의 가게를 새 바텐더가 이어받았다. 할이 남긴 것은 열쇠와 「약속 장부」 한 권.' };
-    case 2:
-      return { day, head: '새 바텐더, 첫 밤을 무사히 넘기다', body: '유성 골목 7번지에 다시 단골들의 발길이 이어진다.' };
-    case 3:
-      return { day, head: '월광관 공연 날, 골목이 붐비다', body: '공연이 끝난 뒤 별빛 바에 들르는 관객이 늘었다는 소식.' };
-    case 4:
-      return { day, head: '녹턴에 비 — 우산을 챙기세요', body: '밤새 비가 내린다. 우산 없는 손님이 많을 듯.' };
-    case 5:
-      return { day, head: '유성우 예보, 오늘 밤 하늘을 보세요', body: '꿈의 축제를 이틀 앞두고 하늘이 먼저 들떴다.' };
-    case 6:
-      return {
-        day,
-        head: '꿈의 축제 D-1',
-        body: s.flags.has('fest_permit') ? '관리국 허가 완료. 광장에 무대가 세워지고 있다.' : '관리국 허가는 아직 감감무소식. 레일라가 골목을 뛰어다닌다.',
-      };
-    case 7:
-      return { day, head: '오늘 밤, 꿈의 축제', body: tally.length ? `준비된 것: ${tally.join(' · ')}. 나머지는 오늘 밤에 달렸다.` : '준비는 모자라지만, 축제는 오늘 밤이다.' };
-    default:
-      return { day, head: '축제가 끝난 녹턴', body: '별빛 바는 오늘도 막차 이후에 불을 켠다. 단골들은 저마다의 결말을 안고 다시 찾아온다.' };
-  }
-}
-
 /** 골목 소문 칸: 축제 준비 상황, 맡은 전언, 새로 들은 소문 */
 export function alleyGossip(s: StoryState): string[] {
   const out: string[] = [];
@@ -2013,10 +2029,25 @@ export interface StorySave {
   log: LogEntry[];
   news: NewsEntry[];
   endings: Partial<Record<ArcId, string>>;
+  /** v7에서 더한 신문 재료(없던 저장은 빈 채로 읽는다) */
+  deeds?: Deed[];
+  nights?: NightNote[];
+  papers?: Edition[];
 }
 
 export function toSave(s: StoryState): StorySave {
-  return { flags: [...s.flags], trust: { ...s.trust }, items: [...s.items], seen: [...s.seen], log: s.log.slice(-300), news: s.news.slice(-60), endings: { ...s.endings } };
+  return {
+    flags: [...s.flags],
+    trust: { ...s.trust },
+    items: [...s.items],
+    seen: [...s.seen],
+    log: s.log.slice(-300),
+    news: s.news.slice(-60),
+    endings: { ...s.endings },
+    deeds: s.deeds.slice(-240),
+    nights: s.nights.slice(-14),
+    papers: s.papers.slice(-12),
+  };
 }
 
 const isStr = (x: unknown): x is string => typeof x === 'string';
@@ -2036,6 +2067,9 @@ export function fromSave(raw: unknown): StoryState {
     Array.isArray(xs) ? (xs.filter((x) => x && typeof x === 'object' && ok(x as Record<string, unknown>)) as T[]) : [];
   s.log = entries<LogEntry>(r.log, (x) => typeof x.day === 'number' && isStr(x.who) && isStr(x.text));
   s.news = entries<NewsEntry>(r.news, (x) => typeof x.day === 'number' && isStr(x.head) && isStr(x.body));
+  s.deeds = entries<Deed>(r.deeds, (x) => typeof x.day === 'number' && isStr(x.beat) && !!BEAT_BY_ID[x.beat] && typeof x.i === 'number' && !!BEAT_BY_ID[x.beat].choices[x.i]);
+  s.nights = entries<NightNote>(r.nights, (x) => typeof x.day === 'number' && typeof x.served === 'number' && !!x.sold && typeof x.sold === 'object' && Array.isArray(x.regulars));
+  s.papers = entries<Edition>(r.papers, (x) => typeof x.day === 'number' && Array.isArray(x.articles) && !!x.lead && typeof x.lead === 'object');
   if (r.endings && typeof r.endings === 'object') {
     for (const { id } of ARCS) {
       const e = (r.endings as Record<string, unknown>)[id];
