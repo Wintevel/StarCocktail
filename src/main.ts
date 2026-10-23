@@ -484,10 +484,8 @@ function syncTags() {
 /** 손님 상반신(주문 카드)·얼굴(스툴 목록) 그림. 가게 그림과 같은 SVG를 잘라 쓴다. */
 function portrait(id: string, mood: Mood = 'idle', crop: 'bust' | 'head' = 'bust') {
   const rig = rigFor(id);
-  const top = rig.top - 6;
-  // 머리 자르기: 애니메풍 큰 머리(정수리 -256, 턱 -150)를 정사각형에 가깝게 담는다(높은 모자는 조금 잘린다)
-  const box = crop === 'bust' ? `-84 ${top} 168 ${-top - 40}` : `-74 -286 148 150`;
-  return `<svg class="portrait ${crop}" viewBox="${box}" data-mood="${mood}" aria-hidden="true" focusable="false">${rig.svg}</svg>`;
+  // 자르는 상자는 그림마다 정해 둔다(상반신: 정수리 위 ~ 가슴 아래, 머리: 정수리 ~ 턱 아래. 높은 모자는 조금 잘린다)
+  return `<svg class="portrait ${crop}" viewBox="${crop === 'bust' ? rig.bust : rig.head}" data-mood="${mood}" aria-hidden="true" focusable="false">${rig.svg}</svg>`;
 }
 
 // ── 3D 제조대와 연결 ─────────────────────────────────────────

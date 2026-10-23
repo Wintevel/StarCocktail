@@ -146,14 +146,15 @@ function counter() {
 }
 
 function stool(x: number) {
-  // 방석은 손님 엉덩이보다 넓게 그려, 앉은 손님 양옆으로 빨간 방석이 보이게 한다(이 그림의 유일한 색).
+  // 방석은 손님 엉덩이보다 조금 넓게 그려, 앉은 손님 양옆으로 빨간 방석이 보이게 한다(이 그림의 유일한 색).
+  // 방석 아랫단(SEAT_Y+30)과 발판(SEAT_Y+110)은 손님 그림의 앉은 종아리 길이(art.ts의 CUSHION_DROP·FOOTREST_DROP)와 맞춘다.
   return `<g class="stool" data-seat-x="${x}">
     <path d="M${x - 6},${SEAT_Y + 10} L${x - 6},${FLOOR_Y - 8} L${x + 6},${FLOOR_Y - 8} L${x + 6},${SEAT_Y + 10} Z" fill="${INK}"/>
-    <ellipse cx="${x}" cy="840" rx="46" ry="10" fill="none" stroke="${INK}" stroke-width="6"/>
-    <ellipse cx="${x}" cy="${FLOOR_Y - 4}" rx="52" ry="11" fill="${INK}"/>
-    <path d="M${x - 98},${SEAT_Y} L${x - 92},${SEAT_Y + 26} Q${x},${SEAT_Y + 56} ${x + 92},${SEAT_Y + 26} L${x + 98},${SEAT_Y} Z" fill="#8e1218" stroke="${INK}" stroke-width="4"/>
-    <ellipse cx="${x}" cy="${SEAT_Y}" rx="98" ry="20" fill="${RED}" stroke="${INK}" stroke-width="4"/>
-    <path d="M${x - 66},${SEAT_Y - 5} Q${x},${SEAT_Y - 14} ${x + 58},${SEAT_Y - 6}" fill="none" stroke="#ff7a7f" stroke-width="3"/>
+    <ellipse cx="${x}" cy="${SEAT_Y + 110}" rx="40" ry="9" fill="none" stroke="${INK}" stroke-width="6"/>
+    <ellipse cx="${x}" cy="${FLOOR_Y - 4}" rx="46" ry="10" fill="${INK}"/>
+    <path d="M${x - 66},${SEAT_Y} L${x - 62},${SEAT_Y + 18} Q${x},${SEAT_Y + 42} ${x + 62},${SEAT_Y + 18} L${x + 66},${SEAT_Y} Z" fill="#8e1218" stroke="${INK}" stroke-width="4"/>
+    <ellipse cx="${x}" cy="${SEAT_Y}" rx="66" ry="15" fill="${RED}" stroke="${INK}" stroke-width="4"/>
+    <path d="M${x - 44},${SEAT_Y - 4} Q${x},${SEAT_Y - 11} ${x + 38},${SEAT_Y - 5}" fill="none" stroke="#ff7a7f" stroke-width="3"/>
   </g>`;
 }
 
