@@ -905,35 +905,6 @@ body[data-view="mix"] .wipe-edge {
   background: var(--lgray);
 }
 
-.mb-type {
-  position: absolute;
-  left: 3%;
-  top: 15%;
-  font: 400 clamp(86px, 12vw, 190px) / 0.86 var(--font-display);
-  letter-spacing: 0.01em;
-  color: transparent;
-  -webkit-text-stroke: 2px rgba(21, 19, 19, 0.16);
-  transform: rotate(-4deg);
-  white-space: nowrap;
-}
-
-.mb-strip {
-  position: absolute;
-  left: -10%;
-  right: -10%;
-  top: 9%;
-  display: flex;
-  gap: 0;
-  padding: 7px 0 8px;
-  background: var(--ink);
-  color: var(--paper);
-  font: 400 15px/1 var(--font-display);
-  letter-spacing: 0.24em;
-  white-space: nowrap;
-  overflow: hidden;
-  transform: rotate(-5deg);
-}
-
 /* ── 위쪽 띠: 로고·시계·마감·레시피북·메뉴 ──────── */
 .topbar {
   position: fixed;

@@ -379,8 +379,6 @@ app.innerHTML = `
       <div class="mb-shard s1"></div>
       <div class="mb-shard s2"></div>
       <div class="mb-shard s3"></div>
-      <div class="mb-type">STAR<br />COCKTAIL</div>
-      <div class="mb-strip"><span>LAST TRAIN · NOCTURNE 7 · OPEN 18:00 — 04:00 · </span><span>LAST TRAIN · NOCTURNE 7 · OPEN 18:00 — 04:00 · </span></div>
     </div>
     <div class="stage3d" id="stage"></div>
   </section>
