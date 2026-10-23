@@ -24,6 +24,10 @@ export const CYAN = '#4ef0ff';
 export const LAV = '#c9b6ff';
 export const PEACH = '#ffc9a8';
 export const GOLD = '#ffd97a';
+/** 신문 화풍(v7) 공용 색: 먹·종이·빨강 */
+export const INK = '#151313';
+export const PAPER = '#f7f2e8';
+export const RED = '#d8202a';
 const SKIN = '#ffe6df';
 const SKIN_SH = '#f7b9c8';
 const BLUSH = '#ff7fb6';

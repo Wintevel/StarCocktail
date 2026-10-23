@@ -1,5 +1,17 @@
 import './style.css';
-import '@fontsource/jetbrains-mono/500.css';
+// 글꼴: 역할마다 다른 무료 한글 글꼴(한글은 유니코드 구간별로 나뉘어 쓰는 글자만 받는다)
+import '@fontsource/anton/400.css'; // 로마자·숫자 제목
+import '@fontsource/black-han-sans/400.css'; // 오려 붙인 굵은 글자·신문 큰 표제
+import '@fontsource/do-hyeon/400.css'; // 카드 제목·버튼
+import '@fontsource/hahmlet/700.css'; // 신문 제호·기사 제목(명조)
+import '@fontsource/hahmlet/900.css';
+import '@fontsource/ibm-plex-sans-kr/400.css'; // 본문
+import '@fontsource/ibm-plex-sans-kr/700.css';
+import '@fontsource/gowun-batang/400.css'; // 기사 본문·레시피북
+import '@fontsource/gowun-batang/700.css';
+import '@fontsource/gaegu/400.css'; // 손님 대사(손글씨)
+import '@fontsource/gaegu/700.css';
+import '@fontsource/jetbrains-mono/500.css'; // 숫자·시계·장부
 import '@fontsource/jetbrains-mono/700.css';
 import {
   arrivalsOn,
@@ -758,7 +770,7 @@ function renderTopbar() {
       ? `<div class="clock" aria-label="영업 시계"><span class="c-day">DAY<b>${state.day}</b>${infinite ? '<small class="inf">∞</small>' : ''}</span><span class="c-time ${over ? 'over' : ''}" id="clockTime">${clockLabel(minute())}</span></div>`
       : `<div class="clock free" aria-label="자유 제조 중"><span class="c-day">자유 제조</span></div>`;
   $('topbar').innerHTML = `
-    <div class="brand">${ransom('별빛 바', { seed: 5, cls: 'brand-rn' })}<span class="brand-en">STARCOCKTAIL</span></div>
+    <div class="brand">${ransom('★', { seed: 5, cls: 'brand-rn' })}<span class="brand-en">STARCOCKTAIL</span></div>
     ${clock}
     <div class="top-actions">
       ${closeButton()}
@@ -1618,7 +1630,7 @@ function todayStory() {
 }
 
 /** 신문 머리(제호 띠) */
-const masthead = (right: string, left = '★ 별빛 바', mid = '유성 골목 7번지 · 막차 이후의 바') =>
+const masthead = (right: string, left = '★ 유성 골목 7번지', mid = '막차 이후에 문을 여는 바') =>
   `<div class="masthead" aria-hidden="true"><span>${left}</span><span class="mh-mid">${mid}</span><span>${right}</span></div>`;
 
 const OUTCOME_VIEW: Record<Outcome, { stars: string; note?: string }> = {
@@ -1744,7 +1756,7 @@ function renderOverlay() {
       el.innerHTML = `
         <div class="card shop paper">
           ${masthead(`Day ${next} 전날 밤`)}
-          <h2>${ransom('별빛 바 상점', { seed: 21 })}</h2>
+          <h2>${ransom('내일 장보기', { seed: 21 })}</h2>
           <p class="total">가진 돈 <strong class="${state.money < 0 ? 'debt' : ''}">${coin(state.money)}</strong></p>
           <p class="sub small">영업 중에도 오른쪽 아래 서랍에서 같은 상점을 열 수 있어요. 오늘 밤 주문한 것은 내일 아침 도착해요.</p>
           ${shopLists()}
