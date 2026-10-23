@@ -595,7 +595,7 @@ export const UPGRADES: Upgrade[] = [
   { id: 'wholesale', name: '도매 계약', desc: '리필과 장식이 30% 싸져요.', price: 60 },
   { id: 'velvet', name: '벨벳 의자', desc: '손님이 편해져 판매가가 +5 올라요.', price: 70 },
   { id: 'jukebox', name: '별빛 축음기', desc: '실패한 잔도 판매가의 절반은 받아요.', price: 80 },
-  { id: 'neon', name: '네온 간판 정비', desc: '받는 팁이 50% 늘어요.', price: 90 },
+  { id: 'neon', name: '바 조명 정비', desc: '받는 팁이 50% 늘어요.', price: 90 },
 ];
 
 const discount = (base: number, upgrades: ReadonlySet<UpgradeId>) => (upgrades.has('wholesale') ? Math.max(1, Math.round(base * 0.7)) : base);

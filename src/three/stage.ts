@@ -1,4 +1,6 @@
-// 3D 제조대: 잔과 병 진열대·잔 쟁반을 놓고, 게임 상태(Drink)가 바뀔 때마다 붓기·젓기·얼음·장식 연출을 재생한다.
+// 3D 제조대: 카운터 가운데 잔 하나를 크게 놓고, 게임 상태(Drink)가 바뀔 때마다 붓기·젓기·얼음·장식 연출을 재생한다.
+// 재료·잔 고르기는 화면 오른쪽 카드(DOM)에서 하고, 붓기는 화면 위에서 잔으로 떨어지는 술 줄기로 보여 준다.
+// 잔은 화면 배치가 알려 준 영역(setFrame) 가운데에 오도록 카메라 거리와 렌즈 이동(setViewOffset)을 맞춘다.
 // 2D 가게와 화풍을 맞추려고 셀 셰이딩 재질에 먹선·하프톤 후처리(post.ts)를 쓰고, 배경은 투명하게 두어
 // 캔버스 뒤 DOM 신문지 콜라주 배경이 비치게 한다. 손님은 2D 가게 화면(src/shop)에만 나온다.
 // 제조 화면이 아닐 때는 그리기를 멈춘다(setActive).
@@ -9,40 +11,54 @@ import { type Drink, visibleLayers } from '../mix';
 import { makeGlass } from './glassware';
 import { fxOf, type LiquidBand, liquidGeometry, liquidMaterials, setCap, SurfaceSpray } from './liquid';
 import { fxTime, inkMaterial, neonCyanMaterial, neonPinkMaterial, redMaterial, steelMaterial, toonMaterial } from './materials';
-import { fillDepth, GLASS_SHAPES, type GlassShape, iceMaterial, makeBottle, makeGarnish, makeIce, rimY } from './models';
+import { fillDepth, GLASS_SHAPES, type GlassShape, iceMaterial, makeGarnish, makeIce, rimY } from './models';
 import { InkRenderer } from './post';
-import { GlassShelf } from './props';
 import { quality, setQuality } from './quality';
-import { BOTTLE_SCALE, BottleRack, type RackBottle } from './rack';
 import { counterTexture, shadowTexture } from './textures';
 
-const POUR_MS = 1500;
-/** 잔은 손님·병과 어울리는 크기로 줄여 둔다. 모양 치수(models.ts)는 잔 기준 단위 그대로 쓴다. */
+const POUR_MS = 1000;
+/** 잔 모양 치수(models.ts)는 잔 기준 단위라서 카운터 위에서는 줄여 둔다. */
 const GLASS_SCALE = 0.72;
 const STIR_MS = 1300;
-/** 붓기 연출 중 술이 흘러나오는 구간 (0~1) */
-const FLOW: [number, number] = [0.37, 0.74];
+/** 붓기 연출: 술 줄기 머리가 수면에 닿는 때, 꼬리가 떨어지기 시작하는 때, 꼬리가 수면에 닿는 때 (0~1) */
+const HEAD_AT = 0.2;
+const TAIL_FROM = 0.72;
+const TAIL_AT = 0.92;
+/** 잔 속 술이 차오르는 구간 (0~1) */
+const FLOW: [number, number] = [HEAD_AT, 0.88];
+/** 술 줄기가 떨어지는 자리(잔 기준 좌표, 가운데에서 살짝 비켜서) */
+const STREAM_X = 0.07;
+const STREAM_Z = 0.05;
 
-/** 카메라 3단계: 잔 고르기(쟁반까지 넓게) · 제조(진열대와 잔) · 장식(잔 가까이) */
-export type View = 'pick' | 'mix' | 'garnish';
-const VIEWS: Record<View, { target: THREE.Vector3; half: number; minDist: number; pitch: number }> = {
-  pick: { target: new THREE.Vector3(0.35, 0.62, -0.2), half: 2.75, minDist: 4.6, pitch: 0.32 },
-  mix: { target: new THREE.Vector3(0.95, 0.62, -0.05), half: 2.45, minDist: 3.7, pitch: 0.36 },
-  garnish: { target: new THREE.Vector3(0, 0.78, 0.05), half: 1.6, minDist: 2.6, pitch: 0.38 },
-};
+/** 잔·장식이 들어가는 세계 좌표 상자: 높이(받침 앞 가장자리부터 가장 높은 잔과 장식까지), 반쪽 너비, 가운데 높이 */
+const BOX_H = 2.1;
+const BOX_HALF = 0.62;
+const BOX_MID = 0.8;
+/** 잔 받침 반지름(잔 아래 버튼은 받침 앞 가장자리 밑에 단다) */
+const COASTER_R = 0.64 * GLASS_SCALE * 1.05;
+/** 카메라가 내려다보는 기울기(앞 1에 대한 높이) */
+const PITCH = 0.34;
 
-/** 화면 위 DOM(게이지·횟수 바·장식 카드)을 잔 둘레에 붙이기 위한 잔의 화면 좌표(px) */
+/** 화면 위 DOM(횟수 바·초기화 버튼)을 잔 둘레에 붙이기 위한 잔의 화면 좌표(px) */
 export interface GlassAnchor {
   x: number;
   top: number;
   bottom: number;
+  /** 잔 받침 앞 가장자리 */
+  foot: number;
   /** 잔 반쪽 너비 */
   half: number;
 }
 
-/** 포인터 아래에 있는 것 */
-export type Target = { kind: 'bottle'; id: IngredientId } | { kind: 'glass'; id: GlassId };
+/** 잔을 놓을 화면 영역(px, 화면 왼쪽 위 기준) */
+export interface Frame {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
+const easeIn = (t: number) => t * t;
 const easeOut = (t: number) => 1 - (1 - t) ** 3;
 const easeOutBack = (t: number) => 1 + 2.2 * (t - 1) ** 3 + 1.2 * (t - 1) ** 2;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
@@ -94,10 +110,13 @@ export class Stage3D {
   private ink = new InkRenderer();
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(36, 1, 0.05, 40);
-  private camTarget = VIEWS.pick.target.clone();
+  private camTarget = new THREE.Vector3(0, BOX_MID, 0);
   private camDist = 0;
-  private camPitch = VIEWS.pick.pitch;
-  private view: View = 'pick';
+  /** 렌즈 이동(px): 잔이 화면 가운데가 아니라 frame 가운데에 오게 한다 */
+  private camShift = new THREE.Vector2();
+  private frameRect: Frame | null = null;
+  /** 캔버스 크기(CSS px) */
+  private size = { w: 1, h: 1 };
   private active = false;
 
   private drink: Drink | null = null;
@@ -119,30 +138,14 @@ export class Stage3D {
   private garnish: THREE.Group | null = null;
   private garnishIn = 0;
 
-  private rack = new BottleRack();
-  private shelf = new GlassShelf();
-  /** 병을 끌고 있는 중 */
-  private drag: {
-    id: IngredientId;
-    bottle: RackBottle;
-    pointer: number;
-    sx: number;
-    sy: number;
-    moved: boolean;
-    near: boolean;
-  } | null = null;
-  /** 잔을 누르기 시작한 대상 (손을 뗄 때 같은 대상이면 누른 것으로 본다) */
-  private press: { target: Target; sx: number; sy: number } | null = null;
-  private dragPlane = new THREE.Plane();
   private lastAnchor = '';
+  /** 붓기: 화면 위쪽 밖에서 잔으로 떨어지는 술 줄기와 수면의 물결 고리 */
   private pourAnim: {
     start: number;
-    id: IngredientId;
-    bottle: RackBottle;
-    temp: boolean;
     stream: THREE.Mesh;
     ring: THREE.Mesh;
-    from: THREE.Vector3 | null;
+    /** 줄기가 시작하는 높이(세계 좌표, 화면 위쪽 밖) */
+    from: number;
   } | null = null;
   private stirAnim: {
     start: number;
@@ -162,9 +165,6 @@ export class Stage3D {
   private serveAnim: { start: number } | null = null;
   private glassOffset = new THREE.Vector3();
 
-  private raycaster = new THREE.Raycaster();
-  private hoverKey = '';
-
   constructor(container: HTMLElement) {
     this.container = container;
     this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' });
@@ -176,7 +176,7 @@ export class Stage3D {
 
     const coaster = makeCoaster();
     coaster.scale.setScalar(GLASS_SCALE * 1.05);
-    this.scene.add(makeCounter(), this.glassRoot, coaster, this.rack.group, this.shelf.group);
+    this.scene.add(makeCounter(), this.glassRoot, coaster);
     this.addLights();
 
     this.shadow = new THREE.Mesh(
@@ -197,15 +197,6 @@ export class Stage3D {
     const ro = new ResizeObserver(() => this.resize(container));
     ro.observe(container);
     this.resize(container);
-    // 터치에서도 끌기가 스크롤로 새지 않도록 캔버스가 포인터를 모두 받는다.
-    this.canvas.style.touchAction = 'none';
-    this.canvas.addEventListener('pointerdown', (e) => this.pointerDown(e));
-    this.canvas.addEventListener('pointermove', (e) => this.pointerMove(e));
-    this.canvas.addEventListener('pointerup', (e) => this.pointerUp(e));
-    this.canvas.addEventListener('pointercancel', () => this.cancelDrag());
-    this.canvas.addEventListener('pointerleave', () => {
-      if (!this.drag) this.setHover(null, 0, 0);
-    });
   }
 
   /** 제조 화면이 보일 때만 그린다. */
@@ -215,152 +206,18 @@ export class Stage3D {
     this.lastTick = 0;
     this.lastFrame = 0;
     this.renderer.setAnimationLoop(on ? this.frame : null);
-    if (!on) this.cancelDrag();
   }
 
   /** 붓기·젓기 연출이 끝나 다시 조작할 수 있게 되면 호출된다. */
   onIdle: (() => void) | null = null;
-  /** 병을 잔 위로 끌어다 놓았을 때(또는 병을 톡 눌렀을 때). 부었으면 true를 돌려준다. */
-  onBottleDrop: ((id: IngredientId) => boolean) | null = null;
-  /** 쟁반의 잔을 눌렀을 때 */
-  onGlassPick: ((id: GlassId) => void) | null = null;
-  /** 병·잔 위에 포인터가 올라가거나 벗어날 때 (설명 말풍선용) */
-  onHover: ((t: Target | null, x: number, y: number) => void) | null = null;
   /** 잔의 화면 위치가 바뀔 때마다 호출된다. */
   onLayout: ((a: GlassAnchor) => void) | null = null;
 
-  // ── 진열대 ─────────────────────────────────────────
-
-  setShelf(ids: ReadonlySet<IngredientId>, animate: boolean) {
-    this.rack.setAvailable(ids, performance.now(), animate);
-  }
-
-  /** 재료별 남은 양(0~1). 병 몸통의 수면 높이로 보이고, 빈 병은 끌 수 없다. null이면 모두 가득. */
-  setStock(levels: Partial<Record<IngredientId, number>> | null) {
-    this.rack.setLevels(levels);
-  }
-
-  /** 지금 병을 끌어 부을 수 있는지 (재료 단계이고 잔에 자리가 있을 때) */
-  setPourable(on: boolean) {
-    this.rack.enabled = on;
-  }
-
-  setGlassShelf(open: ReadonlySet<GlassId>, selected: GlassId | null, enabled: boolean) {
-    this.shelf.setAvailable(open);
-    this.shelf.selected = selected;
-    this.shelf.enabled = enabled;
-  }
-
-  setView(v: View) {
-    this.view = v;
-  }
-
-  private rayAt(x: number, y: number) {
-    const rect = this.canvas.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
-    this.raycaster.setFromCamera(ndc, this.camera);
-    return this.raycaster;
-  }
-
-  private pickAt(x: number, y: number): Target | null {
-    const ray = this.rayAt(x, y);
-    const id = this.rack.pick(ray);
-    if (id) return { kind: 'bottle', id };
-    const g = ray.intersectObjects(this.shelf.hits, false)[0];
-    if (g && this.shelf.selected !== g.object.userData.glass) return { kind: 'glass', id: g.object.userData.glass as GlassId };
-    return null;
-  }
-
-  private canUse(t: Target | null) {
-    if (!t) return false;
-    if (t.kind === 'bottle') return this.rack.enabled && !this.busy && !this.rack.isEmpty(t.id);
-    return this.shelf.enabled;
-  }
-
-  private setHover(t: Target | null, x: number, y: number) {
-    const key = t ? `${t.kind}:${'id' in t ? t.id : ''}` : '';
-    this.rack.setHover(t?.kind === 'bottle' ? t.id : null);
-    this.shelf.hovered = t?.kind === 'glass' ? t.id : null;
-    this.canvas.style.cursor = this.canUse(t) ? (t!.kind === 'bottle' ? 'grab' : 'pointer') : '';
-    if (key !== this.hoverKey || t) this.onHover?.(t, x, y);
-    this.hoverKey = key;
-  }
-
-  private pointerDown(e: PointerEvent) {
-    const t = this.pickAt(e.clientX, e.clientY);
-    if (!t || !this.canUse(t)) return;
-    e.preventDefault();
-    this.canvas.setPointerCapture?.(e.pointerId);
-    if (t.kind === 'bottle') {
-      const bottle = this.rack.lend(t.id);
-      if (!bottle) return;
-      bottle.returning = false;
-      this.drag = {
-        id: t.id,
-        bottle,
-        pointer: e.pointerId,
-        sx: e.clientX,
-        sy: e.clientY,
-        moved: false,
-        near: false,
-      };
-      this.canvas.style.cursor = 'grabbing';
-      this.onHover?.(null, 0, 0);
-    } else {
-      this.press = { target: t, sx: e.clientX, sy: e.clientY };
-    }
-  }
-
-  private pointerMove(e: PointerEvent) {
-    const d = this.drag;
-    if (!d) {
-      this.setHover(this.pickAt(e.clientX, e.clientY), e.clientX, e.clientY);
-      return;
-    }
-    if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 6) d.moved = true;
-    if (!d.moved) return;
-    // 카메라를 마주 보는 평면(잔 위쪽 높이)에 포인터를 투영해 병이 손끝을 따라오게 한다.
-    const anchor = new THREE.Vector3(0.4, 0.95, 0.15);
-    const normal = this.camera.position.clone().sub(anchor).normalize();
-    this.dragPlane.setFromNormalAndCoplanarPoint(normal, anchor);
-    const hit = new THREE.Vector3();
-    if (!this.rayAt(e.clientX, e.clientY).ray.intersectPlane(this.dragPlane, hit)) return;
-    hit.y = Math.max(0.55, hit.y);
-    d.bottle.pivot.position.copy(hit);
-    // 잔 위에 오면 병을 살짝 기울여 '여기 부을 수 있다'를 알려 준다.
-    d.near = Math.hypot(hit.x, hit.z - 0.05) < 0.62;
-    d.bottle.pivot.rotation.z = d.near ? 0.45 : 0.08;
-  }
-
-  private pointerUp(e: PointerEvent) {
-    const d = this.drag;
-    if (d) {
-      this.drag = null;
-      // 끌어서 잔 위에 놓았거나, 끌지 않고 톡 눌렀으면 붓는다.
-      const poured = (d.near || !d.moved) && !!this.onBottleDrop?.(d.id);
-      if (!poured) this.rack.giveBack(d.id, true);
-      this.setHover(this.pickAt(e.clientX, e.clientY), e.clientX, e.clientY);
-      return;
-    }
-    const p = this.press;
-    this.press = null;
-    if (!p || Math.hypot(e.clientX - p.sx, e.clientY - p.sy) > 10) return;
-    const t = this.pickAt(e.clientX, e.clientY);
-    if (!t || t.kind !== p.target.kind || t.id !== p.target.id) return;
-    if (t.kind === 'glass' && this.shelf.enabled) this.onGlassPick?.(t.id);
-  }
-
-  private cancelDrag() {
-    if (this.drag) this.rack.giveBack(this.drag.id, true);
-    this.drag = null;
-    this.press = null;
-  }
-
-  /** 테스트·디버그용: 병의 화면 좌표 */
-  screenOf(id: IngredientId) {
-    const b = this.rack.get(id);
-    if (!b) return null;
-    return this.project(b.home.clone().add(new THREE.Vector3(0, -0.25, 0)));
+  /** 잔을 놓을 화면 영역. 처음 정할 때는 카메라가 곧바로 그 자리로 가고, 그 뒤로는 부드럽게 옮겨 간다. */
+  setFrame(f: Frame) {
+    const r = this.frameRect;
+    if (r && r.x === f.x && r.y === f.y && r.w === f.w && r.h === f.h) return;
+    this.frameRect = { ...f };
   }
 
   private project(v: THREE.Vector3) {
@@ -382,13 +239,15 @@ export class Stage3D {
     const b = this.project(new THREE.Vector3(pos.x, 0, pos.z));
     const side = this.project(new THREE.Vector3(pos.x + Math.max(r, 0.3), top * 0.5, pos.z));
     const mid = this.project(new THREE.Vector3(pos.x, top * 0.5, pos.z));
+    const foot = this.project(new THREE.Vector3(pos.x, 0, pos.z + COASTER_R));
     const anchor: GlassAnchor = {
       x: b.x,
       top: a.y,
       bottom: b.y,
+      foot: foot.y,
       half: Math.abs(side.x - mid.x),
     };
-    const key = [anchor.x, anchor.top, anchor.bottom, anchor.half].map((n) => Math.round(n)).join(',');
+    const key = [anchor.x, anchor.top, anchor.bottom, anchor.foot, anchor.half].map((n) => Math.round(n)).join(',');
     if (key === this.lastAnchor) return;
     this.lastAnchor = key;
     this.onLayout(anchor);
@@ -416,6 +275,7 @@ export class Stage3D {
   private resize(container: HTMLElement) {
     const w = Math.max(1, container.clientWidth);
     const h = Math.max(1, container.clientHeight);
+    this.size = { w, h };
     this.renderer.setSize(w, h, false);
     const ratio = this.renderer.getPixelRatio();
     this.ink.setSize(Math.round(w * ratio), Math.round(h * ratio), ratio);
@@ -520,37 +380,6 @@ export class Stage3D {
 
   private startPour(id: IngredientId, now: number) {
     this.clearPour();
-    // 진열대의 그 병을 들어 와서 붓는다. 진열대에 없으면(예외) 임시 병을 쓴다.
-    // 끌어다 놓은 병이면 놓은 자리에서 바로 잔 위로 간다.
-    const dragged = this.rack.get(id);
-    const from = dragged?.lent ? dragged.pivot.position.clone() : null;
-    let bottle = this.rack.lend(id);
-    let temp = false;
-    if (!bottle) {
-      const ing = INGREDIENT_BY_ID[id];
-      const b = makeBottle(id, ing.color, { glow: 0.2 });
-      b.scale.setScalar(BOTTLE_SCALE);
-      b.position.y = -b.userData.mouthY * BOTTLE_SCALE;
-      const pivot = new THREE.Group();
-      pivot.add(b);
-      this.scene.add(pivot);
-      const home = new THREE.Vector3(1.9, 0.6, 0);
-      pivot.position.copy(home);
-      bottle = {
-        id,
-        pivot,
-        home,
-        body: (b.children[0] as THREE.Mesh).material as THREE.MeshToonMaterial,
-        glow: 0.2,
-        lift: 0,
-        appearAt: 0,
-        lent: true,
-        level: { value: 1 },
-        amount: 1,
-        fill: [0, 1],
-      };
-      temp = true;
-    }
     const color = liquidColor([id]);
     const stream = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 12, 1, true), toonMaterial(color, { emissive: color, glow: 0.35 }));
     stream.visible = false;
@@ -566,21 +395,27 @@ export class Stage3D {
     );
     ring.rotation.x = -Math.PI / 2;
     this.scene.add(stream, ring);
-    this.pourAnim = { start: now, id, bottle, temp, stream, ring, from };
+    this.pourAnim = { start: now, stream, ring, from: this.streamTop() };
+  }
+
+  /** 술 줄기가 시작할 높이: 잔 위로 곧게 올라가 화면 위쪽 밖으로 나가는 곳(병 없이 위에서 따르는 것처럼 보이게) */
+  private streamTop() {
+    const s = this.shape;
+    let y = (s ? rimY(s) : 1) * GLASS_SCALE + 0.6;
+    this.camera.updateMatrixWorld();
+    for (let i = 0; i < 16; i++) {
+      if (this.project(new THREE.Vector3(STREAM_X, y, STREAM_Z)).y < -40) break;
+      y += 0.5;
+    }
+    return y;
   }
 
   private clearPour() {
     if (!this.pourAnim) return;
-    const { id, bottle, temp, stream, ring } = this.pourAnim;
+    const { stream, ring } = this.pourAnim;
     this.scene.remove(stream, ring);
     disposeDeep(stream, true);
     disposeDeep(ring, true);
-    if (temp) {
-      this.scene.remove(bottle.pivot);
-      disposeDeep(bottle.pivot, true);
-    } else {
-      this.rack.giveBack(id);
-    }
     this.pourAnim = null;
   }
 
@@ -632,8 +467,6 @@ export class Stage3D {
     this.lastTick = now;
     fxTime.value = now / 1000;
     this.adaptResolution(now);
-    this.rack.update(now, dt);
-    this.shelf.update(dt);
     this.animateCamera(dt);
     if (this.drink && this.shape) {
       const g = this.drink.glass!;
@@ -686,21 +519,26 @@ export class Stage3D {
     }
   }
 
-  /** 단계별 시선으로 부드럽게 옮겨 간다. 마우스에 따라 흔들리지 않는다. */
+  /**
+   * 잔·장식 상자가 frame 영역에 꼭 맞게 들어오도록 카메라 거리를 잡고, 렌즈를 옮겨 frame 가운데에 놓는다.
+   * 렌즈만 옮기므로 잔은 화면 어디에 있어도 정면에서 본 모습 그대로다. 마우스에 따라 흔들리지 않는다.
+   */
   private animateCamera(dt: number) {
-    const v = VIEWS[this.view];
+    const { w: W, h: H } = this.size;
+    const f = this.frameRect ?? { x: 0, y: 0, w: W, h: H };
+    // 1 세계 단위가 화면에서 몇 px인가: 상자의 높이와 너비 중 빡빡한 쪽에 맞춘다.
+    const px = Math.max(40, Math.min(f.h / BOX_H, f.w / (BOX_HALF * 2)));
     const tan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    // 보여야 할 가로 폭이 화면에 들어오도록 거리를 잡는다 (세로 화면이면 더 멀리).
-    // 세로 화면에서는 양 끝을 조금 잘라 내고, 시선을 높여 카운터를 화면 아래쪽에 두고 빈 바닥이 덜 보이게 한다.
-    const portrait = this.camera.aspect < 1;
-    const goal = Math.max(v.minDist, (v.half * (portrait ? 0.85 : 1)) / (tan * this.camera.aspect));
-    const target = portrait ? v.target.clone().add(new THREE.Vector3(0, 0.55, 0)) : v.target;
-    // 프레임 수가 아니라 시간으로 다가가 느린 기기에서도 같은 속도로 움직인다.
-    const k = this.camDist ? 1 - Math.exp(-dt * 3.5) : 1;
-    this.camTarget.lerp(target, k);
+    const goal = H / (2 * px * tan);
+    const sx = W / 2 - (f.x + f.w / 2);
+    const sy = H / 2 - (f.y + f.h / 2);
+    // 프레임 수가 아니라 시간으로 다가가 느린 기기에서도 같은 속도로 움직인다(처음에는 곧바로).
+    const k = this.camDist ? 1 - Math.exp(-dt * 6) : 1;
     this.camDist += (goal - this.camDist) * k;
-    this.camPitch += (v.pitch - this.camPitch) * k;
-    const dir = new THREE.Vector3(0, this.camPitch, 1).normalize();
+    this.camShift.x += (sx - this.camShift.x) * k;
+    this.camShift.y += (sy - this.camShift.y) * k;
+    this.camera.setViewOffset(W, H, this.camShift.x, this.camShift.y, W, H);
+    const dir = new THREE.Vector3(0, PITCH, 1).normalize();
     this.camera.position.copy(this.camTarget).addScaledVector(dir, this.camDist);
     this.camera.lookAt(this.camTarget);
   }
@@ -833,51 +671,32 @@ export class Stage3D {
       if (!this.busy) this.onIdle?.();
       return;
     }
-    const { bottle, stream, ring } = this.pourAnim;
-    const pivot = bottle.pivot;
-    const top = rimY(this.shape) * this.glassRoot.scale.y + this.glassRoot.position.y;
-    const home = bottle.home;
-    const lifted = this.pourAnim.from ?? home.clone().add(new THREE.Vector3(0, 0.28, 0.14));
-    const pourAt = new THREE.Vector3(0.1, top + 0.38, 0.04);
-    // 들어 올림 → 잔 위로 호를 그리며 이동 → 기울여 붓기 → 세우기 → 제자리로
-    let pos: THREE.Vector3;
-    let tilt: number;
-    if (p < 0.14) {
-      pos = (this.pourAnim.from ?? home).clone().lerp(lifted, easeOut(seg(p, 0, 0.14)));
-      tilt = 0;
-    } else if (p < 0.34) {
-      const q = easeInOut(seg(p, 0.14, 0.34));
-      pos = lifted.clone().lerp(pourAt, q);
-      pos.y += Math.sin(q * Math.PI) * 0.22;
-      tilt = q * 1.0;
-    } else if (p < 0.8) {
-      pos = pourAt.clone();
-      const into = easeOut(seg(p, 0.34, 0.42));
-      const back = easeInOut(seg(p, 0.7, 0.8));
-      tilt = 1.0 + into * 1.05 - back * 1.45 + Math.sin(now / 90) * 0.02 * (into - back);
-    } else {
-      const q = easeInOut(seg(p, 0.8, 1));
-      pos = pourAt.clone().lerp(home, q);
-      pos.y += Math.sin(q * Math.PI) * 0.22;
-      tilt = 0.6 * (1 - q);
+    const { stream, ring, from } = this.pourAnim;
+    const root = this.glassRoot;
+    const surface = (this.liquidSide ? this.surfaceY : this.shape.floor) * root.scale.y + root.position.y;
+    const drop = Math.max(0.01, from - surface);
+    // 머리는 중력처럼 빨라지며 수면까지 떨어지고, 따르기를 멈추면 꼬리가 뒤따라 떨어진다.
+    const head = from - drop * easeIn(seg(p, 0, HEAD_AT));
+    const tail = from - drop * easeIn(seg(p, TAIL_FROM, TAIL_AT));
+    const len = tail - head;
+    stream.visible = len > 0.004;
+    const x = STREAM_X * root.scale.x + root.position.x;
+    const z = STREAM_Z * root.scale.z + root.position.z;
+    if (stream.visible) {
+      // 한창 따를 때 가장 굵고, 꼬리가 떨어질 때는 가늘어진다.
+      const r = (0.008 + 0.009 * Math.sin(seg(p, 0, TAIL_AT) * Math.PI)) * (1 + Math.sin(now / 35) * 0.08);
+      stream.scale.set(r, len, r);
+      stream.position.set(x, head + len / 2, z);
     }
-    pivot.position.copy(pos);
-    pivot.rotation.set(0, 0, tilt);
-
-    const flowing = p > FLOW[0] && p < FLOW[1];
-    stream.visible = flowing;
+    const flowing = p > HEAD_AT && p < TAIL_AT;
+    const mat = ring.material as THREE.MeshBasicMaterial;
     if (flowing) {
-      const surface = (this.liquidSide ? this.surfaceY : this.shape.floor) * this.glassRoot.scale.y + this.glassRoot.position.y;
-      const len = Math.max(0.01, pos.y - surface);
-      const r = 0.012 + 0.014 * Math.sin(seg(p, FLOW[0], FLOW[1]) * Math.PI);
-      stream.scale.set(r * (1 + Math.sin(now / 35) * 0.08), len, r);
-      stream.position.set(pos.x - 0.01, surface + len / 2, pos.z);
-      ring.position.set(pos.x, surface + 0.004, pos.z);
+      ring.position.set(x, surface + 0.004, z);
       const phase = (now / 300) % 1;
       ring.scale.setScalar(0.04 + phase * 0.16);
-      (ring.material as THREE.MeshBasicMaterial).opacity = 0.7 * (1 - phase);
+      mat.opacity = 0.7 * (1 - phase);
     } else {
-      (ring.material as THREE.MeshBasicMaterial).opacity = 0;
+      mat.opacity = 0;
     }
   }
 
