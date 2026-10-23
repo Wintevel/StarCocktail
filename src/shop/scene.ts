@@ -446,7 +446,9 @@ export class ShopScene {
     v.tag.hidden = !(sitting && v.waiting);
     const sayOn = now < v.sayUntil;
     if (!sayOn && v.say.classList.contains('show')) v.say.classList.remove('show');
-    const head = this.toScreen(v.x, v.hipY + v.rig.top * v.rig.scale);
+    // 앉은 뒷모습은 고개를 숙여 머리가 조금 내려온다
+    const top = v.el.classList.contains('seated') ? v.rig.sitTop : v.rig.top;
+    const head = this.toScreen(v.x, v.hipY + top * v.rig.scale);
     const key = `${Math.round(head.x)},${Math.round(head.y)},${v.tag.hidden},${sayOn}`;
     if (key === v.lastTag) return;
     v.lastTag = key;

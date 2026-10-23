@@ -6,13 +6,16 @@
 // 한 사람은 두 벌로 그린다.
 //  - 앞모습(.v-front): 걸어 들어오고 나갈 때, 주문 카드·대화 카드·스툴 목록의 얼굴 그림. 표정 다섯 벌.
 //  - 뒷모습(.v-back): 스툴에 앉았을 때. 가게 화면은 손님 등 뒤에서 카운터를 보므로 뒷머리·어깨·옷 뒤판이 보인다.
+//    카운터 쪽으로 몸을 기울여 팔꿈치를 카운터 윗판에 올리고(팔뚝·손은 몸 앞으로 숨는다), 넓은 어깨가 솟고,
+//    고개를 조금 숙여 머리가 내려온다. 엉덩이는 방석에 퍼지고 윗옷 자락이 방석 가장자리로 흘러내리며,
+//    종아리는 방석 아래로 내려와 발판 고리에 발을 건다(한 발만 걸거나 발목을 꼬기도 한다).
 //    머리 모양·모자·소품으로 뒤에서도 누군지 알아보게 했다. 표정 대신 머리 위 감정 표시(.emote)로 반응한다.
 //
 // 단골 여덟 명과 지나가는 손님은 같은 부품(머리 모양·모자·윗옷·자세·얼굴 특징)으로 조립한다.
 // 지나가는 손님은 손님 id로 부품을 고르므로 같은 손님은 늘 같은 모습이고, 빨강은 한 사람에 한 군데만 쓴다.
 //
 // 좌표: 엉덩이(고관절) 가운데가 (0,0), 위가 -y. 정수리 ≈ -220, 턱 ≈ -165, 어깨 ≈ -148, 선 다리 끝 = leg(190).
-// 앉으면 엉덩이 아래(seat)가 방석 윗면에 닿고, 종아리는 방석 아래로 내려와 스툴 발판에 발뒤꿈치를 걸친다.
+// 앉으면 엉덩이 아래(seat)가 방석 윗면에 닿고, 팔꿈치는 카운터 윗판(COUNTER_RISE)에, 발은 스툴 발판(FOOTREST_DROP)에 놓인다.
 // 표정·감정 표시는 data-mood(idle·perfect·good·fail·angry)에 맞는 묶음만 보인다(style.css).
 // 빗금·망점·그늘 가림(마스크)은 문서에 한 번만 넣는 공통 정의(artDefs)를 참조한다.
 
@@ -28,6 +31,8 @@ export const RED = '#d8202a';
 /** 스툴 방석 윗면에서 방석 아랫단·발판까지(세계 좌표). 앉은 종아리를 그릴 때 쓴다(backdrop.ts의 스툴과 맞춘다). */
 export const CUSHION_DROP = 30;
 export const FOOTREST_DROP = 110;
+/** 방석 윗면에서 카운터 윗판(앉은 손님이 팔꿈치를 올리는 곳)까지의 높이(세계 좌표, backdrop.ts의 카운터 윗판 630~654와 맞춘다) */
+export const COUNTER_RISE = 84;
 
 export interface Rig {
   /** 전체 크기 배율 */
@@ -36,6 +41,8 @@ export interface Rig {
   leg: number;
   /** 머리 꼭대기(모자 포함) 높이 (그림 좌표, 음수) */
   top: number;
+  /** 앉은 뒷모습의 머리 꼭대기: 고개를 숙여 조금 내려온다(이름표·말풍선을 이 위에 띄운다) */
+  sitTop: number;
   /** 들고 나가는 잔을 쥐는 손 위치(앞모습) */
   hand: [number, number];
   /** 앉았을 때 방석 윗면에 닿는 높이 (그림 좌표): 엉덩이 기준점을 이만큼 올려 앉힌다 */
@@ -56,6 +63,40 @@ const poly = (pts: Pt[]) => `M${pts.map(([x, y]) => `${n1(x)},${n1(y)}`).join(' 
 const line = (pts: Pt[]) => `M${pts.map(([x, y]) => `${n1(x)},${n1(y)}`).join(' L')}`;
 /** 오른쪽(+x) 기준으로 적은 점들을 왼쪽으로 뒤집는다 */
 const side = (pts: Pt[], s: number): Pt[] => pts.map(([x, y]) => [x * s, y]);
+
+/** 좌우 대칭 외곽선의 오른쪽 반 한 마디: [x,y]는 직선, [cx,cy,x,y]는 곡선 */
+type Seg = [number, number] | [number, number, number, number];
+/**
+ * 오른쪽 반만 적은 좌우 대칭 외곽선: start(가운데 위)에서 오른쪽을 따라 내려가 가운데 아래에서 끝나면,
+ * 왼쪽은 같은 마디를 거꾸로 뒤집어 잇는다. 곡선이라 종이를 오린 듯한 각진 몸통을 피한다.
+ */
+function mirror(start: Pt, segs: Seg[]): string {
+  const f = (x: number, y: number) => `${n1(x)},${n1(y)}`;
+  const ends: Pt[] = [start, ...segs.map((s): Pt => (s.length === 2 ? [s[0], s[1]] : [s[2], s[3]]))];
+  let d = `M${f(start[0], start[1])}`;
+  for (const s of segs) d += s.length === 2 ? ` L${f(s[0], s[1])}` : ` Q${f(s[0], s[1])} ${f(s[2], s[3])}`;
+  for (let i = segs.length - 1; i >= 0; i--) {
+    const s = segs[i];
+    const p = ends[i];
+    d += s.length === 2 ? ` L${f(-p[0], p[1])}` : ` Q${f(-s[0], s[1])} ${f(-p[0], p[1])}`;
+  }
+  return `${d} Z`;
+}
+
+const unit = (a: Pt, b: Pt): Pt => {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len = Math.hypot(dx, dy) || 1;
+  return [dx / len, dy / len];
+};
+const add = (p: Pt, v: Pt, k = 1): Pt => [p[0] + v[0] * k, p[1] + v[1] * k];
+/** 두 직선(점 a에서 방향 u, 점 b에서 방향 v)의 만나는 점. 거의 나란하면 null */
+function meet(a: Pt, u: Pt, b: Pt, v: Pt): Pt | null {
+  const den = u[0] * v[1] - u[1] * v[0];
+  if (Math.abs(den) < 1e-3) return null;
+  const t = ((b[0] - a[0]) * v[1] - (b[1] - a[1]) * v[0]) / den;
+  return add(a, u, t);
+}
 
 const P = (d: string, fill: string, stroke = 'none', sw = 0, extra = '') =>
   `<path d="${d}" fill="${fill}"${stroke !== 'none' ? ` stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round"` : ''}${extra}/>`;
@@ -206,10 +247,18 @@ interface Look {
   earring?: boolean;
   /** 어깨를 드러낸 드레스 */
   bare?: boolean;
-  /** 단골 소품: 앞모습(몸 뒤·팔 아래·맨 앞·머리 위), 뒷모습(몸 뒤·맨 앞·머리 위) */
+  /** 앉은 다리: 두 발을 발판에 / 한 발만 걸고 한 발은 늘어뜨림 / 발목을 꼼(치마 기본) */
+  sit?: SitLegs;
+  /**
+   * 단골 소품: 앞모습(몸 뒤·팔 아래·맨 앞·머리 위), 뒷모습(몸 뒤·맨 앞·머리 위·위팔).
+   * 뒷모습 위팔 소품(armL·armR)은 위팔 가운데를 원점으로, 팔을 따라 내려가는 쪽을 +y로 그린다.
+   */
   front?: { behind?: string; under?: string; over?: string; head?: string };
-  back?: { behind?: string; over?: string; head?: string };
+  back?: { behind?: string; over?: string; head?: string; armL?: string; armR?: string };
 }
+
+/** 앉은 다리 모양(아이는 늘 발이 뜬다) */
+type SitLegs = 'ring' | 'hook' | 'cross';
 
 interface Body {
   sw: number;
@@ -418,10 +467,6 @@ interface HairArt {
   back?: string;
   /** 앞모습: 얼굴 위 앞머리·옆머리 */
   front: string;
-  /** 뒷모습 머리 덩어리 */
-  rear: string;
-  /** 뒷모습: 등을 덮는 머리(몸통 위에 그린다) */
-  rearOver?: string;
   /** 머리 꼭대기 높이(모자 없을 때) */
   top: number;
   /** 귀가 보이는가 */
@@ -434,35 +479,29 @@ const strands = (d: string, f: Fill, sw = 1.2) => L(d, over(f), sw, f === 'ink' 
 function hairArt(l: Look): HairArt {
   const f = l.hairFill;
   const hp = (d: string, o: PaintOpts = {}) => paint(d, f, { sw: 2.8, ...o });
-  // 공통 뒷머리(짧은 머리): 정수리부터 목덜미까지
-  const shortRear = (top = -229) => hp(`M-22,-196 Q-25,${top + 6} 0,${top} Q25,${top + 6} 22,-196 L21,-180 L14,-176 L0,-177.5 L-14,-176 L-21,-180 Z`) + strands('M-10,-222 Q-14,-200 -12,-180 M2,-226 Q1,-200 2,-178 M13,-221 Q16,-200 13,-180', f);
   const bangs = hp('M-23,-199.5 Q-25,-226 0,-229 Q25,-226 23,-199.5 L23,-201.4 L-23,-201.4 Z') + strands('M-14,-218 L-15,-202 M-5,-222 L-5,-202 M5,-222 L5,-202 M14,-218 L15,-202', f, 1);
   switch (l.hair) {
     case 'crop':
       return {
         front: hp('M-21,-199 L-22,-212 Q-17,-226 0,-228 Q17,-226 22,-212 L21,-199 L17,-207 L12,-203 L7,-209 L1,-204 L-5,-209 L-10,-204 L-15,-208 Z') + strands('M-12,-222 L-9,-211 M0,-226 L1,-212 M11,-222 L9,-211', f),
-        rear: shortRear(),
         top: -228,
         ears: true,
       };
     case 'slick':
       return {
         front: hp('M-21,-198 Q-23,-222 0,-228 Q23,-222 21,-198 L19,-206 Q10,-213 0,-213.5 Q-10,-213 -19,-206 Z') + strands('M-12,-212 Q-6,-224 4,-226 M0,-213 Q6,-222 14,-222 M8,-212 Q14,-218 19,-213', f),
-        rear: hp('M-22,-196 Q-25,-224 0,-229 Q25,-224 22,-196 L20,-178 Q0,-174 -20,-178 Z') + strands('M-8,-226 Q-12,-200 -10,-178 M4,-228 Q5,-200 4,-176 M15,-222 Q17,-200 14,-179', f),
         top: -228,
         ears: true,
       };
     case 'pomp':
       return {
         front: hp('M-21,-198 L-22,-214 Q-24,-236 -2,-242 Q22,-246 28,-230 Q30,-218 21,-210 L21,-198 L17,-208 Q4,-214 -12,-208 L-16,-204 Z') + strands('M-14,-214 Q-10,-232 6,-238 M-4,-212 Q2,-228 20,-232 M8,-211 Q16,-220 24,-222', f),
-        rear: hp('M-22,-196 Q-26,-232 -2,-242 Q24,-244 24,-214 L22,-196 L20,-178 Q0,-174 -20,-178 Z') + strands('M-10,-234 Q-14,-200 -10,-178 M6,-238 Q6,-200 4,-176', f),
         top: -242,
         ears: true,
       };
     case 'spiky':
       return {
         front: hp('M-21,-198 L-27,-212 L-19,-214 L-23,-230 L-10,-222 L-6,-240 L3,-226 L13,-238 L14,-223 L27,-226 L21,-210 L22,-198 L15,-206 L9,-201 L3,-207 L-4,-202 L-10,-207 L-15,-202 Z'),
-        rear: hp('M-22,-196 L-28,-214 L-20,-216 L-24,-232 L-10,-224 L-6,-242 L3,-228 L13,-240 L14,-224 L28,-228 L22,-208 L22,-196 L20,-178 Q0,-174 -20,-178 Z') + strands('M-6,-222 L-8,-182 M8,-224 L7,-180', f),
         top: -240,
         ears: true,
       };
@@ -470,7 +509,6 @@ function hairArt(l: Look): HairArt {
       return {
         back: hp('M-24,-196 Q-30,-226 0,-232 Q30,-226 24,-196 Q28,-184 23,-172 L16,-180 L-16,-180 L-23,-172 Q-28,-184 -24,-196 Z'),
         front: hp('M-23,-196 Q-26,-224 0,-230 Q26,-224 23,-196 Q20,-202 17,-198 Q15,-206 9,-203 Q6,-210 0,-205 Q-5,-210 -9,-203 Q-14,-207 -17,-198 Q-20,-203 -23,-196 Z') + strands('M-16,-220 q4,4 0,8 M-4,-225 q4,4 0,8 M9,-223 q4,4 0,8', f),
-        rear: hp('M-24,-196 Q-30,-228 0,-233 Q30,-228 24,-196 Q28,-182 22,-168 Q12,-173 0,-169 Q-12,-173 -22,-168 Q-28,-182 -24,-196 Z') + strands('M-14,-222 q5,5 0,10 q-5,5 0,10 M2,-228 q5,5 0,10 q-5,5 0,10 M15,-220 q5,5 0,10 q-5,5 0,10', f),
         top: -232,
         ears: false,
       };
@@ -478,7 +516,6 @@ function hairArt(l: Look): HairArt {
       return {
         back: hp('M-24,-202 Q-26,-228 0,-230 Q26,-228 24,-202 L25,-167 L15,-167 L17,-190 L-17,-190 L-15,-167 L-25,-167 Z'),
         front: bangs + hp('M-23,-201 L-24,-168 L-16,-168 L-18,-194 Z M23,-201 L24,-168 L16,-168 L18,-194 Z', { shade: null }),
-        rear: hp('M-25,-200 Q-27,-229 0,-231 Q27,-229 25,-200 L26,-166 Q0,-162 -26,-166 Z') + strands('M-14,-222 L-16,-168 M-4,-228 L-5,-165 M7,-228 L7,-165 M17,-220 L18,-168', f),
         top: -231,
         ears: false,
       };
@@ -488,8 +525,6 @@ function hairArt(l: Look): HairArt {
         front:
           hp('M-22,-196 Q-25,-226 2,-229 Q25,-225 22,-196 L24,-150 L29,-114 L18,-120 L17,-170 L15,-200 Q4,-212 -10,-205 L-16,-196 L-17,-170 L-18,-120 L-29,-114 L-24,-150 Z') +
           strands('M-21,-180 Q-22,-150 -24,-122 M21,-180 Q22,-150 24,-122 M-6,-224 Q6,-218 14,-206', f),
-        rear: hp('M-25,-200 Q-28,-231 0,-232 Q28,-231 25,-200 L30,-150 Q0,-146 -30,-150 Z'),
-        rearOver: hp('M-25,-196 L-31,-120 L-35,-86 Q0,-78 35,-86 L31,-120 L25,-196 Q0,-170 -25,-196 Z') + strands('M-20,-170 Q-24,-130 -26,-92 M-8,-176 Q-8,-130 -10,-86 M6,-176 Q6,-130 8,-86 M20,-170 Q24,-130 26,-92', f),
         top: -231,
         ears: false,
       };
@@ -497,8 +532,6 @@ function hairArt(l: Look): HairArt {
       return {
         behind: hp('M12,-224 Q36,-238 42,-210 Q46,-176 36,-140 Q32,-166 27,-188 Q22,-206 10,-216 Z'),
         front: (l.bangs ? bangs : hp('M-21,-198 Q-23,-224 0,-229 Q23,-224 21,-198 L19,-207 Q8,-216 -6,-210 L-14,-204 Z') + strands('M-12,-212 Q-4,-224 10,-226 M2,-212 Q10,-220 18,-214', f)) + P('M10,-226 L16,-230 L18,-222 Z', RED, INK, 1.4),
-        rear: shortRear(),
-        rearOver: hp('M-6,-226 Q-12,-236 0,-240 Q12,-236 6,-226 Q14,-198 10,-150 Q5,-118 0,-104 Q-6,-126 -8,-158 Q-12,-198 -6,-226 Z') + strands('M-2,-224 Q4,-180 0,-110 M3,-220 Q8,-180 5,-130', f) + P('M-6,-230 L6,-230 L5,-224 L-5,-224 Z', RED, INK, 1.4),
         top: -232,
         ears: true,
       };
@@ -506,7 +539,6 @@ function hairArt(l: Look): HairArt {
       return {
         back: hp('M-6,-236 a10,10 0 1,1 12,0 Q0,-232 -6,-236 Z'),
         front: (l.bangs ? bangs : hp('M-21,-198 Q-23,-224 0,-229 Q23,-224 21,-198 L19,-207 Q6,-215 -8,-211 L-16,-204 Z') + strands('M-10,-213 Q-2,-224 10,-224', f)) + hp('M-9,-232 a9,8 0 1,1 18,0 a9,8 0 1,1 -18,0 Z', { shade: null }),
-        rear: shortRear(-229) + hp('M-11,-210 a11,11 0 1,1 22,0 a11,11 0 1,1 -22,0 Z') + L('M-16,-218 L16,-202', INK, 2) + strands('M-6,-216 q6,4 12,0', f),
         top: -240,
         ears: true,
       };
@@ -515,7 +547,6 @@ function hairArt(l: Look): HairArt {
       return {
         back: hp(poly(tail(-1))) + hp(poly(tail(1))),
         front: bangs + P('M21,-206 L26,-210 L27,-201 Z M-21,-206 L-26,-210 L-27,-201 Z', RED, INK, 1.2),
-        rear: shortRear(-230) + hp(poly(tail(-1))) + hp(poly(tail(1))),
         top: -230,
         ears: true,
       };
@@ -524,12 +555,173 @@ function hairArt(l: Look): HairArt {
       // 대머리: 머리통은 피부, 귀 위로 짧은 옆머리만
       return {
         front: hp('M-20.5,-198 L-21,-186 L-18,-190 Z M20.5,-198 L21,-186 L18,-190 Z', { shade: null, edge: false }) + L('M-8,-214 Q-2,-218 4,-217', PAPER, 2.2),
-        rear:
-          paint('M-21,-196 Q-23,-224 0,-226 Q23,-224 21,-196 L20,-180 Q0,-176 -20,-180 Z', skinFill(l), { sw: 2.8 }) +
-          hp('M-21,-194 Q0,-186 21,-194 L20,-180 Q0,-176 -20,-180 Z', { shade: null }) +
-          L('M-10,-218 Q-3,-222 4,-221', INK, 1.4),
         top: -222,
         ears: true,
+      };
+  }
+}
+
+/** 결을 따라 가늘어지는 머리 다발(초승달 꼴): a에서 b까지 bend만큼 휘고, 가운데 굵기 w */
+function lock(a: Pt, b: Pt, bend: number, w: number): string {
+  const m: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const u = unit(a, b);
+  const nrm: Pt = [-u[1], u[0]];
+  const c1 = add(m, nrm, bend * 2);
+  const c2 = add(m, nrm, (bend - w) * 2);
+  return `M${n1(a[0])},${n1(a[1])} Q${n1(c1[0])},${n1(c1[1])} ${n1(b[0])},${n1(b[1])} Q${n1(c2[0])},${n1(c2[1])} ${n1(a[0])},${n1(a[1])} Z`;
+}
+type Lock = [Pt, Pt, number, number];
+
+/** 뒷모습 머리(앉았을 때): 덩어리·등을 덮는 머리·덮어 그리는 꼬리 */
+interface HairBack {
+  /** 뒤통수 머리 덩어리(귀 위에 그린다) */
+  rear: string;
+  /** 등에 흘러내린 긴 머리: 몸통 위, 머리 덩어리 아래에 깐다 */
+  down?: string;
+  /** 머리 덩어리·모자 위에 덮어 그리는 꼬리(높이 묶은 머리) */
+  over?: string;
+}
+
+/**
+ * 뒤통수: 둥근 머리통에 정수리 가마에서 목덜미로 흐르는 머리 결, 오른쪽 빗금 그늘.
+ * 목덜미 끝은 머리 모양마다 다르게 잘라 뒤에서도 누군지 알아보게 한다.
+ */
+function hairBack(l: Look): HairBack {
+  const f = l.hairFill;
+  // 머리 덩어리는 빗금 대신 결을 따라 가늘어지는 먹 다발로 그늘을 낸다(빗금은 상자처럼 보인다). 먹 머리는 종이색 반사광과 결만.
+  const hp = (d: string, o: PaintOpts = {}) => paint(d, f, { sw: 2.8, shade: f === 'ink' ? 'r' : null, ...o });
+  const dark = (...ls: Lock[]) => (f === 'ink' ? '' : P(ls.map(([a, b, bend, w]) => lock(a, b, bend, w)).join(' '), INK));
+  /** 머리통 윗부분: 귀 높이(-195)의 왼쪽에서 정수리를 넘어 오른쪽까지. 이어서 목덜미 끝을 붙인다 */
+  const dome = (top = -230, w = 24) => `M-${w},-197 C-${w + 3},${top + 12} -${w * 0.62},${top} 0,${top} C${w * 0.62},${top} ${w + 3},${top + 12} ${w},-197`;
+  /** 가마에서 사방으로 흐르는 결과 가마 소용돌이 */
+  const whorl = (x = 3, y = -222) =>
+    strands(`M${x},${y} Q${x - 15},${y + 8} ${x - 20},${y + 28} M${x},${y} Q${x - 8},${y + 16} ${x - 11},${y + 40} M${x},${y} Q${x + 4},${y + 18} ${x + 3},${y + 42} M${x},${y} Q${x + 14},${y + 10} ${x + 15},${y + 30}`, f) +
+    strands(`M${x - 2},${y - 1} q3,-3.4 6,-0.6 q1.4,3.6 -2.6,4.4`, f, 1.1);
+  /** 목덜미 짧은 머리 끝(들쭉날쭉) */
+  const nape = (y = -174, w = 18) => {
+    const pts: string[] = [];
+    const n = 8;
+    for (let i = 0; i <= n; i++) {
+      const x = w - (2 * w * i) / n;
+      pts.push(`${n1(x)},${n1(y + (i % 2 ? 1.8 : -2.4) - (Math.abs(x) > w * 0.7 ? 2 : 0))}`);
+    }
+    return ` Q${w + 5},-182 ${w},${y - 4} L${pts.join(' L')} Q-${w + 5},-182 -24,-197 Z`;
+  };
+  /** 깔끔하게 둥근 목덜미 */
+  const round = (y = -172, w = 16) => ` Q23.5,-180 ${w},${y - 2} Q0,${y + 4} -${w},${y - 2} Q-23.5,-180 -24,-197 Z`;
+  /** 윤기: 머리 덩어리를 가로지르는 짧은 반사광 획들(흰 머리에는 넣지 않는다) */
+  const sheen = (y = -204, w = 23) => {
+    if (f === 'paper') return '';
+    const ls: string[] = [];
+    // 길이·간격을 들쭉날쭉하게(고르면 이빨처럼 보인다), 머리통 곡면을 따라 양끝이 처진다
+    const xs = [-0.86, -0.62, -0.45, -0.2, 0.06, 0.24, 0.5, 0.68, 0.88];
+    const lens = [6, 10, 5, 8.5, 4.5, 9, 6.5, 10, 5];
+    xs.forEach((t, i) => {
+      const x = t * w;
+      const yy = y + t * t * 10 + (i % 3 === 1 ? -1.5 : 0);
+      ls.push(lock([x, yy - 3], [x * 1.08, yy - 3 + lens[i]], 0.7 * Math.sign(x || 1), 2));
+    });
+    return P(ls.join(' '), PAPER, 'none', 0, f === 'ink' ? ' opacity="0.9"' : '');
+  };
+  // 모자 속에 든 솟은 머리(뾰족·올림)는 모자 밖으로 삐져나오지 않게 짧은 머리로 그린다
+  const style: HairStyle = l.hat && (l.hair === 'spiky' || l.hair === 'pomp') ? 'crop' : l.hair;
+  switch (style) {
+    case 'crop':
+      return { rear: hp(dome() + nape()) + dark([[9, -225], [15, -181], 4, 3], [[17, -216], [21, -190], 2.5, 2.4]) + whorl() };
+    case 'slick':
+      return {
+        rear:
+          hp(dome() + round()) +
+          dark([[6, -229], [10, -174], 5, 3.2], [[14, -224], [18, -179], 4, 3], [[20, -212], [22, -191], 2, 2.2], [[-8, -228], [-9, -175], -3, 1.6]) +
+          sheen(-206, 22) +
+          strands('M-15,-225 Q-21,-198 -11,-175 M-3,-230 Q-7,-200 -3,-171 M17,-222 Q22,-200 13,-176', f),
+      };
+    case 'pomp':
+      // 높이 올린 앞머리가 뒤에서도 정수리 위로 솟고, 목덜미는 오리 꼬리처럼 모인다
+      return {
+        rear:
+          hp(`M-24,-197 C-28,-226 -16,-244 0,-244 C18,-245 28,-226 24,-197${round(-171)}`) +
+          dark([[6, -242], [10, -175], 6, 3.4], [[15, -236], [18, -180], 5, 3], [[-8, -240], [-9, -177], -4, 1.6]) +
+          strands('M-12,-238 Q-22,-205 -11,-176 M2,-243 Q-3,-205 -3,-172 M-7,-181 L0,-172 L7,-181', f),
+      };
+    case 'spiky':
+      return {
+        rear: hp('M-23,-195 L-30,-214 L-21,-216 L-25,-233 L-11,-225 L-6,-244 L3,-229 L13,-242 L14,-225 L30,-229 L23,-210 L27,-198 L22,-187 L25,-176 L15,-178 L11,-169 L5,-176 L0,-167 L-5,-176 L-11,-169 L-15,-178 L-25,-176 L-22,-187 Z') +
+          dark([[5, -228], [11, -176], 4, 3], [[14, -224], [20, -187], 3, 2.6]) +
+          strands('M2,-226 L-12,-190 M2,-226 L-3,-178 M2,-226 L9,-180 M2,-226 L17,-196', f),
+      };
+    case 'wave':
+      return {
+        rear:
+          // 곱슬머리: 둘레가 동글동글한 덩어리
+          hp('M-25,-198 Q-31,-206 -28,-214 Q-29,-224 -20,-228 Q-14,-236 -5,-233 Q0,-238 6,-233 Q14,-236 20,-228 Q29,-224 28,-214 Q31,-206 25,-198 Q31,-190 27,-182 Q30,-174 23,-169 Q20,-162 13,-166 Q8,-160 2,-165 Q-4,-160 -9,-165 Q-15,-161 -20,-167 Q-29,-172 -27,-182 Q-31,-190 -25,-198 Z') +
+          dark([[10, -231], [16, -168], 6, 4.6], [[-7, -232], [-11, -168], -4, 2]) +
+          strands('M-15,-224 q6,5 0,10 q-6,5 0,10 q6,5 1,10 M1,-230 q6,5 0,10 q-6,5 0,10 q6,5 0,10 M16,-222 q6,5 0,10 q-6,5 0,10 q6,5 -1,10', f),
+      };
+    case 'bob':
+      // 턱 높이에서 일자로 자르고 끝이 안으로 말린다
+      return {
+        rear:
+          hp(mirror([0, -234], [[23, -234, 25, -208], [28.5, -193, 26, -180], [24.5, -170.5, 18, -168.5], [14, -163.5, 9, -166.5], [4.5, -162.5, 0, -165.5]])) +
+          // 안쪽으로 말린 끝은 목덜미 그늘에 잠겨 어둡다(먹 끝단 위로 머리끝이 삐죽)
+          P('M-25,-178 L-21,-184 L-18,-179 L-14,-185.5 L-10,-179.5 L-6,-186 L-2,-180 L2,-186.5 L6,-180 L10,-186 L14,-179.5 L18,-185 L21,-179 L25,-178 Q24.5,-170.5 18,-168.5 Q14,-163.5 9,-166.5 Q4.5,-162.5 0,-165.5 Q-4.5,-162.5 -9,-166.5 Q-14,-163.5 -18,-168.5 Q-24.5,-170.5 -25,-178 Z', f === 'ink' ? 'url(#gk-tone-d)' : INK) +
+          dark([[23, -212], [21, -182], 3, 4.4]) +
+          sheen(-206, 24) +
+          strands('M-6,-232 Q-20,-212 -17,-186 M2,-233 Q-4,-210 -4,-187 M10,-231 Q14,-210 10,-186', f),
+      };
+    case 'long':
+      return {
+        rear: hp('M-26,-199 C-29,-224 -16,-234 0,-234 C16,-234 29,-224 26,-199 L29,-168 Q0,-160 -29,-168 Z') + dark([[8, -233], [14, -166], 5, 3.2], [[17, -226], [24, -170], 3, 2.6]) + sheen(-210, 24) + strands('M-15,-227 Q-21,-200 -20,-170 M0,-234 Q-2,-200 -1,-164 M15,-227 Q21,-200 20,-170', f),
+        // 등을 타고 허리까지 흘러내리는 머리, 끝은 물결
+        down:
+          hp('M-27,-196 Q-31,-150 -34,-118 Q-37,-96 -31,-80 Q-23,-86 -16,-77 Q-8,-86 0,-76 Q8,-86 16,-77 Q23,-86 31,-80 Q37,-96 34,-118 Q31,-150 27,-196 Z') +
+          dark([[10, -180], [15, -80], 5, 3.6], [[22, -176], [29, -86], 4, 3]) +
+          strands('M-20,-178 Q-27,-130 -27,-86 M-8,-178 Q-11,-130 -9,-81 M6,-178 Q7,-130 8,-81 M20,-178 Q26,-130 26,-86', f),
+      };
+    case 'pony':
+      // 머리를 모두 정수리로 끌어올려 묶었다: 결이 위로 모이고, 꼬리는 등으로 늘어진다
+      return {
+        rear: hp(dome() + round(-173, 15)) + dark([[12, -177], [4, -224], -4, 3], [[20, -188], [8, -222], -3, 2.4]) + sheen(-203, 22) + strands('M-17,-181 Q-21,-205 -3,-226 M-6,-176 Q-8,-205 -1,-227 M6,-176 Q8,-205 1,-227 M17,-181 Q21,-205 3,-226', f),
+        over:
+          hp('M-6,-227 Q-13,-237 0,-241 Q13,-237 6,-227 Q15,-198 11,-150 Q6,-118 0,-102 Q-7,-126 -9,-158 Q-13,-198 -6,-227 Z') +
+          dark([[4, -222], [3, -114], 5, 2.6]) +
+          strands('M-2,-224 Q4,-180 0,-110 M3,-220 Q9,-180 5,-130 M-5,-214 Q-6,-180 -5,-150', f) +
+          P('M-6.5,-231 L6.5,-231 L5.5,-224 L-5.5,-224 Z', RED, INK, 1.4),
+      };
+    case 'bun':
+      // 결이 뒤통수 쪽진 머리로 모이고, 비녀가 가로지른다
+      return {
+        rear:
+          hp(dome() + round(-173, 15)) +
+          dark([[13, -177], [7, -204], -3, 2.6], [[20, -189], [11, -206], -2, 2]) +
+          strands('M-19,-186 Q-17,-202 -8,-209 M-6,-176 Q-6,-196 -3,-203 M6,-176 Q6,-196 3,-203 M19,-186 Q17,-202 8,-209 M-12,-226 Q-8,-220 -6,-214 M12,-226 Q8,-220 6,-214', f) +
+          hp('M-12,-211 a12,11 0 1,1 24,0 a12,11 0 1,1 -24,0 Z') +
+          strands('M-8,-217 q8,-5 16,0 M-9,-210 q9,5 18,0 M-4,-221 q6,8 0,16', f, 1.1) +
+          L('M-19,-219 L18,-201', INK, 2.4) + C(-19.5, -219.4, 2.2, PAPER, INK, 1.2),
+      };
+    case 'twin': {
+      // 가운데 가르마에서 양옆으로 갈라 귀 뒤에서 묶었다
+      const tail = (s: number) => `M${20 * s},-206 Q${40 * s},-214 ${41 * s},-188 Q${42 * s},-160 ${31 * s},-136 Q${35 * s},-160 ${32 * s},-182 Q${30 * s},-196 ${21 * s},-197 Z`;
+      return {
+        rear:
+          hp(tail(-1)) +
+          hp(tail(1)) +
+          hp(dome(-231) + round(-173, 16)) +
+          dark([[5, -226], [17, -197], 3, 2.6], [[10, -213], [15, -180], 2, 2.2], [[34, -205], [33, -142], 4, 2.6]) +
+          L('M0,-231 L0,-178', over(f), 1.6) +
+          strands('M0,-226 Q-14,-220 -21,-205 M0,-216 Q-12,-206 -16,-186 M0,-226 Q14,-220 21,-205 M0,-216 Q12,-206 16,-186', f) +
+          strands('M-35,-196 Q-39,-170 -33,-142 M35,-196 Q39,-170 33,-142', f, 1.1),
+      };
+    }
+    default:
+      // 대머리: 맨 머리통에 반사광 한 줄, 귀 높이로 둘러 남은 옆·뒷머리
+      return {
+        rear:
+          paint(dome(-226, 22) + ' Q21,-182 15,-174 Q0,-170 -15,-174 Q-21,-182 -22,-195 Z', skinFill(l), { sw: 2.8 }) +
+          L('M-10,-217 Q-4,-222 4,-221', INK, 1.2) +
+          L('M-12,-214 Q-7,-219 -2,-219.6', PAPER, 2.4) +
+          hp('M-22.5,-193 Q0,-185 22.5,-193 Q21.5,-182 15,-175.5 L11,-178 L7,-174.5 L3,-177 L0,-173.5 L-3,-177 L-7,-174.5 L-11,-178 L-15,-175.5 Q-21.5,-182 -22.5,-193 Z', { shade: null }) +
+          strands('M-14,-188 L-12,-178 M-5,-186 L-4,-176 M5,-186 L4,-176 M14,-188 L12,-178', f, 1),
       };
   }
 }
@@ -538,9 +730,15 @@ function hairArt(l: Look): HairArt {
 
 interface HatArt {
   front: string;
+  /** 뒷모습(조금 위에서 내려다본 뒤쪽): 챙은 납작한 타원, 그 밑 머리에 챙 그늘 */
   rear: string;
   top: number;
 }
+
+/** 챙 그늘: 챙 바로 아래 뒤통수에 드리운 빗금 띠 */
+const brimShade = (y: number, w: number) => P(`M-${w},${y} Q0,${y + 9} ${w},${y} L${w - 1},${y + 6} Q0,${y + 15} -${w - 1},${y + 6} Z`, HATCH);
+/** 납작한 타원(챙·모자 윗면) */
+const oval = (cx: number, cy: number, rx: number, ry: number) => `M${cx - rx},${cy} A${rx},${ry} 0 1,1 ${cx + rx},${cy} A${rx},${ry} 0 1,1 ${cx - rx},${cy} Z`;
 
 function hatArt(l: Look): HatArt | null {
   if (!l.hat) return null;
@@ -552,33 +750,49 @@ function hatArt(l: Look): HatArt | null {
       const crown = hp('M-17,-213 L-15,-239 Q0,-243 15,-239 L17,-213 Z') + L('M-8,-239 L0,-234 L8,-239', over(f), 1.4);
       const b = paint('M-17,-220 L17,-220 L17,-213 L-17,-213 Z', band, { sw: 2, shade: null, edge: false });
       const brim = hp('M-35,-211 Q0,-222 35,-211 L31,-206 Q0,-214 -31,-206 Z', { shade: 'b' });
-      return { front: crown + b + brim, rear: crown + b + hp('M-35,-209 Q0,-200 35,-209 L31,-214 Q0,-208 -31,-214 Z', { shade: 'b' }), top: -243 };
+      // 뒤에서: 둥근 챙 위에 가운데가 눌린 높은 모자 몸통
+      const crownB = hp('M-17,-213 L-15.5,-237 Q-8,-243.5 0,-239.5 Q8,-243.5 15.5,-237 L17,-213 Q0,-208 -17,-213 Z') + L('M-9,-240.4 Q0,-235.6 9,-240.4', over(f), 1.3);
+      const bandB = paint('M-17,-220.5 Q0,-215.5 17,-220.5 L17,-213 Q0,-208 -17,-213 Z', band, { sw: 2, shade: null, edge: false });
+      return { front: crown + b + brim, rear: brimShade(-206, 24) + hp(oval(0, -211.5, 36, 8.6), { shade: 'b' }) + crownB + bandB, top: -243 };
     }
     case 'bowler': {
       const crown = hp('M-18,-212 Q-20,-240 0,-241 Q20,-240 18,-212 Z');
       const b = paint('M-18,-219 L18,-219 L18,-212 L-18,-212 Z', band, { sw: 2, shade: null, edge: false });
-      return { front: crown + b + hp('M-27,-211 Q0,-218 27,-211 L25,-207 Q0,-212 -25,-207 Z', { shade: null }), rear: crown + b + hp('M-27,-209 Q0,-203 27,-209 L25,-213 Q0,-209 -25,-213 Z', { shade: null }), top: -241 };
+      const crownB = hp('M-18,-212.5 Q-20,-241 0,-242 Q20,-241 18,-212.5 Q0,-208 -18,-212.5 Z');
+      const bandB = paint('M-18,-219.5 Q0,-215 18,-219.5 L18,-212.5 Q0,-208 -18,-212.5 Z', band, { sw: 2, shade: null, edge: false });
+      return {
+        front: crown + b + hp('M-27,-211 Q0,-218 27,-211 L25,-207 Q0,-212 -25,-207 Z', { shade: null }),
+        rear: brimShade(-206, 23) + hp(oval(0, -211.5, 27, 6.6), { shade: 'b' }) + L('M-24,-209.5 Q0,-202 24,-209.5', over(f), 1.1) + crownB + bandB,
+        top: -241,
+      };
     }
     case 'cap': {
       const crown = hp('M-22,-211 L-25,-233 Q0,-241 25,-233 L22,-211 Z');
       const b = paint('M-22,-218 L22,-218 L22,-211 L-22,-211 Z', band, { sw: 2, shade: null, edge: false });
       const visor = paint('M-20,-211 L20,-211 L24,-204 Q0,-199 -24,-204 Z', 'ink', { sw: 2.4, shade: null });
-      return { front: crown + b + visor, rear: crown + b, top: -240 };
+      // 뒤에서: 챙은 숨고, 벌어진 모자 옆판 위에 납작한 윗면 타원
+      const sideB = hp('M-22,-211 L-25.5,-229 Q0,-223.5 25.5,-229 L22,-211 Q0,-206.5 -22,-211 Z');
+      const bandB = paint('M-23,-218 Q0,-213.5 23,-218 L22,-211 Q0,-206.5 -22,-211 Z', band, { sw: 2, shade: null, edge: false });
+      return { front: crown + b + visor, rear: brimShade(-208, 21) + sideB + bandB + hp(oval(0, -229, 25.5, 5.6), { shade: null }) + L('M-17,-229 Q0,-226.5 17,-229', over(f), 1.1), top: -240 };
     }
     case 'kidcap': {
       const crown = hp('M-22,-207 Q-24,-233 0,-235 Q24,-233 22,-207 Z');
       const goggles = C(-8, -224, 5.6, PAPER, INK, 2.2) + C(8, -224, 5.6, PAPER, INK, 2.2) + L('M-2.4,-224 L2.4,-224', INK, 2) + L('M-6,-226 L-9,-222 M10,-226 L7,-222', INK, 1.2);
       const bill = paint('M-6,-209 L30,-212 L29,-205 L-6,-205 Z', f, { sw: 2.4, shade: null });
-      return { front: crown + bill + goggles, rear: crown + L('M-22,-215 Q0,-211 22,-215', over(f), 1.6) + C(0, -233, 2.4, over(f)), top: -235 };
+      // 뒤에서: 둥근 모자 몸통을 두른 고글 끈, 양옆으로 비죽 나온 고글 테, 꼭대기 단추
+      const crownB = hp('M-22,-207.5 Q-24,-234 0,-235.5 Q24,-234 22,-207.5 Q0,-203.5 -22,-207.5 Z');
+      const strap = paint('M-22.8,-221 Q0,-215.5 22.8,-221 L22.5,-215 Q0,-209.5 -22.5,-215 Z', band, { sw: 2, shade: null, edge: false });
+      const rims = C(-24, -219, 4.6, PAPER, INK, 2.2) + C(24, -219, 4.6, PAPER, INK, 2.2);
+      return { front: crown + bill + goggles, rear: rims + crownB + strap + C(0, -235, 2.6, BASE[f], INK, 1.6), top: -235 };
     }
     case 'beret': {
       const d = 'M-24,-212 Q-30,-232 -4,-237 Q24,-240 29,-222 Q28,-213 18,-211 Q0,-208 -24,-212 Z';
-      return { front: hp(d) + L('M2,-237 L3,-242', INK, 2.4), rear: hp(d) + L('M2,-237 L3,-242', INK, 2.4), top: -242 };
+      return { front: hp(d) + L('M2,-237 L3,-242', INK, 2.4), rear: brimShade(-209, 22) + hp(d) + L('M-21,-214.5 Q0,-210.5 21,-213.5', over(f), 1.3) + L('M2,-237 L3,-242', INK, 2.4), top: -242 };
     }
     case 'tricorn': {
       const d = 'M-36,-213 L-21,-239 L0,-231 L21,-239 L36,-213 Q0,-205 -36,-213 Z';
       const trim = L('M-33,-214 L-21,-235 L0,-227.5 L21,-235 L33,-214', PAPER, 2);
-      return { front: hp(d) + trim + P(starPath(0, -220, 6.5), RED, INK, 1.4), rear: hp(d) + trim, top: -239 };
+      return { front: hp(d) + trim + P(starPath(0, -220, 6.5), RED, INK, 1.4), rear: brimShade(-208, 24) + hp(d) + trim, top: -239 };
     }
     case 'tophat': {
       // 비스듬히 얹은 작은 실크햇
@@ -606,27 +820,6 @@ function torso(b: Body, bottom: number, flare = 0, top = -158) {
     [sw + 1, -139],
     [sw + 1, -145],
     [sw - 9, -153],
-    [nk + 3, top],
-  ]);
-}
-
-/** 뒷모습(앉은) 몸통: 엉덩이가 방석에 눌려 조금 퍼진다 */
-function torsoBack(b: Body, bottom: number, flare = 6, top = -160) {
-  const { sw, ww, hw, nk } = b;
-  return poly([
-    [-(nk + 3), top],
-    [-(sw - 8), -154],
-    [-(sw + 2), -146],
-    [-(sw + 2), -138],
-    [-(ww + 4), -64],
-    [-(hw + flare), bottom - 6],
-    [-(hw + flare - 6), bottom],
-    [hw + flare - 6, bottom],
-    [hw + flare, bottom - 6],
-    [ww + 4, -64],
-    [sw + 2, -138],
-    [sw + 2, -146],
-    [sw - 8, -154],
     [nk + 3, top],
   ]);
 }
@@ -734,54 +927,12 @@ function topFront(l: Look, b: Body): string {
   }
 }
 
-/** 뒷모습 윗옷 */
-function topBack(l: Look, b: Body): string {
-  const F = l.topFill;
-  const inner = l.inner ?? 'paper';
-  const { sw, ww, hw, nk } = b;
-  const ink = over(F);
-  const blades = P(poly([[-(sw - 6), -142], [-6, -136], [-8, -104], [-(ww + 2), -100]]), HATCH, 'none', 0, ' opacity="0.55"');
-  switch (l.top) {
-    case 'coat':
-      return (
-        paint(torsoBack(b, 30, 16), F) +
-        L(`M0,-150 L0,30 M-${ww + 4},-70 L${ww + 4},-70 M-${ww + 4},-60 L${ww + 4},-60 M-8,0 L0,-8 L8,0`, ink, 1.8) +
-        paint(poly([[-(nk + 13), -180], [nk + 13, -180], [nk + 17, -150], [-(nk + 17), -150]]), F, { sw: 2.4, shade: 'r' })
-      );
-    case 'vest':
-      return paint(torsoBack(b, 8), inner) + paint(poly([[-(sw - 10), -150], [sw - 10, -150], [ww + 2, -66], [hw + 2, 4], [-(hw + 2), 4], [-(ww + 2), -66]]), 'tone', { sw: 2.4 }) + L(`M-${ww},-60 L${ww},-60`, INK, 3) + blades;
-    case 'sweater':
-      return paint(torsoBack(b, 10), F) + paint(poly([[-(nk + 2), -176], [nk + 2, -176], [nk + 4, -156], [-(nk + 4), -156]]), F, { sw: 2.4 }) + paint(poly([[-(hw + 3), -2], [hw + 3, -2], [hw + 1, 10], [-(hw + 1), 10]]), F, { sw: 2, shade: null, edge: false }) + blades;
-    case 'apron':
-      return paint(torsoBack(b, 8), inner) + L(`M-${sw - 10},-150 L${ww - 4},-74 M${sw - 10},-150 L-${ww - 4},-74`, INK, 3.4) + L(`M-${ww + 4},-70 L${ww + 4},-70`, INK, 3) + P('M0,-70 L-12,-80 L-12,-60 Z M0,-70 L12,-80 L12,-60 Z', BASE[F], INK, 1.6) + blades;
-    case 'dress':
-      if (l.bare) {
-        return paint(torsoBack(b, -110), skinFill(l), { sw: 3 }) + L('M-6,-150 Q0,-120 0,-100', INK, 1.2) + paint(`M${-(sw - 2)},-128 Q0,-112 ${sw - 2},-128 L${ww + 4},-64 L${hw + 14},20 Q0,28 ${-(hw + 14)},20 L${-(ww + 4)},-64 Z`, F);
-      }
-      return paint(torsoBack(b, 22, 14), F) + L('M0,-156 L0,-70', ink, 1.6, ' stroke-dasharray="3 2"');
-    case 'jumper':
-      return paint(torsoBack(b, 12, 8), F) + paint(poly([[-(nk + 16), -168], [nk + 16, -168], [nk + 12, -128], [-(nk + 12), -128]]), F, { sw: 2.4 }) + L('M-12,-160 Q0,-150 12,-160', ink, 1.4);
-    case 'uniform':
-      return paint(torsoBack(b, 16, 10), F) + paint(poly([[-(nk + 3), -176], [nk + 3, -176], [nk + 4, -156], [-(nk + 4), -156]]), F, { sw: 2.4 }) + L(`M0,-150 L0,16 M-${ww + 4},-66 L${ww + 4},-66`, ink, 1.6) + blades;
-    case 'jacket':
-      return paint(torsoBack(b, 6), F) + paint(poly([[-(hw + 4), -6], [hw + 4, -6], [hw + 2, 6], [-(hw + 2), 6]]), F, { sw: 2, shade: null, edge: false }) + paint(poly([[-(nk + 10), -166], [nk + 10, -166], [nk + 14, -150], [-(nk + 14), -150]]), F, { sw: 2.2, shade: null }) + blades;
-    default:
-      return paint(torsoBack(b, 14), F) + L('M0,-156 L0,14 M-6,14 L0,0 L6,14', ink, 1.6) + blades;
-  }
-}
-
 /** 목도리: 목에 두르고 한쪽 끝을 늘어뜨린다 */
 function scarfFront(l: Look, b: Body): string {
   if (!l.scarf) return '';
   const f = l.scarf;
   return paint(`M-${b.nk + 8},-166 Q0,-156 ${b.nk + 8},-166 L${b.nk + 10},-152 Q0,-142 -${b.nk + 10},-152 Z`, f, { sw: 2.4 }) + paint('M4,-150 L16,-150 L20,-60 L8,-56 Z', f, { sw: 2.4 }) + L('M8,-58 L6,-50 M12,-58 L12,-49 M16,-59 L18,-51', INK, 1.4);
 }
-function scarfBack(l: Look, b: Body): string {
-  if (!l.scarf) return '';
-  const f = l.scarf;
-  return paint(`M-${b.nk + 9},-168 Q0,-162 ${b.nk + 9},-168 L${b.nk + 11},-152 Q0,-148 -${b.nk + 11},-152 Z`, f, { sw: 2.4 }) + paint('M-14,-156 L-4,-156 L-8,-88 L-20,-92 Z', f, { sw: 2.4 });
-}
-
 // ── 팔·다리 ───────────────────────────────────────
 
 interface ArmBones {
@@ -828,19 +979,6 @@ function armFront(l: Look, b: Body, s: number, pose: Pose, extra = ''): string {
   return g(cls, art + extra);
 }
 
-/** 뒷모습 팔: 카운터에 팔꿈치를 올려 어깨에서 바깥 아래로 내려온다(팔뚝은 몸 앞으로 숨는다) */
-function armBack(l: Look, b: Body, s: number, extra = ''): string {
-  const k = b.f ? 0.86 : 1;
-  const sleeve = l.sleeve ?? (l.top === 'vest' || l.top === 'apron' ? (l.inner ?? 'paper') : l.topFill);
-  const fill = sleeve === 'skin' ? skinFill(l) : sleeve;
-  const pts: Pt[] = [[s * (b.sw - 6), -147], [s * (b.sw + 14), -104], [s * (b.sw + 3), -94]];
-  const ws = [16 * k, 14 * k, 12 * k];
-  const art = l.glove
-    ? paint(limb(pts.slice(0, 2), ws.slice(0, 2)), fill, { sw: 2.8 }) + paint(limb(pts.slice(1), ws.slice(1)), l.glove, { sw: 2.8 })
-    : paint(limb(pts, ws), fill, { sw: 2.8 });
-  return g(`arm arm-${s < 0 ? 'l' : 'r'}`, art + extra);
-}
-
 /** 선 다리 두 짝(걸을 때 따로 흔든다) */
 function legsStand(l: Look, b: Body): string {
   const skirt = l.top === 'dress';
@@ -861,20 +999,291 @@ function legsStand(l: Look, b: Body): string {
   return g('legs-stand', one(-1) + one(1));
 }
 
-/** 앉은 뒷모습의 종아리: 방석 아랫단에서 나와 발판에 발뒤꿈치를 걸친다(아이는 발이 뜬다). */
-function legsSitBack(l: Look, scale: number, seat: number): string {
+// ── 앉은 뒷모습 ─────────────────────────────────────
+// 카운터 쪽으로 몸을 기울이고 팔꿈치를 카운터 윗판에 올린 자세를 등 뒤에서 본다.
+// 어깨는 넓게 솟고(승모근이 거의 수평), 등판에는 어깨뼈 사이로 당겨진 주름과 허리에 접힌 주름,
+// 아래로 갈수록 그늘(빗금)이 진다. 엉덩이는 방석에 퍼지고 윗옷 자락은 방석 가장자리로 흘러내린다.
+
+/** 앉은 뒷모습의 머리: 몸을 숙인 만큼 내려오고, 뒤통수는 머리숱만큼 조금 크게 보인다(목 아래 기준) */
+const SIT_HEAD_K = 1.06;
+const SIT_HEAD_DROP = 14;
+const SIT_NECK = -166;
+const sitY = (y: number) => SIT_NECK + (y - SIT_NECK) * SIT_HEAD_K + SIT_HEAD_DROP;
+const sitHead = (body: string) => (body ? `<g transform="matrix(${SIT_HEAD_K},0,0,${SIT_HEAD_K},0,${n1(sitY(0))})">${body}</g>` : '');
+
+/**
+ * 앉은 등판 외곽: 목 → 넓게 솟은 어깨 → 겨드랑이 → 허리 → 방석에 퍼진 엉덩이 → 자락(hem: 가운데 아랫단 높이, flare: 엉덩이보다 넓게 퍼지는 폭).
+ * 카운터 쪽으로 숙인 등은 뒤에서 보면 짧아 보이므로 목·어깨를 선 몸통보다 12쯤 낮춘다.
+ */
+function sitTorso(b: Body, hem: number, flare: number, top = -148): string {
+  const { sw, ww, hw, nk } = b;
+  const F = hw + flare;
+  return mirror([0, top + 1.5], [
+    [nk + 4, top],
+    [sw - 18, top + 1, sw - 5, -140],
+    [sw + 6, -136, sw + 5, -123],
+    [sw + 1, -110],
+    [ww + 10, -92, ww + 4, -68],
+    [ww + 1, -42, hw + 3, -18],
+    [F + 3, hem - 26, F, hem - 4],
+    [F * 0.6, hem + 6, 0, hem + 2],
+  ]);
+}
+
+/** 등판 칠: 오른쪽 빗금 그늘에 더해, 앞으로 숙인 등의 아래쪽(허리·엉덩이)에 옅은 빗금 */
+const sitPaint = (d: string, f: Fill) => paint(d, f) + (f === 'ink' ? '' : P(d, HATCH, 'none', 0, ' mask="url(#gk-mb)" opacity="0.42"'));
+
+/** 등판 주름: 팔을 앞으로 뻗어 어깨뼈 사이가 당겨진 주름, 앉아서 허리에 접힌 주름 */
+function sitFolds(b: Body, ink: string, waist = true): string {
+  const { sw, ww } = b;
+  const blades = `M-${n1(sw - 9)},-120 Q-${n1(sw * 0.42)},-102 -8,-96 M${n1(sw - 9)},-120 Q${n1(sw * 0.42)},-102 8,-96 M-${n1(sw - 14)},-131 Q-${n1(sw * 0.36)},-123 -10,-122`;
+  const lower = waist ? ` M-${n1(ww - 1)},-40 Q-9,-32 -3,-35 M${n1(ww - 1)},-40 Q9,-32 3,-35 M-${n1(ww + 2)},-26 Q0,-17 ${n1(ww + 2)},-26` : '';
+  return L(blades + lower, ink, 1.3, ' opacity="0.85"');
+}
+
+/** 자락 아랫단 띠(시보리·허리띠): 등판 아랫단을 따라 h만큼 */
+function hemBand(b: Body, hem: number, flare: number, h: number): string {
+  const F = b.hw + flare;
+  return mirror([0, hem + 2 - h], [
+    [F * 0.6, hem + 6 - h, F - 0.6, hem - 4 - h],
+    [F, hem - 4],
+    [F * 0.6, hem + 6, 0, hem + 2],
+  ]);
+}
+
+/** 깃: 목을 감싸는 굽은 띠(위쪽 가운데 높이 y0, 아래쪽 y1, 아래 폭 w1) */
+const collarPath = (nk: number, y0: number, y1: number, w0: number, w1: number) => `M-${n1(nk + w0)},${y0} Q0,${y0 + 6} ${n1(nk + w0)},${y0} L${n1(nk + w1)},${y1} Q0,${y1 + 5} -${n1(nk + w1)},${y1} Z`;
+
+/** 방석에 퍼진 엉덩이(바지): 짧은 윗옷 아래로 보인다 */
+function sitSeat(l: Look, b: Body): string {
+  const { hw } = b;
+  const d = mirror([0, -24], [
+    [hw + 2, -24],
+    [hw + 10, -16, hw + 10, 3],
+    [hw + 10, 19, hw, 23],
+    [hw * 0.5, 28, 0, 25],
+  ]);
+  return paint(d, l.pants, { sw: 2.8 }) + L('M0,-4 L0,24 M-9,21 Q-4,15 -1,8 M9,21 Q4,15 1,8', over(l.pants), 1.2, ' opacity="0.8"');
+}
+
+/** 앉은 뒷모습 윗옷(등판·자락·깃). 목은 이보다 먼저, 머리는 나중에 그린다 */
+function topSit(l: Look, b: Body): string {
+  const F = l.topFill;
+  const inner = l.inner ?? 'paper';
+  const { sw, ww, hw, nk } = b;
+  const ink = over(F);
+  const spine = (to = -68) => L(`M0,-144 Q-1.5,-106 0,${to}`, ink, 1.5);
+  const shirtCollar = paint(collarPath(nk, -152, -143, 3, 5), inner === 'ink' ? 'ink' : 'paper', { sw: 2, shade: null, edge: false });
+  switch (l.top) {
+    case 'coat': {
+      // 긴 외투: 자락이 방석 뒤 가장자리를 덮어 흘러내린다. 허리 뒤 반 벨트, 가운데 트임, 세운 깃
+      const yoke = F === 'paper' || F === 'tone' ? paint(mirror([0, -141], [[sw - 6, -140], [sw - 9, -110], [sw * 0.5, -102, 0, -104]]), F, { sw: 2.2, shade: 'r', edge: false }) : '';
+      return (
+        sitPaint(sitTorso(b, 40, 18), F) +
+        yoke +
+        spine(-72) +
+        sitFolds(b, ink, false) +
+        paint(mirror([0, -72], [[ww + 2, -72], [ww + 2, -62], [0, -62]]), F, { sw: 2, shade: null, edge: false }) +
+        C(-(ww - 4), -67, 2.1, ink === PAPER ? PAPER : INK) +
+        C(ww - 4, -67, 2.1, ink === PAPER ? PAPER : INK) +
+        L(`M0,-62 L0,10 L-3,40 M0,10 L4,41 M-${n1(hw - 3)},-12 Q-${n1(hw + 3)},12 -${n1(hw + 13)},34 M${n1(hw - 3)},-12 Q${n1(hw + 3)},12 ${n1(hw + 13)},34 M-12,0 Q-14,20 -17,40 M12,0 Q14,20 17,40`, ink, 1.3) +
+        paint(collarPath(nk, -158, -138, 9, 18), F, { sw: 2.4, shade: 'r' }) +
+        L(`M-${n1(nk + 13)},-147 Q0,-141 ${n1(nk + 13)},-147`, ink, 1.2)
+      );
+    }
+    case 'vest':
+      // 셔츠 등판 위에 조끼 뒤판(망점)과 허리 조임 끈
+      return (
+        sitPaint(sitTorso(b, 6, 4), inner) +
+        paint(mirror([0, -142], [[sw - 12, -141], [ww + 9, -92, ww + 3, -66], [ww + 1, -38, hw + 1, -6], [hw * 0.5, 2, 0, 0]]), 'tone', { sw: 2.4 }) +
+        sitFolds(b, INK) +
+        L(`M-${n1(ww + 1)},-54 L${n1(ww + 1)},-54`, INK, 3) +
+        P('M-4,-58 L4,-58 L4,-50 L-4,-50 Z', PAPER, INK, 1.4) +
+        shirtCollar
+      );
+    case 'sweater':
+      return (
+        sitPaint(sitTorso(b, 10, 6), F) +
+        paint(hemBand(b, 10, 6, 11), F, { sw: 2.2, shade: null, edge: false }) +
+        L(`M-${hw - 4},-1 L-${hw - 3},10 M-${hw - 14},0 L-${hw - 14},11 M0,1 L0,12 M${hw - 14},0 L${hw - 14},11 M${hw - 4},-1 L${hw - 3},10`, ink, 1.1) +
+        sitFolds(b, ink) +
+        paint(collarPath(nk, -156, -141, 3, 6), F, { sw: 2.4, shade: 'r' }) +
+        L(`M-${n1(nk + 3)},-150 Q0,-145 ${n1(nk + 3)},-150`, ink, 1.1)
+      );
+    case 'apron':
+      // 셔츠 등판에 엇갈린 앞치마 끈, 허리에 묶은 나비 매듭, 옆구리로 돌아온 앞치마 자락
+      return (
+        sitPaint(sitTorso(b, 8, 5), inner) +
+        paint(`M-${hw + 1},-30 Q-${hw + 9},-4 -${hw + 7},14 L-${hw - 3},16 Q-${hw - 1},-6 -${hw - 4},-30 Z M${hw + 1},-30 Q${hw + 9},-4 ${hw + 7},14 L${hw - 3},16 Q${hw - 1},-6 ${hw - 4},-30 Z`, F, { sw: 2.4, shade: null }) +
+        L(`M-${n1(sw - 10)},-138 Q-6,-104 ${n1(ww - 2)},-66 M${n1(sw - 10)},-138 Q6,-104 -${n1(ww - 2)},-66`, INK, 3.4) +
+        L(`M-${n1(ww + 4)},-62 L${n1(ww + 4)},-62`, INK, 3) +
+        P('M0,-62 L-13,-73 L-13,-52 Z M0,-62 L13,-73 L13,-52 Z M-3,-61 L-7,-40 L-1,-42 Z M3,-61 L8,-41 L2,-42 Z', BASE[F], INK, 1.6) +
+        sitFolds(b, INK, false) +
+        shirtCollar
+      );
+    case 'dress': {
+      // 치마가 방석을 덮고 가장자리로 흘러내린다
+      const skirtFolds = L(`M-${hw - 3},-14 Q-${hw + 3},14 -${hw + 11},40 M${hw - 3},-14 Q${hw + 3},14 ${hw + 11},40 M-8,-6 Q-9,20 -11,44 M8,-6 Q9,20 11,44`, ink, 1.2);
+      if (l.bare) {
+        // 등이 깊게 파인 드레스: 맨등에 견갑골 그늘, 허리 아래부터 드레스
+        const back = mirror([0, -88], [
+          [sw * 0.5, -92, sw + 1, -115],
+          [sw + 1, -110],
+          [ww + 10, -92, ww + 4, -68],
+          [ww + 1, -42, hw + 3, -18],
+          [hw + 21, 18, hw + 18, 40],
+          [(hw + 18) * 0.6, 50, 0, 46],
+        ]);
+        return (
+          paint(sitTorso(b, 20, 6), skinFill(l), { sw: 3 }) +
+          L(`M-${n1(sw - 10)},-124 Q-${n1(sw * 0.4)},-110 -9,-106 M${n1(sw - 10)},-124 Q${n1(sw * 0.4)},-110 9,-106 M0,-138 Q-1,-116 0,-94`, INK, 1.2) +
+          paint(back, F) +
+          skirtFolds
+        );
+      }
+      return sitPaint(sitTorso(b, 44, 16), F) + L('M0,-146 L0,-60', ink, 1.6, ' stroke-dasharray="3 2"') + sitFolds(b, ink, false) + skirtFolds + paint(collarPath(nk, -151, -143, 3, 5), F, { sw: 2, shade: null, edge: false });
+    }
+    case 'jumper':
+      // 점퍼 등에 늘어진 모자(후드)
+      return (
+        sitPaint(sitTorso(b, 12, 8), F) +
+        paint(hemBand(b, 12, 8, 10), F, { sw: 2.2, shade: null, edge: false }) +
+        sitFolds(b, ink) +
+        paint(`M-${nk + 15},-154 Q0,-148 ${nk + 15},-154 Q${nk + 17},-128 ${nk + 9},-114 Q0,-104 -${nk + 9},-114 Q-${nk + 17},-128 -${nk + 15},-154 Z`, F, { sw: 2.4 }) +
+        L(`M-${nk + 8},-148 Q0,-138 ${nk + 8},-148`, ink, 1.3)
+      );
+    case 'uniform':
+      // 제복: 높게 선 깃, 가운데 솔기, 허리띠
+      return (
+        sitPaint(sitTorso(b, 18, 9), F) +
+        spine(18) +
+        sitFolds(b, ink, false) +
+        paint(mirror([0, -66], [[ww + 4, -67], [ww + 4, -57], [0, -56]]), F === 'paper' ? 'tone' : F, { sw: 2.2, shade: null, edge: false }) +
+        L(`M-${n1(hw - 2)},-32 Q-${n1(hw + 4)},-4 -${n1(hw + 8)},16 M${n1(hw - 2)},-32 Q${n1(hw + 4)},-4 ${n1(hw + 8)},16`, ink, 1.2) +
+        paint(collarPath(nk, -161, -142, 3, 5), F, { sw: 2.4, shade: 'r' })
+      );
+    case 'jacket':
+      return (
+        sitPaint(sitTorso(b, 4, 4), F) +
+        paint(hemBand(b, 4, 4, 9), F, { sw: 2.2, shade: null, edge: false }) +
+        sitFolds(b, ink) +
+        shirtCollar +
+        paint(collarPath(nk, -150, -138, 7, 15), F, { sw: 2.2, shade: null })
+      );
+    default:
+      // 양복 윗도리: 가운데 트임이 방석 위에서 살짝 벌어진다
+      return (
+        sitPaint(sitTorso(b, 14, 6), F) +
+        spine(-26) +
+        L('M0,-26 L-2,15 M0,-26 L3,15', ink, 1.4) +
+        sitFolds(b, ink) +
+        shirtCollar +
+        paint(collarPath(nk, -149, -138, 6, 15), F, { sw: 2.2, shade: null })
+      );
+  }
+}
+
+/** 목도리(뒤): 깃 위로 두르고 한쪽 끝이 등으로 늘어진다 */
+function scarfSit(l: Look, b: Body): string {
+  if (!l.scarf) return '';
+  const f = l.scarf;
+  return paint(collarPath(b.nk, -160, -141, 10, 13), f, { sw: 2.4 }) + paint('M-16,-145 L-4,-144 L-8,-80 L-21,-83 Z', f, { sw: 2.4 }) + L('M-20,-83 L-22,-74 M-15,-82 L-16,-73 M-10,-81 L-10,-72', INK, 1.4);
+}
+
+/**
+ * 앉은 뒷모습 팔: 어깨에서 바깥 아래로 내려와 팔꿈치를 카운터 윗판(eY)에 올리고, 팔뚝은 몸 앞쪽(안쪽)으로
+ * 꺾여 등 뒤로 숨는다(손은 보이지 않는다). 몸통보다 먼저 그려 어깨와 팔뚝 끝이 등판에 가린다.
+ * extra는 위팔 가운데를 원점으로, 팔을 따라 내려가는 쪽을 +y로 그린 소품(완장·볼트 등).
+ */
+function armSit(l: Look, b: Body, s: number, eY: number, extra = ''): string {
+  const k = b.f ? 0.86 : 1;
+  const sleeve = l.sleeve ?? (l.top === 'vest' || l.top === 'apron' ? (l.inner ?? 'paper') : l.topFill);
+  const fill: Fill = sleeve === 'skin' ? skinFill(l) : sleeve;
+  const hu = (17.5 * k) / 2;
+  const hf = (14 * k) / 2;
+  const S: Pt = [s * (b.sw - 7), -129];
+  // 팔꿈치는 어깨보다 한참 바깥(아이는 카운터가 어깨 높이라 조금만)
+  const E: Pt = [s * (b.sw + (l.child ? 6 : 24 * k)), eY];
+  const F: Pt = [s * (b.ww - 3), eY - 13];
+  const u = unit(S, E);
+  const v = unit(E, F);
+  // 바깥쪽(몸에서 먼 쪽)·팔뚝 아래쪽 법선
+  const n: Pt = u[1] * s >= 0 ? [u[1], -u[0]] : [-u[1], u[0]];
+  const m: Pt = -v[0] >= 0 ? [v[1], -v[0]] : [-v[1], v[0]];
+  const tip = add(E, u, hu * 0.8);
+  const crease = meet(add(S, n, -hu), u, add(E, m, -hf), v) ?? add(E, n, -hu);
+  const outline: Pt[] = [add(S, n, hu), add(E, n, hu), add(E, [n[0] + u[0], n[1] + u[1]], hu * 0.62), tip, add(E, m, hf), add(F, m, hf), add(F, m, -hf), crease, add(S, n, -hu)];
+  let art = paint(poly(outline), l.glove ?? fill, { sw: 2.8 });
+  // 긴 장갑: 위팔 반쯤까지만 맨팔(또는 소매)
+  if (l.glove) {
+    const len = Math.hypot(E[0] - S[0], E[1] - S[1]) * 0.55;
+    art += paint(poly([add(S, n, hu), add(add(S, n, hu), u, len), add(add(S, n, -hu), u, len + 2), add(S, n, -hu)]), fill, { sw: 2.8, edge: false });
+  }
+  // 팔꿈치 안쪽에 접힌 소매 주름
+  const ink = over(l.glove ?? fill);
+  art += L(`${line([add(crease, u, -9), add(add(crease, u, -4), n, hu * 0.9)])} ${line([add(crease, u, -2), add(add(crease, u, 2), n, hu * 0.75)])}`, ink, 1.3);
+  if (extra) {
+    const mid = add(S, u, Math.hypot(E[0] - S[0], E[1] - S[1]) * 0.42);
+    const deg = (Math.atan2(-u[0], u[1]) * 180) / Math.PI;
+    art += `<g transform="translate(${n1(mid[0])} ${n1(mid[1])}) rotate(${n1(deg)})">${extra}</g>`;
+  }
+  return g(`arm arm-${s < 0 ? 'l' : 'r'}`, art);
+}
+
+/** 뒤에서 본 구두: 뒤축 컵과 굽(치마는 가는 굽, 아이는 둥근 신). 발목 ank에서 다리 방향 u로 내려간다 */
+function shoeBack(l: Look, ank: Pt, u: Pt, wa: number, kind: 'flat' | 'heel' | 'kid'): string {
+  const q: Pt = [-u[1], u[0]];
+  const at = (t: number, c: number): Pt => [ank[0] + u[0] * t + q[0] * c, ank[1] + u[1] * t + q[1] * c];
+  const shape = (pts: [number, number][]) => poly(pts.map(([t, c]) => at(t, c)));
+  const sole = l.shoe === 'ink' ? 'ink' : 'dark';
+  if (kind === 'heel') {
+    const h = wa / 2 + 1.2;
+    return L(line([at(7, 0), at(17, 0)]), INK, 2.6) + paint(shape([[-2, -h], [5, -h - 0.6], [9, -h * 0.5], [9.5, 0], [9, h * 0.5], [5, h + 0.6], [-2, h]]), l.shoe, { sw: 2.2, shade: null, edge: false });
+  }
+  const h = wa / 2 + (kind === 'kid' ? 2.6 : 1.8);
+  const len = kind === 'kid' ? 11 : 12.5;
+  const cup = paint(shape([[-2, -h], [6, -h - 0.8], [len - 1.5, -h + 0.6], [len, -h * 0.45], [len, h * 0.45], [len - 1.5, h - 0.6], [6, h + 0.8], [-2, h]]), l.shoe, { sw: 2.4, shade: null, edge: false });
+  const heel = paint(shape([[len - 1, -h * 0.72], [len + 4, -h * 0.66], [len + 4, h * 0.66], [len - 1, h * 0.72]]), sole, { sw: 2, shade: null, edge: false });
+  const seam = L(line([at(len - 0.6, -h * 0.6), at(len - 0.6, h * 0.6)]), over(l.shoe), 1, ' opacity="0.8"');
+  return cup + heel + seam;
+}
+
+/**
+ * 앉은 뒷모습의 종아리: 방석 아랫단 밑에서 나와 무릎을 벌린 채 발판 고리로 내려가 구두 뒤축을 건다.
+ * ring은 두 발을 고리에, hook은 한 발만 걸고 다른 발은 늘어뜨리고, cross는 발목을 꼰다(치마 기본). 아이는 발이 뜬다.
+ */
+function legsSit(l: Look, scale: number, seat: number): string {
   const skirt = l.top === 'dress';
-  const top = CUSHION_DROP / scale + seat - 6;
-  const foot = (l.child ? FOOTREST_DROP * 0.6 : FOOTREST_DROP) / scale + seat;
-  const w = skirt ? 11 : 14;
-  const one = (s: number) => {
-    const x0 = 6;
-    const x1 = x0 + w;
-    const leg = paint(poly(side([[x0, top], [x1 + 1, top], [x1, foot - 10], [x0 + 1, foot - 10]], s)), l.pants, { sw: 2.6, shade: null });
-    const heel = paint(poly(side([[x0 - 1, foot - 11], [x1 + 2, foot - 11], [x1 + 1, foot], [x0, foot]], s)), l.shoe, { sw: 2.4, shade: null, edge: false });
-    return g(`leg leg-${s < 0 ? 'l' : 'r'}`, leg + heel);
+  const y0 = CUSHION_DROP / scale + seat - 4;
+  const ring = FOOTREST_DROP / scale + seat;
+  const kind = l.child ? 'dangle' : (l.sit ?? (skirt ? 'cross' : 'ring'));
+  const wt = l.child ? 13 : skirt ? 11.5 : 17;
+  const wa = l.child ? 9 : skirt ? 7 : 11;
+  const shoe: 'flat' | 'heel' | 'kid' = l.child ? 'kid' : skirt ? 'heel' : 'flat';
+  const one = (s: number, top: Pt, ank: Pt) => {
+    const u = unit(top, ank);
+    const len = Math.hypot(ank[0] - top[0], ank[1] - top[1]);
+    const q: Pt = [-u[1], u[0]];
+    // 바지는 구두 뒤축을 덮고, 스타킹은 구두 안으로 들어간다
+    const end = skirt ? ank : add(ank, u, 3);
+    const leg = paint(limb([top, add(top, u, len * 0.34), end], [wt, wt * 1.1, wa]), l.pants, { sw: 2.6, shade: s > 0 ? 'r' : null });
+    const fold = skirt || l.child ? '' : L(`${line([add(add(top, u, 10), q, -wt * 0.32), add(add(top, u, 13), q, wt * 0.18)])} ${line([add(add(top, u, len - 9), q, -wa * 0.4), add(add(top, u, len - 7), q, wa * 0.3)])}`, over(l.pants), 1.1, ' opacity="0.8"');
+    const foot = shoeBack(l, ank, u, wa, shoe);
+    return g(`leg leg-${s < 0 ? 'l' : 'r'}`, skirt ? leg + foot : foot + leg + fold);
   };
-  return g('legs-sit', one(-1) + one(1));
+  const ank = ring - 15;
+  switch (kind) {
+    case 'dangle':
+      return g('legs-sit', one(-1, [-11, y0], [-15, y0 + 46]) + one(1, [11, y0], [17, y0 + 50]));
+    case 'hook':
+      // 오른발은 고리에, 왼발은 고리 밖으로 늘어뜨린다
+      return g('legs-sit', one(-1, [-19, y0], [-29, ring + 4]) + one(1, [21, y0], [12, ank]));
+    case 'cross':
+      // 발목을 꼬아 두 발을 고리 한쪽에 모은다(왼다리가 오른다리 위로 넘어간다)
+      return g('legs-sit', one(1, [11, y0], [17, ank + 1]) + one(-1, [-11, y0], [9, ank - 3]));
+    default:
+      return g('legs-sit', one(-1, [-21, y0], [-12, ank]) + one(1, [21, y0], [12, ank]));
+  }
 }
 
 // ── 감정 표시(머리 위) ─────────────────────────────────
@@ -925,19 +1334,33 @@ function assemble(l: Look): Rig {
     `${headWrap(l, hair.behind ?? '')}${l.front?.behind ?? ''}${legsStand(l, b)}${g(
       'p-body',
       `${topFront(l, b)}${scarfFront(l, b)}${l.front?.under ?? ''}${arms(false)}${headF}${arms(true)}${l.front?.over ?? ''}`,
-    )}`,
+    )}${emote(44, n1(yHead(l, -220) + 2))}`,
   );
 
-  // 뒷모습 머리: 목덜미·귀 → 머리 덩어리 → 모자
-  const nape = paint(`M-${b.nk + 1},-176 L-${b.nk + 1},-150 L${b.nk + 1},-150 L${b.nk + 1},-176 Z`, skin, { sw: 2.6, shade: null, edge: false }) + P(`M-${b.nk + 1},-168 L${b.nk + 1},-168 L${b.nk + 1},-158 L-${b.nk + 1},-160 Z`, HATCH);
-  const earsB = hair.ears ? paint('M-19,-196 L-24,-198 L-24.5,-188 L-21,-181 L-18.5,-184 Z', skin, { sw: 2.2, shade: null, edge: false }) + paint('M19,-196 L24,-198 L24.5,-188 L21,-181 L18.5,-184 Z', skin, { sw: 2.2, shade: null, edge: false }) : '';
-  const headB = g('p-head', headWrap(l, `${nape}${earsB}${hair.rear}${hat?.rear ?? ''}${l.back?.head ?? ''}`));
+  // 뒷모습(앉음): 몸 뒤 소품 → 종아리 → 몸[팔 → 목 → 엉덩이 → 등판·깃 → 목도리 → 등에 흘러내린 머리 → 머리 → 높이 묶은 꼬리 → 소품]
+  // 머리는 고개를 숙여 조금 내려오고 커진다(sitHead). 팔꿈치는 카운터 윗판 높이(eY)에 맞춘다.
+  const hairB = hairBack(l);
+  const eY = n1(seat - (COUNTER_RISE + 4) / l.scale);
+  const nk1 = b.nk + 1;
+  const neckB = headWrap(l, paint(`M-${nk1},-186 L${nk1},-186 L${nk1},-138 L-${nk1},-138 Z`, skin, { sw: 2.6, shade: null, edge: false }));
+  const earB = (s: number) => paint(poly(side([[21.5, -198], [25.6, -201], [27.6, -195], [26.6, -187.5], [22.4, -183.5]], s)), skin, { sw: 2.2, shade: null, edge: false }) + L(line(side([[24, -197], [25.6, -192], [24, -187]], s)), INK, 1.1);
+  const earsB = hair.ears ? earB(-1) + earB(1) : '';
+  // 귀에 걸린 안경다리·귀걸이는 뒤에서도 보인다
+  const earExtras = (l.glasses && hair.ears ? L('M-20,-196 Q-27.5,-197.5 -26.4,-186 M20,-196 Q27.5,-197.5 26.4,-186', INK, 1.6) : '') + (l.earring ? C(-24, -180.6, 1.9, RED, INK, 1) + C(24, -180.6, 1.9, RED, INK, 1) : '');
+  // 머리카락이 목덜미·깃에 드리운 그늘
+  const napeShade = P('M-17,-178 Q0,-168 17,-178 L14,-167 Q0,-157 -14,-167 Z', HATCH);
+  const headB = g('p-head', headWrap(l, sitHead(`${napeShade}${hairB.rear}${earsB}${earExtras}${hat?.rear ?? ''}${l.back?.head ?? ''}`)));
+  const seatB = l.top === 'coat' || l.top === 'dress' ? '' : sitSeat(l, b);
   const back = g(
     'v-back',
-    `${l.back?.behind ?? ''}${legsSitBack(l, l.scale, seat)}${g('p-body', `${armBack(l, b, -1)}${armBack(l, b, 1)}${topBack(l, b)}${scarfBack(l, b)}${headB}${headWrap(l, hair.rearOver ?? '')}${l.back?.over ?? ''}`)}`,
+    `${l.back?.behind ?? ''}${legsSit(l, l.scale, seat)}${g(
+      'p-body',
+      `${armSit(l, b, -1, eY, l.back?.armL)}${armSit(l, b, 1, eY, l.back?.armR)}${neckB}${seatB}${topSit(l, b)}${scarfSit(l, b)}${headWrap(l, sitHead(hairB.down ?? ''))}${headB}${headWrap(l, sitHead(hairB.over ?? ''))}${l.back?.over ?? ''}`,
+    )}${emote(44, n1(yHead(l, sitY(-220)) + 2))}`,
   );
 
-  const top = yHead(l, hat ? Math.min(hat.top, hair.top) : hair.top);
+  const top0 = hat ? Math.min(hat.top, hair.top) : hair.top;
+  const top = yHead(l, top0);
   const crown = yHead(l, -220);
   // 잔을 쥐는 손: 내린 팔 → 앞으로 든 팔 → 그 밖의 팔 순서(같으면 오른팔)
   const rank = (p: Pose) => ['hang', 'hold', 'pocket', 'hip', 'chin', 'raise'].indexOf(p);
@@ -955,11 +1378,12 @@ function assemble(l: Look): Rig {
     scale: l.scale,
     leg: b.leg,
     top: n1(top),
+    sitTop: n1(yHead(l, sitY(top0))),
     hand,
     seat,
     bust: `${n1(-bustW / 2)} ${bustTop} ${bustW} ${bustH}`,
     head: `${n1(-headSize / 2)} ${n1(crown - 10)} ${headSize} ${headSize}`,
-    svg: `${front}${back}${emote(44, n1(crown + 2))}`,
+    svg: `${front}${back}`,
   };
 }
 
@@ -988,9 +1412,11 @@ const MIO: Look = {
     head: P(starPath(0, -226, 4.6), PAPER, INK, 1) + paint('M12,-238 C9,-256 28,-262 31,-248 C26,-253 19,-251 17,-237 Z', 'tone', { sw: 2.2, shade: null, edge: false }),
     over: L('M14,-70 C26,-56 36,-30 38,-10', INK, 1.6, ' stroke-dasharray="3 2.4"') + paint('M30,-12 L46,-14 L48,2 L32,4 Z', 'paper', { sw: 2.2, shade: null }) + C(39, -5, 2.6, INK),
   },
+  sit: 'ring',
   back: {
     head: paint('M12,-238 C9,-256 28,-262 31,-248 C26,-253 19,-251 17,-237 Z', 'tone', { sw: 2.2, shade: null, edge: false }),
-    over: L('M44,-100 C52,-80 52,-50 46,-30', INK, 1.6, ' stroke-dasharray="3 2.4"') + paint('M40,-32 L54,-34 L56,-18 L42,-16 Z', 'paper', { sw: 2.2, shade: null }),
+    // 외투 허리에서 사슬로 늘어진 검표 펀치가 방석 옆으로 흔들린다
+    over: L('M30,-66 C46,-52 54,-30 54,-12', INK, 1.6, ' stroke-dasharray="3 2.4"') + paint('M47,-14 L61,-16 L63,0 L49,2 Z', 'paper', { sw: 2.2, shade: null }) + C(55.5, -7, 2.4, INK),
   },
 };
 
@@ -1019,7 +1445,9 @@ const GREY: Look = {
   beard: 'stubble',
   wrinkles: true,
   front: { under: '', over: umbrellaFront },
-  back: { behind: paint('M-74,40 L-66,38 L-58,190 L-64,196 L-72,192 Z', 'ink', { sw: 2.4 }) + L('M-70,40 Q-74,22 -62,20 Q-52,20 -54,30', INK, 4) },
+  sit: 'hook',
+  // 접은 우산을 스툴 방석에 기대 세웠다
+  back: { behind: paint('M-66,30 L-58,32 L-76,174 L-83,178 L-87,171 Z', 'ink', { sw: 2.4 }) + L('M-62,31 Q-60,12 -48,14 Q-39,17 -42,27', INK, 4) + L('M-84,176 L-86,186', INK, 3) },
 };
 
 /** 세레나 · 무대 뒤의 가수: 허리까지 물결치는 먹색 머리에 빨간 장미, 어깨 드러낸 반짝이 먹색 드레스, 긴 장갑, 붉은 입술, 눈가 점 */
@@ -1100,7 +1528,9 @@ const BOLT: Look = {
   wrinkles: true,
   sleeve: 'red',
   front: { over: mechArm([[54, -60], [55, -40], [53, -26]]) + L('M48,-54 L60,-54 M48,-34 L60,-34', INK, 1.6) },
-  back: { over: mechArm([[62, -112], [66, -100]]) },
+  sit: 'ring',
+  // 기계 팔: 위팔에 볼트 줄과 이음매
+  back: { armR: L('M-6,-16 L-6,18 M6,-16 L6,18', INK, 1.4) + mechArm([[0, -12], [0, 0], [0, 12]]) },
 };
 
 /** 노르마 · 꿈 관리국 감독관: 먹색 올림머리와 일자 앞머리, 네모 안경, 높은 깃의 종이색 제복, 빨간 마름모 완장, 클립보드 */
@@ -1125,7 +1555,8 @@ const NORMA: Look = {
     under: P('M-42,-124 L-28,-124 L-30,-108 L-44,-108 Z', RED, INK, 1.6) + P('M-36,-121 L-32,-116 L-36,-111 L-40,-116 Z', PAPER),
     over: paint('M-2,-112 L28,-110 L26,-62 L-4,-64 Z', 'tone', { sw: 2.4 }) + paint('M6,-114 L20,-113 L19,-106 L5,-107 Z', 'ink', { sw: 1.6, shade: null, edge: false }) + L('M2,-98 L22,-97 M2,-90 L20,-89 M2,-82 L22,-81 M2,-74 L14,-73', INK, 1.2),
   },
-  back: { over: P('M-58,-130 L-44,-128 L-46,-112 L-60,-114 Z', RED, INK, 1.6) },
+  sit: 'cross',
+  back: { armL: P('M-8.5,-6 L8.5,-6 L8.5,6 L-8.5,6 Z', RED, INK, 1.6) + P('M0,-4 L3.4,0 L0,4 L-3.4,0 Z', PAPER) },
 };
 
 /** 피피 · 꼬마 배달부: 별 핀 꽂은 양갈래, 고글 얹은 먹색 배달 모자, 빨간 점퍼, 몸만 한 가방, 볼에 반창고 */
@@ -1174,7 +1605,9 @@ const LEILA: Look = {
   shoe: 'ink',
   pose: ['hip', 'raise'],
   front: { over: L('M56,-238 L60,-292', INK, 3.4) + P(starPath(60, -298, 11), PAPER, INK, 2.2) },
-  back: { over: L('M58,-100 L72,-150', INK, 3.4) + P(starPath(73, -156, 9), PAPER, INK, 2) },
+  sit: 'hook',
+  // 카운터 위 손에 쥔 별 지휘봉이 오른 어깨 너머로 솟는다(손은 몸 앞에 가린다)
+  back: { behind: L('M22,-96 L66,-196', INK, 3.4) + P(starPath(68, -203, 10), PAPER, INK, 2) },
 };
 
 const NAMED: Record<string, Look> = { mio: MIO, grey: GREY, serena: SERENA, evan: EVAN, bolt: BOLT, norma: NORMA, pipi: PIPI, leila: LEILA };
@@ -1252,6 +1685,8 @@ function guestLook(id: string): Look {
   else if (accent === 'earring') look.earring = true;
   if (!look.tie && (look.top === 'suit' || look.top === 'coat') && r() < 0.6) look.tie = 'ink';
   if (look.top === 'vest' && !look.tie) look.tie = 'ink';
+  // 앉은 다리: 맨 끝에 골라 앞의 부품 고르기(같은 id면 같은 모습)에 영향을 주지 않는다
+  look.sit = look.top === 'dress' ? (r() < 0.75 ? 'cross' : 'hook') : pickW<SitLegs>(r, [['ring', 5], ['hook', 3], ['cross', 1]]);
   return look;
 }
 
