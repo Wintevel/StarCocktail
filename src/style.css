@@ -3754,12 +3754,8 @@ body:not([data-talk=""]) .p-tag {
 }
 
 .pp-lead .pp-text p {
-  font-size: 15.5px;
-}
-
-.pp-lead .pp-text {
-  columns: 2 220px;
-  column-gap: 20px;
+  font-size: 16.5px;
+  line-height: 1.75;
 }
 
 .pp-text p + p {
@@ -3802,6 +3798,16 @@ body:not([data-talk=""]) .p-tag {
   display: block;
   width: 100%;
   height: 196px;
+}
+
+.pp-photo.head {
+  width: 64px;
+  margin: 2px 0 4px 10px;
+  border-width: 1.5px;
+}
+
+.pp-photo.head .portrait {
+  height: 64px;
 }
 
 .pp-photo figcaption {
@@ -3918,10 +3924,15 @@ body:not([data-talk=""]) .p-tag {
 .pp-archive button {
   display: grid;
   grid-template-columns: 64px 1fr;
+  justify-items: start;
   gap: 10px;
   width: 100%;
+  padding: 8px 12px;
+  border-width: 2px;
+  box-shadow: 3px 3px 0 var(--ink);
+  white-space: normal;
   text-align: left;
-  font: 14px/1.4 var(--font-mast);
+  font: 700 14px/1.4 var(--font-mast);
 }
 
 .pp-archive .num {
@@ -4403,8 +4414,7 @@ body:not([data-talk=""]) .p-tag {
       "side";
   }
 
-  .pp-cols,
-  .pp-lead .pp-text {
+  .pp-cols {
     columns: auto;
   }
 

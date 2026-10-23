@@ -7,7 +7,7 @@
 import { isFestival, isRainy } from './goods';
 import { keywordLabel } from './mix';
 import { seeded } from './shift';
-import { ARCS, BEAT_BY_ID, computeEndings, type Deed, type Effect, epilogueLine, FEST_CHECKLIST, ITEMS, josa, NAME, type NightNote, type StoryState } from './story';
+import { ARCS, BEAT_BY_ID, type Choice, computeEndings, type Deed, type Effect, epilogueLine, FEST_CHECKLIST, ITEMS, josa, NAME, type NightNote, type StoryState } from './story';
 import { GOOD_BY_ID, LORE } from './world';
 
 export interface Article {
@@ -56,35 +56,49 @@ const quoteSaid = (label: string) => `「${label}」${josa(label, '이라고', '
 /** 로그 문장을 마침표 기준으로 나눈다 */
 const sentences = (t: string) => t.split(/\.\s+/).map((x) => x.trim()).filter(Boolean);
 /** 바텐더가 한 일을 적은 문장(원인 쪽과 겹치므로 결과에서 뺀다) */
-const BARTENDER_ACT = /(전했다|전하지 않았다|묻어 두었다|건넸다|돌려줬다|돌려주고|팔았다|들려주었다|부쳤다|맡았다)$/;
+const BARTENDER_ACT = /(전했다|전하지 않았다|묻어 두었다|건넸다|돌려줬다|돌려주고|팔았다|들려주었다|주었다|부쳤다|맡았다)$/;
 
 /** 고른 선택의 효과 목록에서 기사 끝 도장을 만든다 */
-function notesOf(fx: Effect[]): string[] {
+function notesOf(fx: Effect[], buried = false): string[] {
   const out: string[] = [];
   for (const e of fx) {
     if (e.k === 'trust') out.push(`${nameOf(e.who)} 신뢰 ${e.d > 0 ? '+' : ''}${e.d}`);
     else if (e.k === 'money') out.push(`${e.d > 0 ? '+' : '-'}✦${Math.abs(e.d)} ${e.label}`);
     else if (e.k === 'give' && ITEMS[e.i]) out.push(ITEMS[e.i].kind === 'gossip' ? '수첩에 소문 하나' : `「${ITEMS[e.i].name}」 맡음`);
-    else if (e.k === 'take' && ITEMS[e.i]) out.push(`「${ITEMS[e.i].name}」 건넴`);
+    else if (e.k === 'take' && ITEMS[e.i]) out.push(`「${ITEMS[e.i].name}」 ${buried ? '묻음' : '건넴'}`);
   }
   return out;
 }
 
-/** 결과 문장: 신문 기사(있으면) → 로그(바텐더 행동 문장은 빼고) → 신뢰 변화 */
-function effectOf(fx: Effect[], dropAct: boolean): string {
+/** 결과 문장: 신문 기사(있으면) → 로그(바텐더 행동 문장은 빼고) → 신뢰 변화, 끝에 손님의 한마디 */
+function effectOf(c: Choice, who: string, dropAct: boolean): string {
   const parts: string[] = [];
-  const news = fx.find((e): e is Extract<Effect, { k: 'news' }> => e.k === 'news');
-  for (const e of fx) {
+  const news = c.fx.find((e): e is Extract<Effect, { k: 'news' }> => e.k === 'news');
+  for (const e of c.fx) {
     if (e.k !== 'log' || e.text.startsWith('소문을 들었다') || e.text.includes('소문을 들려주었다')) continue;
     const ss = sentences(e.text);
     const keep = dropAct ? ss.filter((x, i) => !(i === 0 && BARTENDER_ACT.test(x))) : ss;
     parts.push(...keep.map(end));
   }
   if (news) parts.push(end(news.body));
+  // 손님의 대답: 괄호 지문은 서술로, 첫 대사는 따옴표로
+  const acts: string[] = [];
+  const talk: string[] = [];
+  for (const l of c.reply ?? []) {
+    const m = /^\(([^)]*)\)\s*(.*)$/.exec(l);
+    if (m) {
+      acts.push(end(m[1]));
+      if (m[2]) talk.push(m[2]);
+    } else talk.push(l);
+  }
+  const said = talk[0];
   if (!parts.length) {
-    const t = fx.find((e): e is Extract<Effect, { k: 'trust' }> => e.k === 'trust');
+    parts.push(...acts);
+    const t = c.fx.find((e): e is Extract<Effect, { k: 'trust' }> => e.k === 'trust');
     if (t) parts.push(t.d > 0 ? `${j(nameOf(t.who), '이', '가')} 바텐더를 조금 더 믿게 되었다.` : `${nameOf(t.who)}의 표정이 굳었다. 믿음에 금이 갔다.`);
   }
+  // 신문 기사에 이미 누군가의 한마디가 실렸으면 겹쳐 싣지 않는다
+  if (said && !parts.some((p) => p.includes('한마디'))) parts.push(`${who}의 한마디: 「${said}」`);
   return parts.length ? parts.join(' ') : '아직 눈에 띄는 변화는 없다. 이야기는 카운터에 남았다.';
 }
 
@@ -116,7 +130,7 @@ export function articleOf(d: Deed): Article | null {
   if (!b || !c || !c.fx.length) return null;
   const who = nameOf(b.who);
   const news = c.fx.find((e): e is Extract<Effect, { k: 'news' }> => e.k === 'news');
-  const notes = notesOf(c.fx);
+  const notes = notesOf(c.fx, c.style === 'bury');
   const photo = LORE[b.who] ? b.who : undefined;
 
   // 전언·편지·서류를 건네는 장면(엽서 배달 포함)
@@ -125,9 +139,12 @@ export function articleOf(d: Deed): Article | null {
     const from = nameOf(it.from);
     const to = nameOf(it.to ?? b.who);
     const style = c.style ?? 'plain';
+    // 「세레나의 고맙다는 말」처럼 맡긴 사람 이름이 붙은 것은 원인 문장에서 이름을 한 번만 쓴다
+    const pre = [`${from}의 `, `${from.split(' ')[0]}의 `].find((x) => it.name.startsWith(x));
+    const short = pre ? it.name.slice(pre.length) : it.name;
     const cause = d.post
-      ? `어젯밤 바텐더가 ${from}의 ${j(`「${it.name}」`, '을', '를')} 유성 엽서에 실어 ${to}에게 부쳤다. 꼬마 배달부 피피가 밤새 날랐다.`
-      : `어젯밤 바텐더가 ${from}에게서 맡은 ${j(`「${it.name}」`, '을', '를')} ${to}에게 ${HOW[style] ?? '전했다'}.`;
+      ? `어젯밤 바텐더가 ${from}의 ${j(`「${short}」`, '을', '를')} 유성 엽서에 실어 ${to}에게 부쳤다. 꼬마 배달부 피피가 밤새 날랐다.`
+      : `어젯밤 바텐더가 ${from}에게서 맡은 ${j(`「${short}」`, '을', '를')} ${to}에게 ${HOW[style] ?? '전했다'}.`;
     const head =
       news?.head ??
       (style === 'bury'
@@ -139,7 +156,7 @@ export function articleOf(d: Deed): Article | null {
             : style === 'soft'
               ? `고쳐 전한 「${it.name}」, ${to}의 마음에 닿다`
               : `「${it.name}」, ${to}에게 닿다`);
-    return { kicker: d.post ? '엽서' : style === 'bury' ? '묻힌 말' : '전언', head, cause: end(cause), effect: effectOf(c.fx, true), who: photo, notes };
+    return { kicker: d.post ? '엽서' : style === 'bury' ? '묻힌 말' : '전언', head, cause: end(cause), effect: effectOf(c, who, true), who: photo, notes };
   }
   // 완벽한 잔 뒤에 흘린 소문
   if (b.id.startsWith('drop_')) {
@@ -163,7 +180,7 @@ export function articleOf(d: Deed): Article | null {
       kicker: '소문',
       head: news?.head ?? `골목 소문, ${who}의 귀에 들어가다`,
       cause: `어젯밤 바텐더가 ${who}에게 골목 소문을 들려주었다${it ? ` — 「${it.desc}」` : '.'}`,
-      effect: effectOf(c.fx, true),
+      effect: effectOf(c, who, true),
       who: photo,
       notes,
     };
@@ -193,7 +210,7 @@ export function articleOf(d: Deed): Article | null {
       kicker: '진열장',
       head: news?.head ?? `${who}, 진열장의 ${j(`「${good}」`, '을', '를')} 사 가다`,
       cause: `어젯밤 바텐더가 ${who}에게 진열장의 ${j(`「${good}」`, '을', '를')} 권했다.`,
-      effect: effectOf(c.fx, true),
+      effect: effectOf(c, who, true),
       who: photo,
       notes,
     };
@@ -205,7 +222,7 @@ export function articleOf(d: Deed): Article | null {
     kicker: b.tag,
     head,
     cause: `어젯밤 ${who}의 이야기에 바텐더는 ${quoteSaid(c.label)} 답했다.`,
-    effect: effectOf(c.fx, false),
+    effect: effectOf(c, who, false),
     who: photo,
     notes,
   };
@@ -231,7 +248,7 @@ const FOLLOW: Record<string, { head: string; body: string; who?: string }> = {
   bolt_will_tell: { head: '부두의 노선장, 무언가 연습 중?', body: '거울 앞에서 「피피야」 하고 부르다 헛기침을 했다는 목격담.', who: 'bolt' },
   pipi_post: { head: '유성 엽서 배달, 접수 시작', body: '꼬마 배달부가 별사탕 한 봉지에 밤새 엽서를 나른다. 맡은 말은 다음 날 아침 그대로 배달.', who: 'pipi' },
   pipi_told: { head: '꼬마 배달부, 부두에서 오래 하늘을 보다', body: '별 나침반을 꼭 쥔 채였다고 한다.', who: 'pipi' },
-  fest_started: { head: '꿈의 축제, 올해는 열릴까', body: '진행자 레일라가 가수·시·불꽃·허가를 찾아 골목을 누비고 있다.', who: 'leila' },
+  fest_started: { head: '꿈의 축제 준비, 골목에서 첫발', body: '진행자 레일라가 가수·시·불꽃·허가를 찾아 골목을 누비고 있다.', who: 'leila' },
   fest_fireworks: { head: '항구에서 시험 불꽃 목격', body: '밤하늘에 별가루가 한 줄기 터졌다. 범인은 아직 오리무중.', who: 'bolt' },
   fest_poem: { head: '낭독 원고, 마감 임박', body: '떠돌이 시인이 정거장 벤치에서 밤새 원고지를 구겼다.', who: 'evan' },
   fest_poem_refused: { head: '시인, 축제 낭독을 고사', body: '「제 시는 무대에 어울리지 않아요」 — 레일라의 한숨이 골목에 길게 남았다.', who: 'leila' },
@@ -309,7 +326,7 @@ function defaultLead(s: StoryState, day: number): Article {
     case 2:
       return { kicker: '골목', head: '새 바텐더, 첫 밤을 무사히 넘기다', body: '유성 골목 7번지에 다시 발길이 이어진다. 단골 몇은 벌써 카운터에 말을 맡길 눈치다.' };
     case 3:
-      return { kicker: '극장', head: '월광관 공연 날, 골목이 붐비다', body: '공연이 끝난 뒤 골목 바에 들르는 관객이 늘었다는 소식.' };
+      return { kicker: '극장', head: '월광관 공연 날, 골목이 붐비다', body: '공연이 끝난 뒤 유성 골목 7번지 별빛 바에 들르는 관객이 늘었다는 소식.' };
     case 4:
       return { kicker: '날씨', head: '녹턴에 비 — 우산을 챙기세요', body: '밤새 비가 내린다. 우산 없는 손님이 많을 듯.' };
     case 5:
@@ -359,7 +376,7 @@ function openingEdition(day: number): Edition {
     weather: weatherOf(day),
     lead: {
       kicker: '1면',
-      head: '유성 골목 7번지의 바, 1년 만에 다시 불을 켜다',
+      head: '별빛 바, 1년 만에 다시 불을 켜다',
       body: '사라진 주인 할의 가게를 새 바텐더가 이어받았다. 할이 남긴 것은 열쇠 한 꾸러미와 「약속 장부」 한 권. 오늘 밤 18시, 막차가 끊긴 뒤에 문을 연다.',
     },
     articles: [
@@ -390,7 +407,7 @@ function festivalEdition(s: StoryState, day: number, last: Article[]): Edition {
       ...last.slice(0, 2),
     ],
     follow: [],
-    briefs: briefsFor(day, 1, []),
+    briefs: [{ kicker: '골목', head: '축제 답례, 바의 병이 가득', body: '할의 옛 거래처가 「축제 수고했다」며 별빛 바의 빈 병을 밤새 모두 채워 두었다.' }, ...briefsFor(day, 1, [])],
     ads: adsFor(day),
     night: s.nights.find((n) => n.day === day - 1) ?? null,
   };

@@ -1602,11 +1602,14 @@ function ensurePaper() {
 }
 
 /** 기사 하나: 어깨 제목·제목·「어젯밤 바텐더가 … → 그 결과 …」·작은 도장 */
-function articleHtml(a: Article, cls: string, photo = false) {
+function articleHtml(a: Article, cls: string, photo: 'bust' | 'head') {
   const text = a.cause
     ? `<p class="pp-cause">${a.cause}</p><p class="pp-effect"><b class="pp-arrow">→ 그 결과</b> ${a.effect ?? ''}</p>`
     : `<p class="pp-body">${a.body ?? ''}</p>`;
-  const pic = photo && a.who ? `<figure class="pp-photo">${portrait(a.who, 'idle')}<figcaption>${nameOf(a.who)}</figcaption></figure>` : '';
+  // 1면은 상반신 사진, 나머지 기사는 작은 얼굴 사진
+  const pic = a.who
+    ? `<figure class="pp-photo ${photo}">${portrait(a.who, 'idle', photo)}${photo === 'bust' ? `<figcaption>${nameOf(a.who)}</figcaption>` : ''}</figure>`
+    : '';
   const notes = a.notes?.length ? `<p class="pp-notes">${a.notes.map((n) => `<span>${n}</span>`).join('')}</p>` : '';
   return `<article class="${cls}"><p class="pp-kicker">${a.kicker}</p><h3 class="pp-head">${a.head}</h3>${pic}<div class="pp-text">${text}${notes}</div></article>`;
 }
@@ -1640,10 +1643,10 @@ function paperHtml(ed: Edition, back: boolean) {
       </header>
       <p class="pp-dateline"><span>유성 골목 7번지 소식</span><span>${til}</span><span>값 ✦1</span></p>
       <div class="pp-grid">
-        ${articleHtml(ed.lead, 'pp-lead', true)}
+        ${articleHtml(ed.lead, 'pp-lead', 'bust')}
         <div class="pp-cols">
-          ${ed.articles.map((a) => articleHtml(a, 'pp-art', false)).join('')}
-          ${ed.follow.length ? `<section class="pp-follow"><h4 class="pp-sec">후속 보도</h4>${ed.follow.map((a) => articleHtml(a, 'pp-art small', false)).join('')}</section>` : ''}
+          ${ed.articles.map((a) => articleHtml(a, 'pp-art', 'head')).join('')}
+          ${ed.follow.length ? `<section class="pp-follow"><h4 class="pp-sec">후속 보도</h4>${ed.follow.map((a) => articleHtml(a, 'pp-art small', 'head')).join('')}</section>` : ''}
         </div>
         <aside class="pp-side">
           ${nightBox(ed)}
@@ -1661,7 +1664,7 @@ function paperArchive() {
   if (!list.length) return '';
   return `<h3>지난 신문 <small>누르면 다시 펼쳐요</small></h3>
     <ul class="pp-archive">${list
-      .map((p) => `<li><button class="ghost" data-act="paper-open" data-id="${p.day}"><span class="num">DAY ${p.day}</span><span>${p.lead.head}</span></button></li>`)
+      .map((p) => `<li><button class="secondary" data-act="paper-open" data-id="${p.day}"><span class="num">DAY ${p.day}</span><span>${p.lead.head}</span></button></li>`)
       .join('')}</ul>`;
 }
 
@@ -1826,6 +1829,8 @@ function renderOverlay() {
         return;
       }
       el.innerHTML = paperHtml(ed, paperBack !== null);
+      // 전날 밤 상점의 알림이 제호를 가리지 않게 걷는다.
+      $('toast').classList.remove('show');
       break;
     }
     case 'dayStart': {
@@ -2536,6 +2541,8 @@ document.addEventListener('click', (e) => {
       break;
     case 'to-final':
       // 7일째 밤이 지나면 무한 영업 첫날 아침으로 저장해 둔다.
+      // 결산 뒤에는 장보기를 거치지 않으니, 축제 답례로 할의 옛 거래처가 빈 병을 모두 채워 둔다(아침 신문 단신).
+      for (const id of unlocked().ingredients) state.refills.add(id);
       advanceDay();
       state.overlay = 'final';
       break;
@@ -2725,6 +2732,7 @@ debug.__talk = () => {
   };
 };
 debug.__story = () => ({ flags: [...state.story.flags], items: [...state.story.items], trust: { ...state.story.trust }, endings: { ...state.story.endings }, goods: { ...state.goods } });
+debug.__night = () => ({ day: state.day, total: state.plan.visits.length, outcomes: state.plan.visits.map((v, i) => [v.customer, state.outcomes[i] ?? null]), paper: paperOf(state.day)?.lead.head ?? null });
 
 // 주소에 ?debug가 있을 때만: 지금 손님의 주문을 완벽하게 맞춘 잔을 곧바로 낸다(화면 검증용). 경향 부호·열쇠 맛을 덧붙일 수 있다.
 if (new URLSearchParams(location.search).has('debug')) {
