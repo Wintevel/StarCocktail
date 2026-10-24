@@ -3,7 +3,7 @@
 // 새 칸으로 내려 주고, 초점·키·화면 읽기 프로그램 안내를 맡는다.
 // 고르기·권하기·끝내기·닫기 버튼은 data-act(talk-pick·talk-sell·talk-next·talk-done·talk-close)로 main.ts가 처리한다.
 
-import { type Cut, type PageIn, planComic, type Say, type TailIn, type Unit, unitText } from '../comicPlan';
+import { type Cut, type PageIn, planComic, type Say, settleShown, shownPrefix, stepShown, type TailIn, type Unit, unitText } from '../comicPlan';
 import { josa, type When } from '../story';
 import { cutSvg, faceSvg, memorySvg, openSvg, propSvg, type SceneOpts, soldSvg } from './comicArt';
 
@@ -153,7 +153,7 @@ export class Comic {
     if (last && last.n === m.page.n) this.pages[this.pages.length - 1] = m.page;
     else this.pages.push(m.page);
     this.units = planComic(this.pages, m.tail);
-    this.settle();
+    this.revealed = settleShown(this.units, this.revealed);
     this.root.hidden = !show;
     this.root.dataset.when = m.when;
     this.renderHead();
@@ -172,10 +172,9 @@ export class Comic {
 
   /** 다음 칸을 펼친다(더 없으면 false) */
   step(): boolean {
-    const i = this.units.findIndex((u) => !this.revealed.has(u.key));
-    if (i < 0 || this.root.hidden) return false;
-    this.revealed.add(this.units[i].key);
-    this.settle();
+    const next = stepShown(this.units, this.revealed);
+    if (!next || this.root.hidden) return false;
+    this.revealed = next;
     this.lastStep = performance.now();
     const added = this.render();
     this.follow(added);
@@ -245,17 +244,6 @@ export class Comic {
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
-  /** 곧바로 펼칠 칸(auto)과 앞 칸에 붙어 나오는 칸(join)을 펼친다. 펼치지 않은 칸에서 멈춘다. */
-  private settle() {
-    for (let i = 0; i < this.units.length; i++) {
-      const u = this.units[i];
-      if (this.revealed.has(u.key)) continue;
-      const prev = this.units[i - 1];
-      if (u.auto || (u.join && (!prev || this.revealed.has(prev.key)))) this.revealed.add(u.key);
-      else break;
-    }
-  }
-
   private reset(session: number) {
     const a = document.activeElement as HTMLElement | null;
     this.returnTo = a && a !== document.body && !this.root.contains(a) ? a : null;
@@ -289,8 +277,7 @@ export class Comic {
     const added: HTMLElement[] = [];
     const keep = new Set<string>();
     let prev: HTMLElement | null = null;
-    for (const u of this.units) {
-      if (!this.revealed.has(u.key)) break;
+    for (const u of shownPrefix(this.units, this.revealed)) {
       const sig = JSON.stringify(u);
       let rec = this.els.get(u.key);
       if (!rec || rec.sig !== sig) {

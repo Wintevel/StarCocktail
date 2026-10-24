@@ -112,7 +112,6 @@ import {
   type Beat,
   BEATS,
   choicesOf,
-  type ChoiceView,
   choose,
   closeBook,
   computeEndings,
@@ -1038,19 +1037,6 @@ function renderClip() {
 /** 대사 한 줄: 괄호로 시작하면 지문, 아니면 손님의 말 */
 const lineHtml = (line: string) => (line.startsWith('(') ? `<p class="tk-narr">${line}</p>` : `<p class="tk-say">${line}</p>`);
 
-const STYLE_BADGE: Partial<Record<string, string>> = { asis: '그대로', soft: '완곡', blunt: '직설', bury: '묻기' };
-
-function choiceHtml(v: ChoiceView, n: number) {
-  const c = v.choice;
-  const sell = c.fx.find((e) => e.k === 'sell');
-  const badge = sell && sell.k === 'sell' ? `✦${GOOD_BY_ID[sell.g].price}` : (STYLE_BADGE[c.style ?? ''] ?? '');
-  return `<li><button class="tk-choice st-${c.style ?? 'plain'}" data-act="talk-pick" data-id="${v.i}" ${v.ok ? '' : 'disabled'}>
-    <span class="tk-n num" aria-hidden="true">${n + 1}</span>
-    <span class="tk-cbody"><strong>${c.label}</strong>${c.hint && v.ok ? `<small>${c.hint}</small>` : ''}${!v.ok && v.reason ? `<small class="tk-lock">${v.reason}</small>` : ''}</span>
-    ${badge ? `<span class="tk-badge">${badge}</span>` : ''}
-  </button></li>`;
-}
-
 /** 대화 카드를 매번 다시 쓰지 않도록(움직임이 다시 시작되지 않게) 바뀔 때만 고친다. */
 let talkHtml = '';
 let talkFresh = false;
@@ -1116,47 +1102,27 @@ function renderTalk() {
     return;
   }
   const c = customerAt(s.idx);
-  const ctx = talkCtx(s, t.when);
-  const b = t.beat;
-  const done = !b || t.picked !== null;
-  const views = b && t.picked === null ? choicesOf(b, state.story, ctx) : [];
-  const more = done && !!b && t.count < TALK_MAX && !!beatFor(s, t.when);
-  const offers = done ? offersFor(s, b) : [];
+  // 이 카드에는 장면 없는 대화만 온다(단골의 짧은 혼잣말·지나가는 손님의 잡담·진열장). 장면은 이야기 만화가 맡는다.
+  const offers = offersFor(s);
   // 지나가는 손님은 이야기·신뢰가 없고 짧은 잡담만 한다.
   const guest = isGuest(c.id);
   const idle = guest ? guestSmallTalk(c.id) : (IDLE[c.id] ?? []);
-  const lines = b ? b.lines : t.sold.length ? [] : idle;
+  const lines = t.sold.length ? [] : idle;
   const notes = [...t.notes, ...t.sold.map(saleNote)];
   const sold = t.sold[t.sold.length - 1];
   const mood = t.when === 'after' ? (s.drink?.grade ?? 'idle') : 'idle';
-  // 고쳐 전하기가 걸린 장면에서는 방금 낸 잔의 경향을 보여 준다.
-  const toneChoice = !!b && t.when === 'after' && b.choices.some((x) => x.style === 'soft' || x.style === 'blunt');
-  const tone = s.drink?.attrs.tone ?? 0;
-  const toneNote = toneChoice
-    ? `<p class="tk-drink">방금 낸 잔의 경향 <b class="num">${tone > 0 ? '+' : ''}${tone}</b> · ${tone < 0 ? '「완곡함」 쪽 — 부드럽게 고쳐 전할 수 있어요' : tone > 0 ? '「직설적」 쪽 — 단도직입으로 고쳐 전할 수 있어요' : '경향 0 — 말투를 고칠 수 없어요'}</p>`
-    : '';
-  const picked = b && t.picked !== null ? b.choices[t.picked] : null;
   const exit = t.when === 'before' ? '주문 받기 →' : '배웅하기';
-  const closable = t.when === 'before' ? !picked : done;
-  const foot = done
-    ? `<div class="tk-foot">
-        ${more ? `<button class="secondary" data-act="talk-done">${exit}</button><button class="primary" data-act="talk-next">다음 이야기 ▸</button>` : `<button class="primary" data-act="talk-done">${exit}</button>`}
-      </div>`
-    : '';
   const html = `
     ${masthead(`DAY ${state.day} · ${clockLabel(minute())}`, '카운터의 약속', t.when === 'before' ? '바 카운터에서 한 말은 바텐더가 맡는다' : '전할지, 묻어 둘지, 어떻게 전할지는 바텐더가 정한다')}
-    ${closable ? `<button class="clip-x tk-x" data-act="talk-close" aria-label="${t.when === 'before' ? '이야기는 다음에 듣기' : '배웅하기'}">✕</button>` : ''}
+    <button class="clip-x tk-x" data-act="talk-close" aria-label="${t.when === 'before' ? '이야기는 다음에 듣기' : '배웅하기'}">✕</button>
     <div class="tk-head">
       <div class="tk-face">${portrait(c.id, mood)}</div>
       <div class="tk-who">
         <div class="who">${ransom(c.name, { seed: c.id.charCodeAt(0) })}<span class="oc-title">${c.title}</span></div>
-        <div class="tk-meta"><span class="stamp">${b ? b.tag : guest ? '잡담' : '진열장'}</span>${guest ? '<small>지나가는 손님</small>' : stars(trustOf(state.story, c.id))}<small>${t.when === 'before' ? '잔을 내기 전' : '잔을 낸 뒤'}</small></div>
+        <div class="tk-meta"><span class="stamp">${guest ? '잡담' : '진열장'}</span>${guest ? '<small>지나가는 손님</small>' : stars(trustOf(state.story, c.id))}<small>${t.when === 'before' ? '잔을 내기 전' : '잔을 낸 뒤'}</small></div>
       </div>
     </div>
     <div class="tk-lines ${talkFresh ? 'fresh' : ''}">${lines.map(lineHtml).join('')}</div>
-    ${toneNote}
-    ${views.length ? `<ol class="tk-choices" aria-label="바텐더의 선택">${views.map(choiceHtml).join('')}</ol>` : ''}
-    ${picked ? `<div class="tk-reply"><p class="tk-you">▸ ${picked.label}</p>${t.reply.map(lineHtml).join('')}</div>` : ''}
     ${notes.length ? `<ul class="tk-notes">${notes.join('')}</ul>` : ''}
     ${sold ? `<div class="tk-reply sold">${lineHtml(GOOD_LINES[sold])}</div>` : ''}
     ${
@@ -1169,7 +1135,7 @@ function renderTalk() {
             .join('')}</div>`
         : ''
     }
-    ${foot}`;
+    <div class="tk-foot"><button class="primary" data-act="talk-done">${exit}</button></div>`;
   // 넓은 화면에서는 이야기하는 손님을 가리지 않게 손님 반대편에 카드를 둔다.
   const at = shop.screenOf(s.key);
   const side = at && at.x < window.innerWidth / 2 ? 'right' : 'left';
@@ -2542,16 +2508,9 @@ document.addEventListener('keydown', (e) => {
   if ((state.talk?.beat || (comicPreview && !state.talk)) && !state.overlay) {
     if (comic.key(e)) return;
   } else if (state.talk && !state.overlay) {
-    // 대화 카드: 1~9로 선택지, Enter로 다음(주문 받기·배웅), Esc로 닫기
+    // 대화 카드(장면 없는 잡담·진열장): Enter로 다음(주문 받기·배웅), Esc로 닫기. 숫자 키는 카드가 열린 동안 먹는다.
     const card = $('talk');
-    if (/^[1-9]$/.test(e.key)) {
-      const b = card.querySelectorAll<HTMLButtonElement>('.tk-choice')[Number(e.key) - 1];
-      if (b && !b.disabled) {
-        e.preventDefault();
-        b.click();
-      }
-      return;
-    }
+    if (/^[1-9]$/.test(e.key)) return;
     if (e.key === 'Enter' && !(e.target as HTMLElement).closest('button')) {
       card.querySelector<HTMLButtonElement>('.tk-foot .primary')?.click();
       return;

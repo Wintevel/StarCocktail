@@ -433,6 +433,36 @@ export function planComic(pages: PageIn[], tail: TailIn): Unit[] {
   return pages.flatMap((p, i) => planPage(p, i === pages.length - 1 ? tail : null));
 }
 
+// ── 펼치기 ─────────────────────────────────────────
+// 칸은 앞에서부터 차례로 펼친다. 한 번 넘기면 처음으로 가려진 칸 하나를 펼치고,
+// 그 뒤에 붙은 칸(join)과 곧바로 펼치는 칸(auto)은 다음 가려진 칸 앞까지 함께 펼친다.
+
+/** 펼친 칸 모음에 곧바로 이어 펼칠 칸을 더한 새 모음 */
+export function settleShown(units: readonly Unit[], shown: ReadonlySet<string>): Set<string> {
+  const out = new Set(shown);
+  for (let i = 0; i < units.length; i++) {
+    const u = units[i];
+    if (out.has(u.key)) continue;
+    const prev = units[i - 1];
+    if (u.auto || (u.join && (!prev || out.has(prev.key)))) out.add(u.key);
+    else break;
+  }
+  return out;
+}
+
+/** 한 번 넘긴 뒤의 펼친 칸 모음(더 펼칠 칸이 없으면 null) */
+export function stepShown(units: readonly Unit[], shown: ReadonlySet<string>): Set<string> | null {
+  const next = units.find((u) => !shown.has(u.key));
+  if (!next) return null;
+  return settleShown(units, new Set(shown).add(next.key));
+}
+
+/** 앞에서부터 이어 펼친 칸들(그릴 칸) */
+export function shownPrefix(units: readonly Unit[], shown: ReadonlySet<string>): Unit[] {
+  const i = units.findIndex((u) => !shown.has(u.key));
+  return i < 0 ? [...units] : units.slice(0, i);
+}
+
 /** 칸 하나에 나오는 글(화면 읽기 프로그램에 읽어 줄 것) */
 export function unitText(u: Unit, nameOf: (who: string) => string): string {
   const cut = (c: Cut, who: string) => [c.caption, c.say ? `${nameOf(who)}: ${c.say.text}` : ''].filter(Boolean).join(' ');

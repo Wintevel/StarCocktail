@@ -9,7 +9,10 @@ import {
   planPage,
   propOf,
   replyMood,
+  settleShown,
+  shownPrefix,
   splitLine,
+  stepShown,
   type TailIn,
   type Unit,
   unwrap,
@@ -219,6 +222,48 @@ describe('장면 → 만화 칸', () => {
         }
       });
     }
+  });
+
+  it('칸은 한 번 넘길 때마다 앞에서부터 펼치고, 붙은 칸·곧바로 펼치는 칸은 함께 나온다', () => {
+    const b = BEAT_BY_ID.mio_box;
+    const before = planComic([page(b)], NO_TAIL);
+    let shown = settleShown(before, new Set());
+    // 처음에는 카운터의 손님 칸만
+    expect(shownPrefix(before, shown).map((u) => u.k)).toEqual(['open']);
+    let steps = 0;
+    for (let next = stepShown(before, shown); next; next = stepShown(before, shown)) {
+      expect(next.size).toBeGreaterThan(shown.size);
+      shown = next;
+      steps += 1;
+    }
+    expect(steps).toBeLessThan(before.length);
+    expect(shownPrefix(before, shown)).toEqual(before);
+    expect(stepShown(before, shown)).toBeNull();
+
+    // 고르면 다시 나눈 칸에서 바텐더의 말과 첫 대답은 곧바로, 닫는 묶음(결과·진열장·끝 버튼)은 한 번 더 넘기면 함께
+    const tail: TailIn = { offers: [{ g: 'postcard', name: '유성 엽서', price: 3, left: 2 }], end: { exit: '배웅하기', more: false } };
+    const after = planComic([page(b, { picked: 0, reply: b.choices[0].reply!, notes: ['<li>맡음</li>'] })], tail);
+    shown = settleShown(after, shown);
+    expect(shownPrefix(after, shown).map((u) => u.k).slice(-2)).toEqual(['you', 'split']);
+    shown = stepShown(after, shown)!;
+    expect(shownPrefix(after, shown).map((u) => u.k).slice(-3)).toEqual(['notes', 'shelf', 'end']);
+    expect(stepShown(after, shown)).toBeNull();
+  });
+
+  it('고쳐 전하기 장면의 잔 경향은 선택지와 함께, 이어지는 장면은 넘김 띠와 첫 칸이 함께 펼쳐진다', () => {
+    const tone = planComic([page(BEAT_BY_ID.tell_g_stage_norma, { tone: -2 })], NO_TAIL);
+    let shown = settleShown(tone, new Set());
+    while (!shownPrefix(tone, shown).some((u) => u.k === 'tone')) shown = stepShown(tone, shown)!;
+    expect(shownPrefix(tone, shown).at(-1)?.k).toBe('choices');
+
+    const b = BEAT_BY_ID.pipi_tab;
+    const p1 = page(b, { picked: 0, reply: b.choices[0].reply! });
+    const one = planComic([p1], NO_TAIL);
+    const all = new Set(one.map((u) => u.key));
+    const two = planComic([p1, page(BEAT_BY_ID.drop_g_sweet, { n: 2 })], NO_TAIL);
+    const now = shownPrefix(two, settleShown(two, all)).filter((u) => u.key.startsWith('p2-'));
+    expect(now.length).toBe(2);
+    expect(now[0].k).toBe('next');
   });
 
   it('집중선 칸은 한 장면의 대사에 한 번까지', () => {
