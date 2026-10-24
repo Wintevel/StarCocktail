@@ -251,8 +251,9 @@ export class ShopScene {
       const can = on && ready();
       g.classList.toggle('hot', can);
       tag.classList.toggle('hot', can);
-      // 눌러 보라는 안내가 펼쳐져 이름표가 넓어진다: 화면 안쪽으로 다시 민다
+      // 눌러 보라는 안내가 펼쳐져 이름표가 넓어진다: 다음 프레임을 기다리지 않고 바로 화면 안쪽으로 다시 민다
       v.lastTag = '';
+      if (this.vis.get(key) === v) this.placeUi(v, performance.now());
     };
     g.addEventListener('click', pick);
     g.addEventListener('pointerenter', () => hot(true));
@@ -494,7 +495,8 @@ export class ShopScene {
     v.say.classList.toggle('flip', flip);
     const sx = flip ? Math.max(8, head.x - gap - w) : head.x + gap;
     // 말풍선 윗변이 윗줄(시계·버튼) 밑으로 숨지 않게 내린다
-    let sy = head.y - (v.tag.hidden ? 0 : 54);
+    // 이름표 위에 띄운다(안내가 펼쳐져 이름표가 커져도 가리지 않게 실제 높이를 잰다)
+    let sy = head.y - (v.tag.hidden ? 0 : 14 + v.tag.offsetHeight);
     if (sayOn) sy = Math.max(sy, this.topInset() + 8 + v.say.offsetHeight);
     v.say.style.transform = `translate(${Math.round(sx)}px, ${Math.round(sy)}px) translate(0, -100%)`;
   }

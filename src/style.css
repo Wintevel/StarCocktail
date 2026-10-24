@@ -749,6 +749,8 @@ button:disabled {
 }
 
 .p-tag.hot {
+  /* 펼쳐진 이름표가 옆 손님 이름표 위로 온다 */
+  z-index: 2;
   border-color: var(--line-strong);
   background: linear-gradient(180deg, rgba(74, 50, 138, 0.97), rgba(34, 21, 70, 0.97));
   box-shadow:
