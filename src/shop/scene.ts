@@ -251,6 +251,8 @@ export class ShopScene {
       const can = on && ready();
       g.classList.toggle('hot', can);
       tag.classList.toggle('hot', can);
+      // 눌러 보라는 안내가 펼쳐져 이름표가 넓어진다: 화면 안쪽으로 다시 민다
+      v.lastTag = '';
     };
     g.addEventListener('click', pick);
     g.addEventListener('pointerenter', () => hot(true));
@@ -286,6 +288,7 @@ export class ShopScene {
     v.tag.querySelector('.p-mark')!.textContent = TAG_MARK[mode];
     v.tag.querySelector('.p-hint')!.textContent = `${v.c.title} · ${TAG_HINT[mode]}`;
     v.tag.setAttribute('aria-label', `${v.c.name}, ${v.c.title}: ${TAG_HINT[mode]}`);
+    v.lastTag = '';
   }
 
   setPatience(key: string, frac: number, impatient: boolean) {

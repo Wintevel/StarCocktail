@@ -2250,6 +2250,34 @@ body[data-view="mix"] .wipe-edge {
   color: var(--muted);
 }
 
+/* 마감·7일 결산 판 안의 이야기 기록과 결말 카드: 밤빛 판 위의 둥근 조각(기울이지 않는다) */
+.card.end .story-log li {
+  border-bottom-color: rgba(255, 214, 140, 0.18);
+}
+
+.card.end .story-log b {
+  color: var(--accent-2);
+}
+
+.card.final .ending {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  transform: none;
+}
+
+.card.final .ending .arc {
+  background: var(--accent-2);
+  color: var(--on-accent);
+  border-radius: 999px;
+  transform: none;
+}
+
+.card.final .ending .extra {
+  color: var(--accent);
+}
+
 /* 하루 시작·마감 */
 .day-head {
   display: flex;
@@ -4372,6 +4400,12 @@ body:not([data-talk=""]) .p-tag {
 
   .overlay .paper-page {
     filter: none;
+  }
+
+  /* 이름표의 「눌러서 듣기」 안내는 좁은 화면에서 두 줄로 접는다 */
+  .p-tag .p-hint {
+    max-width: 170px;
+    white-space: normal;
   }
 
   .result-card {
