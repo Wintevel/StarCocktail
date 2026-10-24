@@ -1,5 +1,6 @@
 import './style.css';
 import './mix-panel.css';
+import './book.css';
 // 글꼴: 역할마다 다른 무료 한글 글꼴(한글은 유니코드 구간별로 나뉘어 쓰는 글자만 받는다)
 import '@fontsource/limelight/400.css'; // 로고(StarCocktail)
 import '@fontsource/cinzel/700.css'; // 로마자·숫자 제목(DAY 표시)
@@ -146,8 +147,9 @@ import {
   type When,
 } from './story';
 import { type Article, type Edition, morningEdition } from './paper';
-import { canLeave, chooseGlass, chooseIce, glassChangeLoses, type MixStep, nextStep, prevStep, reachable } from './mixSteps';
+import { canLeave, chooseGlass, chooseIce, glassChangeLoses, type MixStep, nextStep, prevStep, reachable, stirButton } from './mixSteps';
 import { type Frame, type GlassAnchor, Stage3D } from './three/stage';
+import { type BookTab, type BookView, renderBook } from './ui/book';
 import { icons } from './ui/icons2d';
 import { renderPanel, resetPanel } from './ui/mixPanel';
 import { ransom } from './ui/ransom';
@@ -156,12 +158,10 @@ import { GOOD_BY_ID, type GoodId, GOODS, LORE } from './world';
 
 /** 가게 안(손님이 스툴에 앉는 2D 화면) / 제조대(3D) */
 type View = 'shop' | 'mix';
-/** 제조 단계(① 잔 → ② 얼음 → ③ 재료 → ④ 젓기 → ⑤ 장식). result는 자유 제조에서만 쓴다(영업 중에는 서빙하면 곧바로 가게로 돌아간다). */
+/** 제조 단계(① 잔 → ② 얼음 → ③ 재료 → ④ 장식, 젓기는 잔 오른쪽 버튼). result는 자유 제조에서만 쓴다(영업 중에는 서빙하면 곧바로 가게로 돌아간다). */
 type Phase = MixStep | 'result';
 type Mode = 'shift' | 'free';
 type Overlay = 'title' | 'book' | 'paper' | 'dayStart' | 'dayEnd' | 'shop' | 'final' | null;
-/** 레시피북의 쪽: 레시피 / 단골 수첩 / 약속 장부 / 이야기 기록 */
-type BookTab = 'recipes' | 'patrons' | 'promises' | 'log';
 /** 오늘 손님 한 명의 결과: 판정 / 돌려보냄 / 기다리다 떠남 */
 type Outcome = Grade | 'away' | 'left';
 
@@ -280,6 +280,10 @@ interface State {
   /** 레시피북을 열 때 강조할 레시피(레시피 이름 주문) */
   bookFocus: string | null;
   bookTab: BookTab;
+  /** 레시피북에서 쪽마다 고른 항목(오른쪽 쪽에 펼친다) */
+  bookSel: Partial<Record<BookTab, string>>;
+  /** 폰: 목차 대신 고른 항목 쪽을 보는 중 */
+  bookReading: boolean;
   /** 열려 있는 대화 카드 */
   talk: Talk | null;
   /** 왼쪽 아래 수첩(맡은 것·소문)이 열려 있다 */
@@ -367,6 +371,8 @@ const state: State = {
   orderOpen: false,
   bookFocus: null,
   bookTab: 'recipes',
+  bookSel: {},
+  bookReading: false,
   talk: null,
   notebook: false,
 };
@@ -391,7 +397,8 @@ app.innerHTML = `
   <div class="hud" id="hud">
     <div class="meters" id="meters"></div>
     <div class="pourbar" id="pourbar" role="img"></div>
-    <div class="glass-actions" id="actions"></div>
+    <button type="button" class="glass-btn reset-btn" id="resetBtn" data-act="restart" hidden><span class="gb-ring" aria-hidden="true"></span><span class="gb-label"></span></button>
+    <button type="button" class="glass-btn stir-btn" id="stirBtn" data-act="stir" hidden><span class="gb-ring" aria-hidden="true"></span><span class="gb-label"></span></button>
   </div>
   <aside class="mix-panel" id="mixPanel" aria-label="제조 단계"></aside>
   <p class="sr-only" id="mixLive" aria-live="polite"></p>
@@ -540,32 +547,70 @@ const place = (el: HTMLElement, left: number, top: number) => {
   el.style.left = `${Math.round(left)}px`;
   el.style.top = `${Math.round(top)}px`;
 };
-const clampX = (x: number, w: number) => Math.max(8, Math.min(window.innerWidth - w - 8, x));
+/** 두 상자가 겹치는가(여백 pad만큼 넓혀 본다) */
+const overlaps = (a: DOMRect, b: { left: number; top: number; right: number; bottom: number }, pad = 0) =>
+  a.left < b.right + pad && b.left < a.right + pad && a.top < b.bottom + pad && b.top < a.bottom + pad;
 
-/** 잔의 화면 위치에 맞춰 부은 횟수 바(오른쪽)와 초기화 버튼(아래)을 붙인다. */
+/**
+ * 잔의 화면 위치에 맞춰 잔 둘레 조작을 붙인다: 오른쪽에 부은 횟수 바와 그 아래 젓기 버튼, 왼쪽에 초기화 버튼.
+ * 두 동그라미 버튼은 잔 바닥 높이에 나란히 놓는다(휴대폰은 단계 시트 위로). 휴대폰에서 초기화가
+ * 왼쪽 맛 기둥에 닿으면 기둥 위로 올린다. 횟수 바는 잔 윗부분과 젓기 버튼 사이 가운데에 둔다.
+ */
 function layoutHud(a: GlassAnchor | null = anchor) {
   if (!a) return;
   anchor = a;
+  const mobile = isMobile();
+  const side = mobile ? 10 : 18;
   const glassH = Math.max(60, a.bottom - a.top);
-  const midY = (a.top + a.bottom) / 2;
+  const stirEl = $('stirBtn');
+  const resetEl = $('resetBtn');
+  const w = stirEl.offsetWidth || 64;
+  const h = stirEl.offsetHeight || 76;
+  const panel = $('mixPanel');
+  const floor = (mobile && !panel.hidden ? panel.getBoundingClientRect().top : window.innerHeight) - 10;
+  const top = Math.max(frameTop, Math.min(floor - h, a.bottom - h + 6));
+  const right = Math.min(window.innerWidth - w - 6, a.x + a.half + side);
+  place(stirEl, right, top);
 
+  const left = Math.max(6, a.x - a.half - side - w);
+  let resetTop = top;
+  const box = () => ({ left, top: resetTop, right: left + w, bottom: resetTop + h });
+  const meters = $('meters');
+  if (mobile && !meters.hidden) {
+    const m = meters.getBoundingClientRect();
+    if (overlaps(m, box(), 6)) resetTop = Math.max(frameTop, m.top - h - 8);
+  }
+  // 휴대폰에서 펼쳐 본 주문 카드는 잠깐 덮는 것이라 피하지 않는다.
+  const order = orderRect();
+  if (order && !(mobile && state.orderOpen) && overlaps(order, box(), 6)) resetTop = order.bottom + 8;
+  place(resetEl, left, resetTop);
+
+  // 횟수 바: 잔 윗부분과 젓기 버튼 사이 가운데. 낮은 잔이라 자리가 모자라면(휴대폰) 위로 늘린다.
   const bar = $('pourbar');
-  const barH = Math.min(200, Math.max(90, glassH * 0.8));
-  bar.style.height = `${barH}px`;
-  place(bar, a.x + a.half + 18, midY - barH / 2);
-
-  const actions = $('actions');
-  place(actions, clampX(a.x - actions.offsetWidth / 2, actions.offsetWidth), Math.min(window.innerHeight - actions.offsetHeight - 14, a.foot + 10));
+  const end = top - 12;
+  let barH = Math.min(200, Math.max(90, glassH * 0.8));
+  let barTop = a.top + Math.max(0, (end - a.top - barH) / 2);
+  if (barTop + barH > end) barTop = end - barH;
+  if (barTop < frameTop) {
+    barH = Math.max(40, end - frameTop);
+    barTop = end - barH;
+  }
+  bar.style.height = `${Math.round(barH)}px`;
+  place(bar, right + (w - bar.offsetWidth) / 2, barTop);
 }
 
 /** 화면 요소끼리 띄울 간격 */
 const GAP = 14;
-/** 잔 오른쪽에 부은 횟수 바가 들어갈 자리 */
-const BAR_ROOM = 64;
+/** 잔 양옆에 동그라미 버튼(왼쪽 초기화, 오른쪽 횟수 바와 젓기)이 들어갈 자리 */
+const SIDE_ROOM = 88;
+/** 휴대폰에서 잔 오른쪽 자리(횟수 바·젓기 버튼 줄). 초기화는 맛 기둥 위로 올라가므로 왼쪽 자리는 따로 두지 않는다. */
+const PHONE_SIDE_ROOM = 72;
 /** 휴대폰에서 왼쪽 맛 게이지 기둥이 차지하는 폭(mix-panel.css의 게이지 폭 + 여백) */
-const PHONE_METERS = 138;
+const PHONE_METERS = 146;
 /** 휴대폰에서 접힌 주문 카드의 아래 끝(펼쳐 볼 때 잔이 움직이지 않도록 접혔을 때 값을 쓴다) */
 let orderLineBottom = 0;
+/** 잔 영역의 위 끝(잔 둘레 버튼·횟수 바가 이보다 위로 올라가지 않는다) */
+let frameTop = 0;
 
 /** 보이는 주문 카드의 화면 상자(기울어진 카드는 바깥 상자) */
 function orderRect(): DOMRect | null {
@@ -577,7 +622,8 @@ function orderRect(): DOMRect | null {
 
 /**
  * 잔을 놓을 화면 영역. 넓은 화면은 왼쪽 주문 카드·맛 게이지와 오른쪽 단계 판 사이,
- * 휴대폰은 위쪽 자리 띠·주문 줄과 아래 단계 판 사이(왼쪽은 게이지 기둥)다. 오른쪽에는 횟수 바 자리를 남긴다.
+ * 휴대폰은 위쪽 자리 띠·주문 줄과 아래 단계 판 사이(왼쪽은 게이지 기둥)다.
+ * 잔 양옆에는 동그라미 버튼 자리를 남긴다(넓은 화면은 양쪽, 휴대폰은 오른쪽만).
  */
 function stageFrame(): Frame {
   const W = window.innerWidth;
@@ -598,20 +644,19 @@ function stageFrame(): Frame {
     if (card && !state.orderOpen) orderLineBottom = card.bottom;
     if (card) top = Math.max(top, (orderLineBottom || card.top + 52) + 8);
     left = PHONE_METERS;
-    right = W - 6;
+    right = W - 6 - PHONE_SIDE_ROOM;
     bottom = (panel ? panel.top : H) - 8;
   } else {
     const meters = rect('meters');
-    left = Math.max(card?.right ?? 0, meters?.right ?? 0) + GAP;
-    right = (panel ? panel.left : W) - GAP;
-    // 잔 아래 초기화 버튼 자리를 남긴다.
-    bottom = H - 66;
+    left = Math.max(card?.right ?? 0, meters?.right ?? 0) + GAP + SIDE_ROOM;
+    right = (panel ? panel.left : W) - GAP - SIDE_ROOM;
+    bottom = H - 26;
   }
   // 자유 제조의 「완성!」 카드가 잔을 가리지 않게 그 위에 놓는다.
   const result = rect('result');
   if (result) bottom = Math.min(bottom, result.top - GAP);
-  const w = Math.max(120, right - left - BAR_ROOM);
-  return { x: left, y: top, w, h: Math.max(120, bottom - top) };
+  frameTop = top;
+  return { x: left, y: top, w: Math.max(120, right - left), h: Math.max(120, bottom - top) };
 }
 
 window.addEventListener('resize', () => {
@@ -760,7 +805,7 @@ function renderOrder() {
   if (!v) {
     el.innerHTML = `
       <div class="oc-main">
-        <div class="who">${ransom('자유 제조', { seed: 9 })}<span class="oc-title">주문 없이 실험하기</span></div>
+        <div class="who"><strong class="oc-name">자유 제조</strong><span class="oc-title">주문 없이 실험하기</span></div>
         <p class="line">마음대로 섞어 보세요. 이름 있는 조합을 만들면 레시피북에 기록돼요. 병은 줄지 않고 시계도 흐르지 않아요.</p>
       </div>
       ${orderToggle()}`;
@@ -773,7 +818,7 @@ function renderOrder() {
   el.innerHTML = `
     <div class="oc-face">${portrait(c.id)}</div>
     <div class="oc-main">
-      <div class="who">${ransom(c.name, { seed: c.id.charCodeAt(0) })}<span class="oc-title">${c.title}</span>${seat?.first ? '<span class="stamp">첫 손님</span>' : ''}</div>
+      <div class="who"><strong class="oc-name">${c.name}</strong><span class="oc-title">${c.title}</span>${seat?.first ? '<span class="stamp">첫 손님</span>' : ''}</div>
       <p class="line">${view.line}</p>
       ${view.extra}
       ${storyHints(c.id, attrs)}
@@ -870,7 +915,7 @@ function renderMeters() {
   const pct = (n: number) => ((Math.max(METER_MIN, Math.min(METER_MAX, n)) - METER_MIN) / (METER_MAX - METER_MIN)) * 100;
   const active = keys.flatMap((k) => {
     const side = keywordSide(attrs[k]);
-    return side ? [`<span class="kw-pill">${keywordLabel(k, side)}</span>`] : [];
+    return side ? [`<span class="kw-pill ${k}">${keywordLabel(k, side)}</span>`] : [];
   });
   el.innerHTML =
     `<h3><span>현재 맛</span>${active.join('')}</h3>` +
@@ -927,7 +972,35 @@ function promptText(): string {
   return '손님을 기다리는 중… 그동안 서랍에서 리필을 주문해 둘 수 있어요';
 }
 
-/** 안내 띠와 잔 둘레에 붙는 것: 부은 횟수 바(오른쪽), 초기화 버튼(아래) */
+/** 잔 둘레 동그라미 버튼의 그림(선은 글자색을 따른다) */
+const GLASS_BTN_ICON = {
+  // 반시계 화살표: 잔부터 다시
+  reset: '<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 3.8v4.6h4.6"/>',
+  // 바 스푼과 소용돌이: 젓기
+  stir: '<path d="M18 2.6 13.1 13.2"/><path d="M19.5 13.6A8 4.2 0 1 1 4.5 13.6"/><path d="M2.2 13.9 5 12.8l.1 3"/>',
+  // 끝냄 표시
+  done: '<path d="M5 12.6l4.4 4.4L19 7.4"/>',
+} as const;
+
+/** 잔 둘레 동그라미 버튼 하나를 고친다. 버튼은 그대로 두고 바뀐 속성만 바꿔 초점을 지킨다. */
+function syncGlassBtn(el: HTMLButtonElement, v: { show: boolean; state: string; icon: keyof typeof GLASS_BTN_ICON; label: string; aria: string; title: string; off: boolean; wait: boolean }) {
+  el.hidden = !v.show;
+  if (!v.show) return;
+  el.dataset.state = v.state;
+  el.disabled = v.off;
+  if (v.wait) el.setAttribute('aria-disabled', 'true');
+  else el.removeAttribute('aria-disabled');
+  el.setAttribute('aria-label', v.aria);
+  el.title = v.title;
+  if (el.dataset.icon !== v.icon) {
+    el.dataset.icon = v.icon;
+    el.querySelector('.gb-ring')!.innerHTML = `<svg class="gb-ic" viewBox="0 0 24 24" focusable="false">${GLASS_BTN_ICON[v.icon]}</svg>`;
+  }
+  const label = el.querySelector('.gb-label')!;
+  if (label.textContent !== v.label) label.textContent = v.label;
+}
+
+/** 안내 띠와 잔 둘레에 붙는 것: 부은 횟수 바·젓기 버튼(오른쪽), 초기화 버튼(왼쪽) */
 function renderHud() {
   const d = state.drink;
   const free = !state.overlay;
@@ -946,10 +1019,35 @@ function renderHud() {
     <span class="num">${d.pours.length}/${cap}</span>`;
   bar.setAttribute('aria-label', `부은 횟수 ${d.pours.length} / ${cap}`);
 
-  const actions = $('actions');
-  actions.hidden = !mix || !d.glass;
-  const restart = `<button class="ghost" data-act="restart" ${stage.busy ? 'aria-disabled="true"' : ''} title="잔부터 다시${shift() && d.pours.length ? ' (부은 재료는 버려져요)' : ''}">↺ 초기화</button>`;
-  if (actions.innerHTML !== restart) actions.innerHTML = restart;
+  // 잔 왼쪽 초기화: 잔부터 다시(부은 재료는 버려진다). 젓기를 물리는 유일한 방법이기도 하다.
+  const lose = shift() && d.pours.length ? ' (부은 재료는 버려져요)' : '';
+  syncGlassBtn($('resetBtn') as HTMLButtonElement, {
+    show: mix && !!d.glass,
+    state: 'ready',
+    icon: 'reset',
+    label: '초기화',
+    aria: `초기화: 잔부터 다시${lose}`,
+    title: `잔부터 다시${lose}`,
+    off: false,
+    wait: stage.busy,
+  });
+  // 잔 오른쪽 젓기: 재료를 한 번 이상 부은 뒤 한 번만. 저은 뒤에는 끝난 표시로 남는다.
+  const st = stirButton(d);
+  syncGlassBtn($('stirBtn') as HTMLButtonElement, {
+    show: mix && !!d.glass,
+    state: st,
+    icon: st === 'done' ? 'done' : 'stir',
+    label: st === 'done' ? '저었어요' : '젓기',
+    aria:
+      st === 'done'
+        ? '저었어요: 젓기는 한 번뿐이에요 (되돌리려면 초기화)'
+        : st === 'ready'
+          ? '젓기: 층이 하나로 섞이고 바디 -1 (한 번만)'
+          : '젓기: 재료를 한 번 이상 부은 뒤 저을 수 있어요',
+    title: st === 'done' ? '젓기는 한 번뿐이에요 · 되돌리려면 초기화' : st === 'ready' ? '저으면 층이 하나로 섞이고 바디 -1 · 젓지 않으면 층이 남아요' : '재료를 한 번 이상 부은 뒤 저을 수 있어요',
+    off: st === 'off',
+    wait: stage.busy || st === 'done',
+  });
 }
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1341,92 +1439,43 @@ function lowStockList() {
       .join('')}</ul>`;
 }
 
-function bookList() {
-  return RECIPES.map((r) => {
-    const found = state.discovered.has(r.id);
-    const focus = state.bookFocus === r.id;
-    // 손님이 이름으로 주문한 레시피는 아직 몰라도 이름은 보인다.
-    const name = found || focus ? r.name : '???';
-    return `<li class="${found ? 'found' : ''} ${focus ? 'focus' : ''}" ${focus ? 'id="bookFocus"' : ''}>
-      <strong>${name}${focus ? ' <em>주문 중</em>' : ''}</strong>
-      <span>${found ? r.desc : '힌트: ' + r.hint}</span>
-      ${found ? `<ul class="chips mini">${r.conditions.map((c) => `<li class="chip">${describe(c, true)}</li>`).join('')}</ul>` : ''}
-    </li>`;
-  }).join('');
-}
-
-const BOOK_TABS: { id: BookTab; label: string }[] = [
-  { id: 'recipes', label: '레시피' },
-  { id: 'patrons', label: '단골 수첩' },
-  { id: 'promises', label: '약속 장부' },
-  { id: 'log', label: '이야기 기록' },
-];
-
-function bookTabs(tab: BookTab) {
-  return `<nav class="book-tabs" role="tablist" aria-label="레시피북 쪽">${BOOK_TABS.map(
-    (t) => `<button role="tab" class="bt ${t.id === tab ? 'on' : ''}" aria-selected="${t.id === tab}" data-act="book-tab" data-id="${t.id}">${t.label}</button>`,
-  ).join('')}</nav>`;
-}
-
-function bookPage(tab: BookTab) {
+/** 레시피북에 펼칠 것들을 모은다(그림·별·이름은 여기서 HTML로 만들어 넘긴다). */
+function bookView(): BookView {
   const story = state.story;
-  switch (tab) {
-    case 'patrons': {
-      const metN = CUSTOMERS.filter((c) => state.met.has(c.id)).length;
-      return `
-        <h2>${ransom('단골 수첩', { seed: 6 })} <small class="num">만난 손님 ${metN} / ${CUSTOMERS.length}</small></h2>
-        <ul class="patrons">${CUSTOMERS.map((c) => {
-          const met = state.met.has(c.id);
-          const facts = factsOf(story, c.id);
-          return `<li class="pt ${met ? '' : 'unmet'}">
-            <div class="pt-face">${portrait(c.id, 'idle', 'head')}</div>
-            <div class="pt-main">
-              <p class="pt-name"><strong>${met ? c.name : '???'}</strong><small>${met ? c.title : '아직 만나지 않은 손님'}</small>${confessed(story, c.id) ? '<span class="stamp">고백</span>' : ''}</p>
-              ${
-                met
-                  ? `<p class="pt-meta">${stars(trustOf(story, c.id))}<span class="pt-key">열쇠 맛 ${keyKnown(c.id) ? `<b>「${keyLabel(c.id)}」</b>` : '<b>???</b> <small>완벽한 잔을 내면 알게 돼요</small>'}</span></p>
-                     ${facts.length ? `<ul class="pt-facts">${facts.map((f) => `<li>${f}</li>`).join('')}</ul>` : '<p class="pt-none">아직 아는 것이 없어요.</p>'}`
-                  : ''
-              }
-            </div>
-          </li>`;
-        }).join('')}</ul>`;
-    }
-    case 'promises': {
-      const list = promisesOf(story);
-      return `
-        <h2>${ransom('약속 장부', { seed: 8 })} <small class="num">줄 그은 약속 ${list.filter((p) => p.done).length} / ${list.length}</small></h2>
-        <p class="sub small">할이 남긴 장부. 단골마다 끝내지 못한 이야기가 한 줄씩 적혀 있다. 줄기를 끝내면 줄이 그어지고, 무한 영업에서는 끝낸 약속에 따라 단골의 말이 바뀌어요.</p>
-        <ol class="promises">${list
-          .map((p) => `<li class="${p.done ? 'done' : ''}"><span class="pr-who">${nameOf(p.who)}</span><span class="pr-text">${p.text}</span>${p.done ? '<span class="stamp">끝냄</span>' : ''}</li>`)
-          .join('')}</ol>`;
-    }
-    case 'log': {
-      const days = [...new Set(story.log.map((l) => l.day))].sort((a, b) => b - a);
-      const settled = Object.keys(story.endings).length > 0;
-      return `
-        <h2>${ransom('이야기 기록', { seed: 12 })} <small class="num">${story.log.length}건</small></h2>
-        ${settled ? `<h3>꿈의 축제 · 결말</h3>${endingsHtml()}` : ''}
-        ${paperArchive()}
-        ${
-          days.length
-            ? days
-                .map(
-                  (d) =>
-                    `<h3>DAY ${d}</h3><ul class="story-log">${story.log
-                      .filter((l) => l.day === d)
-                      .map((l) => `<li>${l.who ? `<b>${nameOf(l.who)}</b> ` : ''}${l.text}</li>`)
-                      .join('')}</ul>`,
-                )
-                .join('')
-            : '<p class="sub small">아직 기록된 이야기가 없어요. 손님 머리 위 「…」을 눌러 이야기를 들어 보세요.</p>'
-        }`;
-    }
-    default:
-      return `
-        <h2>${ransom('레시피북', { seed: 4 })} <small class="num">${state.discovered.size} / ${RECIPES.length}</small></h2>
-        <ul class="recipes">${bookList()}</ul>`;
-  }
+  const tab = shift() ? state.bookTab : 'recipes';
+  const u = unlocked();
+  return {
+    tab,
+    sel: state.bookSel[tab] ?? null,
+    reading: state.bookReading,
+    tabs: shift(),
+    recipes: { discovered: state.discovered, focus: state.bookFocus, limits: { ingredients: u.ingredients, glasses: u.glasses, garnishes: u.garnishes } },
+    // 단골·장부·기록은 영업 중에만 펼친다(자유 제조는 레시피 쪽만).
+    patrons:
+      tab !== 'patrons'
+        ? []
+        : CUSTOMERS.map((c) => ({
+            id: c.id,
+            met: state.met.has(c.id),
+            name: c.name,
+            title: c.title,
+            confessed: confessed(story, c.id),
+            trust: stars(trustOf(story, c.id)),
+            key: keyKnown(c.id) ? `<b>「${keyLabel(c.id)}」</b>` : '<b>???</b> <small>완벽한 잔을 내면 알게 돼요</small>',
+            facts: factsOf(story, c.id),
+            head: portrait(c.id, 'idle', 'head'),
+            bust: portrait(c.id, 'idle', 'bust'),
+          })),
+    promises: tab === 'promises' ? promisesOf(story).map((p) => ({ ...p, who: nameOf(p.who) })) : [],
+    log: {
+      total: story.log.length,
+      endings: tab === 'log' && Object.keys(story.endings).length > 0 ? endingsHtml() : null,
+      papers: [...story.papers].sort((a, b) => b.day - a.day).map((p) => ({ day: p.day, head: p.lead.head })),
+      days: [...new Set(story.log.map((l) => l.day))]
+        .sort((a, b) => b - a)
+        .map((d) => ({ day: d, lines: story.log.filter((l) => l.day === d).map((l) => ({ who: l.who ? nameOf(l.who) : '', text: l.text })) })),
+    },
+  };
 }
 
 /** 다섯 줄기의 결말(Day 7 마감 때 정해진다) */
@@ -1507,16 +1556,6 @@ function paperHtml(ed: Edition, back: boolean) {
     </div>`;
 }
 
-/** 기록 탭의 「지난 신문」 목록: 날짜를 누르면 그날 아침 신문을 다시 펼친다 */
-function paperArchive() {
-  const list = [...state.story.papers].sort((a, b) => b.day - a.day);
-  if (!list.length) return '';
-  return `<h3>지난 신문 <small>누르면 다시 펼쳐요</small></h3>
-    <ul class="pp-archive">${list
-      .map((p) => `<li><button class="secondary" data-act="paper-open" data-id="${p.day}"><span class="num">DAY ${p.day}</span><span>${p.lead.head}</span></button></li>`)
-      .join('')}</ul>`;
-}
-
 /** 신문을 넘기거나 접는다: 오늘 신문이면 하루 시작 화면으로, 지난 신문이면 기록 탭으로 */
 function leavePaper() {
   if (paperBack !== null) {
@@ -1542,11 +1581,15 @@ document.addEventListener('click', (e) => {
   e.stopImmediatePropagation();
   switch (btn.dataset.act) {
     case 'paper-next':
-    case 'paper-close':
+    case 'paper-close': {
+      const back = paperBack;
       leavePaper();
       render();
       $('overlay').scrollTop = 0;
+      // 레시피북 기록 탭으로 돌아오면 펼쳤던 신문 줄에 초점을 둔다.
+      if (back !== null) $('overlay').querySelector<HTMLElement>(`.rb-paper[data-id="${back}"]`)?.focus({ preventScroll: true });
       break;
+    }
     case 'paper-again':
       showPaper(null);
       break;
@@ -1679,14 +1722,17 @@ function renderOverlay() {
       break;
     }
     case 'book': {
-      const tab = shift() ? state.bookTab : 'recipes';
-      el.innerHTML = `
-        <div class="card book paper tab-${tab}">
-          ${shift() ? bookTabs(tab) : ''}
-          ${bookPage(tab)}
-          <div class="row center"><button class="primary" data-act="close">닫기</button></div>
-        </div>`;
-      document.getElementById('bookFocus')?.scrollIntoView({ block: 'center' });
+      // 시계·손님 때문에 다시 그려도 내용이 같으면 그대로 둔다(스크롤·초점을 지킨다).
+      const html = renderBook(bookView());
+      const opening = !el.querySelector('.rb');
+      if (html === bookHtml && !opening) break;
+      el.innerHTML = html;
+      bookHtml = html;
+      // 펼치는 움직임은 처음 열 때만(쪽을 넘길 때마다 책이 다시 뜨지 않게).
+      if (opening) el.querySelector('.rb')?.classList.add('enter');
+      // 목차는 보던 자리를 지킨다(오른쪽 쪽은 새로 펼치면 맨 위부터).
+      const index = el.querySelector<HTMLElement>('.rb-page.left .rb-scroll');
+      if (index) index.scrollTop = bookScroll[shift() ? state.bookTab : 'recipes'] ?? 0;
       break;
     }
     case 'paper': {
@@ -1868,14 +1914,48 @@ function selectGarnish(i: number) {
   state.drink = { ...state.drink, garnish: GARNISHES[i].id };
 }
 
+/** 마지막으로 그린 레시피북 HTML(같으면 다시 그리지 않는다) */
+let bookHtml = '';
+/** 쪽마다 목차를 어디까지 내려 봤는지 */
+const bookScroll: Partial<Record<BookTab, number>> = {};
+const phoneBook = () => matchMedia('(max-width: 860px)').matches;
+
 function openBook(focus: string | null = activeVisit()?.recipe ?? null, tab: BookTab = 'recipes') {
   state.bookFocus = focus;
   state.bookTab = tab;
+  // 이름 주문 레시피를 들고 열면 그 쪽을 바로 펼친다(폰에서도 목차를 건너뛴다).
+  if (focus && tab === 'recipes') state.bookSel.recipes = focus;
+  state.bookReading = !!focus && tab === 'recipes';
   state.overlay = 'book';
   state.drawer = false;
   state.notebook = false;
+  bookScroll[tab] = 0;
   render();
+  document.getElementById('bookFocus')?.scrollIntoView({ block: 'nearest' });
+  focusBook(state.bookReading ? 'entry' : 'row');
 }
+
+/** 레시피북을 다시 그린 뒤 초점: 폰에서 항목 쪽을 보면 그 제목, 아니면 고른 목차 줄(없으면 책갈피 탭) */
+function focusBook(to: 'entry' | 'row' | 'tab') {
+  const el = $('overlay');
+  const pick =
+    to === 'entry' && (state.bookReading || !phoneBook())
+      ? el.querySelector<HTMLElement>(phoneBook() ? '#rbTitle' : '.rb-row.on')
+      : to === 'row'
+        ? el.querySelector<HTMLElement>('.rb-row.on')
+        : null;
+  (pick ?? el.querySelector<HTMLElement>('.rb-tab.on') ?? el.querySelector<HTMLElement>('.rb-x'))?.focus({ preventScroll: true });
+}
+
+// 목차를 내려 본 자리를 쪽마다 기억한다(다시 그려도 그 자리로). 스크롤은 거품이 일지 않아 잡는 단계에서 받는다.
+document.addEventListener(
+  'scroll',
+  (e) => {
+    const t = e.target;
+    if (state.overlay === 'book' && t instanceof HTMLElement && t.matches('.rb-page.left .rb-scroll')) bookScroll[shift() ? state.bookTab : 'recipes'] = t.scrollTop;
+  },
+  true,
+);
 
 /** 잔에 부은 재료 색의 평균(손님이 들고 나가는 작은 잔의 술 색) */
 function drinkColor(d: Drink) {
@@ -2297,7 +2377,7 @@ document.addEventListener('click', (e) => {
   const act = btn.dataset.act!;
   const id = btn.dataset.id;
   // 붓기·젓기 연출 중에는 단계를 넘기거나 잔을 바꾸는 입력을 받지 않는다(붓기는 이어서 할 수 있다).
-  const steady = ['glass', 'ice', 'stir', 'no-stir', 'mp-next', 'mp-prev', 'mp-step', 'serve', 'restart', 'turn-away', 'pick-seat'];
+  const steady = ['glass', 'ice', 'stir', 'mp-next', 'mp-prev', 'mp-step', 'serve', 'restart', 'turn-away', 'pick-seat'];
   if (stage.busy && steady.includes(act)) return;
   const mixing = state.view === 'mix' && !state.overlay;
 
@@ -2320,10 +2400,11 @@ document.addEventListener('click', (e) => {
       if (mixing && state.phase === 'pour') doPour(id as IngredientId);
       break;
     case 'stir':
-      if (mixing && state.phase === 'stir') state.drink = stir(state.drink);
-      break;
-    case 'no-stir':
-      if (mixing && state.phase === 'stir') goStep('garnish');
+      // 잔 오른쪽 젓기 버튼: 어느 단계에서든 재료를 부은 뒤 한 번만(되돌리려면 초기화).
+      if (mixing && state.phase !== 'result' && stirButton(state.drink) === 'ready') {
+        state.drink = stir(state.drink);
+        announce('저었어요 · 층이 하나로 섞이고 바디 -1');
+      }
       break;
     case 'mp-next': {
       if (!mixing || state.phase === 'result' || !canLeave(state.phase, state.drink)) break;
@@ -2368,6 +2449,13 @@ document.addEventListener('click', (e) => {
       break;
     case 'restart':
       newDrink();
+      announce('초기화했어요 · 잔부터 다시 골라요');
+      // 누른 초기화 버튼은 잔이 없어지면 사라지므로 초점을 단계 판 제목으로 옮긴다.
+      if (btn.id === 'resetBtn') {
+        render();
+        $('mixPanel').querySelector<HTMLElement>('#mpTitle')?.focus({ preventScroll: true });
+        return;
+      }
       break;
     case 'book':
       openBook(id ?? activeVisit()?.recipe ?? null, (btn.dataset.tab as BookTab | undefined) ?? 'recipes');
@@ -2375,7 +2463,26 @@ document.addEventListener('click', (e) => {
     case 'book-tab':
       state.bookTab = id as BookTab;
       state.bookFocus = null;
-      break;
+      state.bookReading = false;
+      render();
+      focusBook('tab');
+      return;
+    case 'book-sel': {
+      // 목차에서 항목을 고르면 오른쪽 쪽에 펼친다(폰에서는 그 쪽으로 넘긴다).
+      const tab = shift() ? state.bookTab : 'recipes';
+      state.bookSel[tab] = id;
+      state.bookReading = true;
+      render();
+      $('overlay').querySelector('.rb-page.right .rb-scroll')?.scrollTo(0, 0);
+      focusBook('entry');
+      return;
+    }
+    case 'book-back':
+      state.bookReading = false;
+      render();
+      focusBook('row');
+      $('overlay').querySelector('.rb-row.on')?.scrollIntoView({ block: 'nearest' });
+      return;
     case 'drawer':
       state.drawer = !state.drawer;
       drawerOpening = state.drawer;
@@ -2519,6 +2626,14 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.notebook) {
     state.notebook = false;
     render();
+    return;
+  }
+  // 레시피북 책갈피 탭: ←/→ 로 옆 쪽으로
+  if (state.overlay === 'book' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && (e.target as HTMLElement).matches?.('.rb-tab')) {
+    const tabs = [...$('overlay').querySelectorAll<HTMLButtonElement>('.rb-tab')];
+    const i = tabs.indexOf(e.target as HTMLButtonElement);
+    e.preventDefault();
+    tabs[(i + (e.key === 'ArrowLeft' ? tabs.length - 1 : 1)) % tabs.length]?.click();
     return;
   }
   if (e.key === 'Escape' && (state.overlay === 'book' || (state.overlay === 'title' && state.started))) {

@@ -35,19 +35,19 @@ const STREAM_Z = 0.05;
 const BOX_H = 2.1;
 const BOX_HALF = 0.62;
 const BOX_MID = 0.8;
-/** 잔 받침 반지름(잔 아래 버튼은 받침 앞 가장자리 밑에 단다) */
+/** 잔 받침 반지름(받침 앞 가장자리를 화면 배치에 알려 준다) */
 const COASTER_R = 0.64 * GLASS_SCALE * 1.05;
 /** 카메라가 내려다보는 기울기(앞 1에 대한 높이) */
 const PITCH = 0.34;
 
-/** 화면 위 DOM(횟수 바·초기화 버튼)을 잔 둘레에 붙이기 위한 잔의 화면 좌표(px) */
+/** 화면 위 DOM(횟수 바·젓기·초기화 버튼)을 잔 둘레에 붙이기 위한 잔의 화면 좌표(px) */
 export interface GlassAnchor {
   x: number;
   top: number;
   bottom: number;
   /** 잔 받침 앞 가장자리 */
   foot: number;
-  /** 잔 반쪽 너비 */
+  /** 잔 반쪽 너비(가장 넓은 곳) */
   half: number;
 }
 
@@ -235,7 +235,8 @@ export class Stage3D {
     const s = this.shape;
     const pos = this.glassRoot.position;
     const top = (s ? rimY(s) : 1.0) * GLASS_SCALE;
-    const r = (s ? s.r(1) + s.wall : 0.5) * GLASS_SCALE;
+    // 잔 양옆 버튼·횟수 바가 잔에 닿지 않게 가장 넓은 곳의 반지름을 쓴다(와인 잔은 입구보다 몸통이 넓다).
+    const r = (s ? Math.max(...Array.from({ length: 11 }, (_, i) => s.r(i / 10))) + s.wall : 0.5) * GLASS_SCALE;
     const a = this.project(new THREE.Vector3(pos.x, top, pos.z));
     const b = this.project(new THREE.Vector3(pos.x, 0, pos.z));
     const side = this.project(new THREE.Vector3(pos.x + Math.max(r, 0.3), top * 0.5, pos.z));

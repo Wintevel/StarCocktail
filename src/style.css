@@ -1538,19 +1538,6 @@ body[data-view="mix"] .wipe-edge {
   font-weight: 700;
 }
 
-/* 잔 아래 버튼 */
-.glass-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  white-space: nowrap;
-}
-
-.glass-actions button {
-  padding: 9px 15px 10px;
-  font-size: 16px;
-}
-
 /* ── 안내 띠·설명·알림 ─────────────────────── */
 .prompt {
   position: fixed;
@@ -2295,93 +2282,6 @@ body[data-view="mix"] .wipe-edge {
 .day-card .headline,
 .end .headline {
   margin: 0;
-}
-
-/* 레시피북 */
-.book {
-  width: min(720px, 100%);
-}
-
-.book h2 {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.book h2 .ransom {
-  font-size: 32px;
-}
-
-.book h2 small {
-  font-size: 14px;
-}
-
-.recipes {
-  columns: 2 280px;
-  column-gap: 22px;
-  column-rule: 1px solid var(--ink);
-  margin: 6px 0 0;
-  padding: 0;
-  list-style: none;
-  font-family: var(--font-book);
-}
-
-.recipes li {
-  break-inside: avoid;
-  display: grid;
-  gap: 3px;
-  margin-bottom: 10px;
-  padding: 8px 0 10px;
-  border-bottom: 1px solid rgba(21, 19, 19, 0.3);
-}
-
-.recipes li strong {
-  font: 700 17px/1.2 var(--font-book);
-}
-
-.recipes li > span {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--ink-2);
-}
-
-.recipes li:not(.found) strong {
-  color: var(--gray);
-  letter-spacing: 0.1em;
-}
-
-.recipes li.found strong::before {
-  content: "★ ";
-  color: var(--red);
-}
-
-.recipes li.focus {
-  padding: 8px 10px 10px;
-  background: var(--white);
-  border: 3px solid var(--red);
-  box-shadow: 4px 4px 0 var(--ink);
-}
-
-.recipes li.focus strong {
-  color: var(--ink);
-}
-
-.recipes li.focus em {
-  padding: 1px 6px;
-  background: var(--red);
-  color: var(--white);
-  font: 400 12px var(--font-title-ko);
-  font-style: normal;
-}
-
-.chips.mini {
-  margin-top: 4px;
-  gap: 4px;
-}
-
-.chips.mini .chip {
-  padding: 2px 6px;
-  font-size: 11px;
 }
 
 /* ── 이야기: 이름표 꼴·대화 카드·수첩·단골 수첩·약속 장부·신문 ─────── */
@@ -3162,168 +3062,6 @@ body:not([data-talk=""]) .p-tag {
   font-size: 14px;
 }
 
-/* ── 레시피북의 쪽: 단골 수첩·약속 장부·이야기 기록 ─── */
-.book-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin: 0 0 12px;
-  border-bottom: 3px solid var(--ink);
-}
-
-.bt {
-  padding: 8px 13px 7px;
-  border: 2px solid var(--ink);
-  border-bottom: 0;
-  background: var(--paper-2);
-  color: var(--ink);
-  font: 400 16px/1 var(--font-title-ko);
-  transition: background-color 160ms ease, color 160ms ease;
-}
-
-.bt.on {
-  background: var(--ink);
-  color: var(--paper);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .bt:not(.on):hover {
-    background: var(--white);
-    color: var(--red);
-  }
-}
-
-.patrons {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-  gap: 0 24px;
-  margin: 4px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.pt {
-  display: grid;
-  grid-template-columns: 56px 1fr;
-  gap: 10px;
-  padding: 10px 0 12px;
-  border-bottom: 1px solid rgba(21, 19, 19, 0.3);
-}
-
-.pt-face {
-  width: 56px;
-  height: 56px;
-  overflow: hidden;
-  background:
-    radial-gradient(circle, rgba(21, 19, 19, 0.45) 1.4px, transparent 1.8px) 0 0 / 6px 6px,
-    var(--lgray);
-  border: 2px solid var(--ink);
-}
-
-.pt-face .portrait {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.pt.unmet .pt-face .portrait {
-  filter: brightness(0);
-  opacity: 0.35;
-}
-
-.pt-main {
-  min-width: 0;
-}
-
-.pt-name {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 8px;
-  margin: 0;
-}
-
-.pt-name strong {
-  font: 400 19px/1.1 var(--font-title-ko);
-}
-
-.pt-name small {
-  font: 600 12px var(--font-ui);
-  color: var(--gray);
-}
-
-.pt-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 10px;
-  margin: 4px 0 0;
-  font: 500 12px var(--font-ui);
-}
-
-.pt-key b {
-  color: var(--red-deep);
-}
-
-.pt-key small {
-  color: var(--gray);
-}
-
-.pt-facts {
-  margin: 6px 0 0;
-  padding: 0;
-  list-style: none;
-  font: 13px/1.5 var(--font-book);
-}
-
-.pt-facts li {
-  padding-left: 14px;
-  text-indent: -14px;
-}
-
-.pt-facts li::before {
-  content: "— ";
-  color: var(--red);
-}
-
-.pt-none {
-  margin: 6px 0 0;
-  font: 13px var(--font-book);
-  color: var(--gray);
-}
-
-.promises {
-  margin: 12px 0 0;
-  padding: 0;
-  list-style: none;
-  background-image: var(--rule);
-}
-
-.promises li {
-  display: grid;
-  grid-template-columns: 72px 1fr auto;
-  align-items: baseline;
-  gap: 10px;
-  padding: 8px 0 7px;
-  border-bottom: 1px dotted rgba(21, 19, 19, 0.5);
-}
-
-.pr-who {
-  font: 400 15px var(--font-title-ko);
-  color: var(--red-deep);
-}
-
-.pr-text {
-  font: 19px/1.35 var(--font-speech);
-}
-
-.promises li.done .pr-text {
-  color: var(--ink-2);
-  text-decoration: line-through;
-  text-decoration-color: var(--red);
-  text-decoration-thickness: 2.5px;
-}
-
 .story-log {
   display: grid;
   gap: 0;
@@ -3744,38 +3482,8 @@ body:not([data-talk=""]) .p-tag {
   margin-top: 2px;
 }
 
-/* 기록 탭의 지난 신문 목록 */
-.pp-archive {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.pp-archive button {
-  display: grid;
-  grid-template-columns: 64px 1fr;
-  justify-items: start;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 12px;
-  border-width: 2px;
-  box-shadow: 3px 3px 0 var(--ink);
-  white-space: normal;
-  text-align: left;
-  font: 700 14px/1.4 var(--font-mast);
-}
-
-.pp-archive .num {
-  font: 700 12px var(--font-num);
-  color: var(--red-deep);
-}
-
 .day-memo,
 .nb-body,
-.patrons,
-.promises,
 .story-log,
 .endings,
 .clip,
@@ -4538,34 +4246,6 @@ body:not([data-talk=""]) .p-tag {
     max-height: calc(100vh - var(--topbar) - 80px);
     border-right: 0;
     box-shadow: 0 -6px 0 var(--ink);
-  }
-
-  .book-tabs {
-    gap: 3px;
-  }
-
-  .bt {
-    flex: 1;
-    padding: 8px 4px 7px;
-    font-size: 14px;
-  }
-
-  .patrons {
-    grid-template-columns: 1fr;
-  }
-
-  .promises li {
-    grid-template-columns: 1fr auto;
-    gap: 2px 8px;
-  }
-
-  .pr-who {
-    grid-column: 1 / -1;
-    font-size: 13px;
-  }
-
-  .pr-text {
-    font-size: 17px;
   }
 
   .overlay[data-kind="paper"] {

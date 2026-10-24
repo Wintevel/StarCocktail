@@ -1,14 +1,245 @@
 /* ────────────────────────────────────────────────────────────
-   제조대 배치(v7): 한 번에 한 단계씩
-   - 왼쪽 위 주문 카드(고정), 왼쪽 아래 현재 맛, 가운데 3D 잔(옆에 부은 횟수, 아래 초기화)
-   - 오른쪽 단계 판: ①~⑤ 단계 표시 · 지금 단계의 카드 · 아래 「이전」「다음 단계」
-   - 휴대폰: 주문 카드는 한 줄로 접히고, 단계 판은 아래 시트, 현재 맛은 잔 왼쪽 기둥
-   - 색은 style.css의 색 토큰만, 글꼴은 글꼴 역할 변수만 쓴다
+   제조대 배치(v8): 한 번에 한 단계씩, 첫 버전 느낌의 판
+   - 왼쪽 위 주문 카드(고정), 왼쪽 아래 현재 맛(맛마다 색), 가운데 3D 잔
+     · 잔 오른쪽: 부은 횟수 바와 그 아래 젓기 동그라미 버튼 / 잔 왼쪽: 초기화 동그라미 버튼
+   - 오른쪽 단계 판: ①~④ 단계 표시 · 지금 단계의 카드 · 아래 「이전」「다음 단계」
+   - 휴대폰: 주문 카드는 한 줄로 접히고, 단계 판은 아래 시트, 현재 맛은 잔 왼쪽 기둥(초기화는 그 위)
+   - 색은 v8 의미 토큰(--surface·--surface-2·--on-surface·--muted·--line·--accent·--on-accent·--accent-2·--taste-*)만 쓴다.
+     그림자는 바탕색과 상관없이 어둡게 깔리는 검정 반투명 하나만 쓴다
+   - 판·카드: 둥근 모서리, 반투명 바탕, 금빛 머리카락 선, 부드러운 그림자, 금빛 모서리 꺾쇠(기울기·단단한 먹 그림자 없음)
+   - 주 버튼은 금빛 바탕에 짙은 글자, 보조 버튼은 금빛 선
+   - 글꼴은 글꼴 역할 변수만 쓴다
    ──────────────────────────────────────────────────────────── */
+
+.order-card,
+.hud,
+.mix-panel {
+  --mp-radius: 16px;
+  --mp-shadow:
+    0 18px 40px rgb(0 0 0 / 0.36),
+    0 2px 0 color-mix(in srgb, var(--on-surface) 6%, transparent) inset;
+  --mp-shadow-sm: 0 6px 16px rgb(0 0 0 / 0.3);
+  --mp-glow: color-mix(in srgb, var(--accent) 38%, transparent);
+  --mp-bracket: color-mix(in srgb, var(--accent) 72%, transparent);
+  --mp-hair: color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+/* 맛마다 다른 색: 게이지·키워드·재료 카드의 맛 변화 칩이 함께 쓴다 */
+:is(.meter, .kw-pill, .delta).sweet {
+  --taste: var(--taste-sweet);
+}
+
+:is(.meter, .kw-pill, .delta).strength {
+  --taste: var(--taste-strength);
+}
+
+:is(.meter, .kw-pill, .delta).body {
+  --taste: var(--taste-body);
+}
+
+:is(.meter, .kw-pill, .delta).tone {
+  --taste: var(--taste-tone);
+}
+
+/* ── 주 버튼·보조 버튼(제조대 안) ───────────────── */
+:is(.order-card, .mix-panel) :is(.primary, .secondary, .ghost) {
+  transform: none;
+  border-radius: 12px;
+  letter-spacing: 0.01em;
+}
+
+:is(.order-card, .mix-panel) .primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border: 1px solid var(--accent);
+  box-shadow:
+    0 8px 22px color-mix(in srgb, var(--accent) 30%, transparent),
+    0 1px 0 color-mix(in srgb, var(--on-surface) 25%, transparent) inset;
+}
+
+:is(.order-card, .mix-panel) :is(.secondary, .ghost) {
+  background: var(--surface);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  box-shadow: var(--mp-shadow-sm);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :is(.order-card, .mix-panel) :is(.primary, .secondary, .ghost):not(:disabled):not([aria-disabled="true"]):hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 10px 26px var(--mp-glow),
+      0 0 0 1px var(--accent);
+  }
+}
+
+:is(.order-card, .mix-panel) :is(.primary, .secondary, .ghost):not(:disabled):not([aria-disabled="true"]):active {
+  transform: translateY(1px) scale(0.98);
+  box-shadow: var(--mp-shadow-sm);
+}
+
+:is(.order-card, .mix-panel) :is(.primary, .secondary, .ghost):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
 
 /* ── 주문 카드: 왼쪽 위에 고정 ─────────────────── */
 .order-card {
   width: clamp(312px, 27vw, 420px);
+  gap: 0 14px;
+  padding: 14px 16px 14px 14px;
+  background: var(--surface);
+  color: var(--on-surface);
+  border: 1px solid var(--line);
+  border-radius: var(--mp-radius);
+  filter: none;
+  box-shadow: var(--mp-shadow);
+  transform: none;
+  animation: mp-rise 260ms var(--ease-out);
+}
+
+/* 금빛 모서리 꺾쇠(왼쪽 위·오른쪽 아래) */
+.order-card::before,
+.order-card::after,
+.mp-sheet::before,
+.mp-sheet::after,
+.meters::before,
+.meters::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: none;
+  border: 2px solid var(--mp-bracket);
+  transform: none;
+  pointer-events: none;
+}
+
+.order-card::before,
+.mp-sheet::before,
+.meters::before {
+  top: 7px;
+  left: 7px;
+  border-right: 0;
+  border-bottom: 0;
+  border-top-left-radius: 8px;
+}
+
+.order-card::after,
+.mp-sheet::after,
+.meters::after {
+  right: 7px;
+  bottom: 7px;
+  border-left: 0;
+  border-top: 0;
+  border-bottom-right-radius: 8px;
+}
+
+@keyframes mp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+.oc-face {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 62%),
+    var(--surface-2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+.order-card .who {
+  gap: 6px 9px;
+}
+
+.oc-name {
+  font: 400 26px/1.1 var(--font-title-ko);
+  color: var(--on-surface);
+  letter-spacing: 0.01em;
+}
+
+.order-card .oc-title {
+  padding: 3px 9px 4px;
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--mp-hair);
+  border-radius: 999px;
+  font: 600 12px/1.1 var(--font-ui);
+  transform: none;
+}
+
+.order-card .stamp {
+  padding: 2px 8px 3px;
+  color: var(--accent-2);
+  border: 1px solid var(--accent-2);
+  border-radius: 999px;
+  font: 600 12px/1.1 var(--font-ui);
+  transform: none;
+}
+
+.order-card .line {
+  margin: 9px 0 4px;
+  font: 19px/1.42 var(--font-speech);
+  color: var(--on-surface);
+}
+
+.order-card mark.cond {
+  padding: 0 2px;
+  background: linear-gradient(transparent 56%, color-mix(in srgb, var(--accent-2) 38%, transparent) 56%);
+  color: inherit;
+  font-weight: 700;
+}
+
+.order-card mark.cond.ok {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  border-radius: 4px;
+  color: var(--on-surface);
+}
+
+.order-card mark.cond.ok::after {
+  content: " ✓";
+  color: var(--accent);
+}
+
+/* 조건 칩 */
+.order-card .chips {
+  gap: 6px;
+}
+
+.order-card .chip {
+  padding: 4px 10px 5px;
+  background: var(--surface-2);
+  color: var(--on-surface);
+  border: 1px solid var(--mp-hair);
+  border-radius: 999px;
+  font: 600 13px/1.2 var(--font-ui);
+  transform: none;
+}
+
+.order-card .chip.kw {
+  border-color: var(--accent-2);
+  color: var(--on-surface);
+  font-weight: 700;
+}
+
+.order-card .chip.kw::before {
+  content: "✦";
+  color: var(--accent-2);
+}
+
+.order-card .chip.ok {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-2));
+  border-color: var(--accent);
+  color: var(--on-surface);
+}
+
+.order-card .chip.ok::before {
+  content: "✓";
+  color: var(--accent);
+  font-weight: 900;
 }
 
 .oc-recipe {
@@ -17,28 +248,79 @@
   gap: 6px;
 }
 
+.order-card .book-chip {
+  border-color: var(--accent);
+}
+
 .oc-recipe .book-chip small {
   margin-left: 4px;
   font: 700 10px var(--font-num);
-  opacity: 0.75;
+  color: var(--muted);
 }
 
 .oc-hint {
   margin: 0;
-  padding: 4px 0 4px 9px;
-  border-left: 3px solid var(--red);
+  padding: 4px 0 4px 10px;
+  border-left: 3px solid var(--accent-2);
   font: 500 13px/1.45 var(--font-book);
-  color: var(--ink-2);
+  color: var(--on-surface);
 }
 
 .oc-hint b {
   margin-right: 4px;
   font: 700 11px var(--font-ui);
-  color: var(--red-deep);
+  color: var(--muted);
 }
 
 .oc-hints {
   margin: 0;
+}
+
+.order-card .vague-note {
+  color: var(--muted);
+}
+
+.order-card .vague-note::before {
+  color: var(--accent-2);
+}
+
+/* 이야기 귀띔 */
+.order-card .oc-story {
+  color: var(--muted);
+}
+
+.order-card .oc-story li {
+  border-left: 3px solid var(--accent-2);
+  padding-left: 10px;
+}
+
+.order-card .oc-story li.h-key {
+  border-left-color: var(--mp-hair);
+}
+
+.order-card .oc-story li.h-key.lit {
+  border-left-color: var(--accent);
+  color: var(--on-surface);
+}
+
+.order-card .oc-story b {
+  color: var(--accent);
+}
+
+.order-card .oc-actions .ghost {
+  padding: 8px 13px 9px;
+  font-size: 15px;
+}
+
+.order-card .away-btn {
+  color: var(--muted);
+  text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .order-card .away-btn:hover {
+    color: var(--accent-2);
+  }
 }
 
 /* 접기 단추는 휴대폰에서만 */
@@ -46,16 +328,323 @@
   display: none;
 }
 
-/* ── 현재 맛: 왼쪽 아래 ─────────────────────── */
+/* ── 현재 맛: 왼쪽 아래, 맛마다 색(v7보다 1.3배쯤 크게) ── */
 .meters {
   left: 22px;
   bottom: 22px;
+  width: 312px;
+  gap: 12px;
+  padding: 16px 20px 18px;
+  background: var(--surface);
+  color: var(--on-surface);
+  border: 1px solid var(--line);
+  border-radius: var(--mp-radius);
+  box-shadow: var(--mp-shadow);
+  transform: none;
 }
 
-/* ── 잔 아래 초기화 ─────────────────────────── */
-.glass-actions button[aria-disabled="true"] {
-  opacity: 0.42;
+.meters h3 {
+  gap: 7px;
+  margin: 0 0 2px;
+  font: 400 19px/1 var(--font-title-ko);
+}
+
+.meters h3 > span:first-child {
+  padding: 0;
+  background: none;
+  color: var(--on-surface);
+  transform: none;
+}
+
+.meters h3 > span:first-child::before {
+  content: "✦ ";
+  color: var(--accent);
+}
+
+/* 끝 단계 키워드(달콤함·묵직함…)가 켜지면 머리에 그 맛 색으로 붙는다 */
+.kw-pill {
+  padding: 4px 10px 5px;
+  background: color-mix(in srgb, var(--taste, var(--accent)) 26%, var(--surface));
+  color: var(--on-surface);
+  border: 1px solid var(--taste, var(--accent));
+  border-radius: 999px;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--taste, var(--accent)) 35%, transparent);
+  font: 400 15px/1 var(--font-title-ko);
+  transform: none;
+}
+
+.meter {
+  grid-template-columns: 54px 1fr 40px;
+  gap: 12px;
+  font: 700 15px var(--font-ui);
+}
+
+/* 맛 이름 칩 */
+.meter .label {
+  padding: 5px 0 6px;
+  background: color-mix(in srgb, var(--taste) 24%, var(--surface));
+  color: var(--on-surface);
+  border: 1px solid color-mix(in srgb, var(--taste) 85%, transparent);
+  border-radius: 999px;
+  font: 400 17px/1 var(--font-title-ko);
+  text-align: center;
+}
+
+.meter .value {
+  font-size: 17px;
+  color: var(--on-surface);
+}
+
+.meter.ok .value::after {
+  content: "✓";
+  margin-left: 1px;
+  color: var(--accent);
+}
+
+.meter.off .value {
+  color: var(--accent-2);
+}
+
+.track {
+  height: 14px;
+  margin: 18px 0 1px;
+  background: var(--surface-2);
+  border: 1px solid var(--mp-hair);
+  border-radius: 999px;
+}
+
+/* 끝 단계 구역: 그 맛 색의 빗금 */
+.track .kz {
+  background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--taste) 34%, transparent) 0 2px, transparent 2px 6px);
+}
+
+.track .kz:first-child {
+  border-radius: 999px 0 0 999px;
+}
+
+.track .kz + .kz {
+  border-radius: 0 999px 999px 0;
+}
+
+/* 주문의 목표 구간: 금빛 점선 */
+.track .band {
+  top: -6px;
+  bottom: -6px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1.5px dashed var(--accent);
+  border-radius: 8px;
+}
+
+.track .fill,
+.meter.tone .fill {
+  background: var(--taste);
+  border-radius: 999px;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--taste) 55%, transparent);
+}
+
+.track .zero {
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: color-mix(in srgb, var(--on-surface) 55%, transparent);
+}
+
+/* 손잡이: 그 맛 색 동그라미 */
+.track .knob {
+  width: 20px;
+  height: 20px;
+  background: var(--taste);
+  border: 2.5px solid var(--on-surface);
+  border-radius: 50%;
+  box-shadow:
+    0 2px 6px rgb(0 0 0 / 0.4),
+    0 0 0 3px color-mix(in srgb, var(--taste) 25%, transparent);
+  transform: translate(-50%, -50%);
+  transition: left 260ms var(--ease-out);
+}
+
+.meter.kw-on .knob {
+  background: var(--taste);
+  box-shadow:
+    0 2px 6px rgb(0 0 0 / 0.4),
+    0 0 0 5px color-mix(in srgb, var(--taste) 40%, transparent),
+    0 0 16px var(--taste);
+}
+
+.meter.ok .knob {
+  background: var(--taste);
+  border-color: var(--accent);
+}
+
+/* 끝 단계 키워드 표시 */
+.track .kw {
+  top: -20px;
+  font: 600 13px/1 var(--font-ui);
+  color: color-mix(in srgb, var(--taste) 30%, var(--muted));
+}
+
+.track .kw.on {
+  color: color-mix(in srgb, var(--taste) 65%, var(--on-surface));
+  font-weight: 800;
+  text-decoration: underline 2px var(--taste);
+  text-underline-offset: 3px;
+}
+
+.track .fill,
+.track .band {
+  transition:
+    left 260ms var(--ease-out),
+    width 260ms var(--ease-out);
+}
+
+/* ── 잔 오른쪽: 부은 횟수 ───────────────────── */
+.pourbar {
+  width: 36px;
+  gap: 7px;
+}
+
+.pourbar .slots {
+  gap: 5px;
+  width: 20px;
+}
+
+.pourbar .slots i {
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: var(--mp-shadow-sm);
+  transform: none;
+}
+
+.pourbar .slots i.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 10px var(--mp-glow);
+}
+
+.pourbar .num {
+  padding: 3px 7px 4px;
+  background: var(--surface);
+  color: var(--on-surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ── 잔 양옆 동그라미 버튼: 왼쪽 초기화, 오른쪽 젓기 ── */
+.glass-btn {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  width: 64px;
+  color: var(--on-surface);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gb-ring {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  background: var(--surface);
+  color: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  box-shadow: var(--mp-shadow-sm);
+  transition:
+    transform 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out),
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.gb-ic {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.gb-label {
+  padding: 2px 9px 3px;
+  background: var(--surface);
+  border: 1px solid var(--mp-hair);
+  border-radius: 999px;
+  font: 400 14px/1.1 var(--font-title-ko);
+  white-space: nowrap;
+}
+
+/* 저을 수 있으면 금빛 고리가 은은하게 빛난다 */
+.stir-btn[data-state="ready"] .gb-ring {
+  border: 2px solid var(--accent);
+  box-shadow:
+    var(--mp-shadow-sm),
+    0 0 18px var(--mp-glow);
+}
+
+/* 저은 뒤: 금빛으로 채운 ✓ */
+.stir-btn[data-state="done"] {
+  cursor: default;
+}
+
+.stir-btn[data-state="done"] .gb-ring {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+
+.stir-btn[data-state="done"] .gb-label {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.glass-btn:disabled {
+  cursor: not-allowed;
+}
+
+.glass-btn:disabled > * {
+  opacity: 0.5;
+}
+
+.glass-btn:disabled .gb-ring {
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.glass-btn[aria-disabled="true"]:not([data-state="done"]) {
   cursor: wait;
+}
+
+.glass-btn[aria-disabled="true"]:not([data-state="done"]) .gb-ring {
+  opacity: 0.6;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .glass-btn:not(:disabled):not([aria-disabled="true"]):hover .gb-ring {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+    box-shadow:
+      var(--mp-shadow-sm),
+      0 0 22px var(--mp-glow);
+  }
+}
+
+.glass-btn:not(:disabled):not([aria-disabled="true"]):active .gb-ring {
+  transform: scale(0.94);
+}
+
+.glass-btn:focus-visible {
+  outline: none;
+}
+
+.glass-btn:focus-visible .gb-ring {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
 }
 
 /* ── 오른쪽 단계 판 ─────────────────────────── */
@@ -83,25 +672,25 @@ body[data-mode="free"] .mix-panel {
 }
 
 .mp-sheet {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 12px 12px 12px;
-  background-color: var(--paper);
-  background-image: var(--grain);
-  color: var(--ink);
-  border: 3px solid var(--ink);
-  border-radius: 10px;
-  box-shadow: 6px 6px 0 var(--red);
+  padding: 14px 14px 12px;
+  background: var(--surface);
+  color: var(--on-surface);
+  border: 1px solid var(--line);
+  border-radius: var(--mp-radius);
+  box-shadow: var(--mp-shadow);
 }
 
 /* 단계 표시: 번호 동그라미를 선으로 잇는다 */
 .mp-steps {
   display: flex;
   margin: 0;
-  padding: 0 0 10px;
+  padding: 2px 0 12px;
   list-style: none;
-  border-bottom: 2px dashed color-mix(in srgb, var(--ink) 28%, transparent);
+  border-bottom: 1px solid var(--mp-hair);
 }
 
 .mp-steps li {
@@ -114,60 +703,68 @@ body[data-mode="free"] .mix-panel {
 .mp-steps li + li::before {
   content: "";
   position: absolute;
-  top: 13px;
-  right: 50%;
-  width: 100%;
+  top: 15px;
+  /* 동그라미 사이만 잇는다(반투명 동그라미 뒤로 선이 비치지 않게) */
+  right: calc(50% + 19px);
+  width: calc(100% - 38px);
   height: 2px;
-  background: color-mix(in srgb, var(--ink) 25%, transparent);
+  background: color-mix(in srgb, var(--on-surface) 18%, transparent);
 }
 
 .mp-steps li.done::before,
 .mp-steps li.now::before {
-  background: var(--ink);
+  background: var(--accent);
 }
 
 .mp-step {
   position: relative;
   display: grid;
   justify-items: center;
-  gap: 3px;
+  gap: 4px;
+  min-width: 44px;
   padding: 0 2px;
 }
 
 .mp-n {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
-  background: var(--paper);
-  color: var(--ink);
-  border: 2px solid var(--ink);
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--mp-hair);
   border-radius: 50%;
   font: 700 13px/1 var(--font-num);
   transition:
     background-color 160ms ease,
-    transform 160ms var(--ease-out);
+    transform 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out);
 }
 
 .mp-l {
-  font: 600 11px/1 var(--font-ui);
-  color: var(--ink-2);
+  font: 600 12px/1 var(--font-ui);
+  color: var(--muted);
   white-space: nowrap;
 }
 
 .mp-steps li.done .mp-n {
-  background: var(--ink);
-  color: var(--paper);
+  background: color-mix(in srgb, var(--accent) 26%, var(--surface-2));
+  color: var(--accent);
+  border-color: var(--accent);
+  font: 900 16px/1 var(--font-ui);
 }
 
 .mp-steps li.now .mp-n {
-  background: var(--red-text-bg);
-  color: var(--white);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 30%, transparent);
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent),
+    0 0 14px var(--mp-glow);
 }
 
 .mp-steps li.now .mp-l {
-  color: var(--red-deep);
+  color: var(--on-surface);
   font-weight: 800;
 }
 
@@ -184,24 +781,34 @@ body[data-mode="free"] .mix-panel {
   cursor: default;
 }
 
+.mp-step:focus-visible {
+  outline: none;
+}
+
+.mp-step:focus-visible .mp-n {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .mp-step:not(:disabled):hover .mp-n {
     transform: translateY(-2px);
-    box-shadow: 2px 2px 0 var(--red);
+    box-shadow: 0 0 12px var(--mp-glow);
   }
 }
 
 /* 단계 머리 */
 .mp-head {
-  padding: 10px 2px 8px;
+  padding: 12px 2px 8px;
 }
 
 .mp-head h2 {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   margin: 0;
-  font: 400 21px/1.1 var(--font-title-ko);
+  font: 400 22px/1.1 var(--font-title-ko);
+  color: var(--on-surface);
 }
 
 .mp-head h2:focus {
@@ -209,30 +816,29 @@ body[data-mode="free"] .mix-panel {
 }
 
 .mp-head h2:focus-visible {
-  outline: 3px solid var(--red);
+  outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
 
 .mp-hn {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  background: var(--ink);
-  color: var(--paper);
-  border-radius: 4px;
+  width: 26px;
+  height: 26px;
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: 8px;
   font-size: 13px;
-  transform: skewX(-8deg);
 }
 
 .mp-sub {
-  margin: 5px 0 0;
-  font: 500 12.5px/1.4 var(--font-ui);
-  color: var(--ink-2);
+  margin: 6px 0 0;
+  font: 500 12.5px/1.45 var(--font-ui);
+  color: var(--muted);
 }
 
 .mp-sub b {
-  color: var(--red-deep);
+  color: var(--accent);
 }
 
 /* 지금 단계의 카드들 */
@@ -246,6 +852,8 @@ body[data-mode="free"] .mix-panel {
   padding: 10px 12px 8px 6px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mp-hair) transparent;
 }
 
 .mp-body.step-ice {
@@ -264,11 +872,14 @@ body[data-mode="free"] .mix-panel {
   gap: 3px;
   min-width: 0;
   padding: 10px 8px;
-  background: linear-gradient(170deg, var(--white), var(--paper-2));
-  color: var(--ink);
-  border: 2.5px solid var(--ink);
-  border-radius: 8px;
-  box-shadow: 4px 4px 0 var(--ink);
+  background: var(--surface-2);
+  color: var(--on-surface);
+  border: 1px solid var(--mp-hair);
+  border-radius: 12px;
+  box-shadow:
+    0 3px 0 rgb(0 0 0 / 0.22),
+    0 8px 16px rgb(0 0 0 / 0.18),
+    0 1px 0 color-mix(in srgb, var(--on-surface) 10%, transparent) inset;
   text-align: center;
   transition:
     translate 140ms var(--ease-out),
@@ -283,7 +894,7 @@ body[data-mode="free"] .mix-panel {
 
 .mp-opt small {
   font: 600 11px/1.3 var(--font-ui);
-  color: var(--ink-2);
+  color: var(--muted);
 }
 
 .mp-opt .icon2d .ic {
@@ -291,31 +902,38 @@ body[data-mode="free"] .mix-panel {
   height: 50px;
 }
 
-/* 고른 카드: 강조 테두리와 ✓ 딱지 */
+.mp-opt:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 고른 카드: 금빛 테두리·빛과 ✓ 딱지 */
 .mp-opt.on {
-  border-color: var(--red);
+  border-color: var(--accent);
   box-shadow:
-    0 0 0 2px var(--red),
-    5px 5px 0 var(--ink);
+    0 0 0 1px var(--accent),
+    0 0 18px var(--mp-glow),
+    0 3px 0 rgb(0 0 0 / 0.22);
 }
 
 .mp-opt.on::after {
   content: "✓";
   position: absolute;
-  top: -10px;
-  right: -9px;
+  top: -9px;
+  right: -8px;
   display: grid;
   place-items: center;
   width: 24px;
   height: 24px;
-  background: var(--red-text-bg);
-  color: var(--white);
-  border: 2px solid var(--ink);
+  background: var(--accent);
+  color: var(--on-accent);
+  border: 2px solid var(--surface);
   border-radius: 50%;
   font: 900 13px/1 var(--font-ui);
 }
 
 .mp-opt:disabled {
+  background: transparent;
   border-style: dashed;
   box-shadow: none;
   cursor: not-allowed;
@@ -329,22 +947,26 @@ body[data-mode="free"] .mix-panel {
   cursor: wait;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .mp-opt:not(:disabled):not([aria-disabled="true"]):not(div):hover {
-    translate: -1px -2px;
-    box-shadow: 6px 6px 0 var(--red);
-  }
+.mp-opt .lock {
+  color: var(--accent-2);
+}
 
-  .mp-opt.on:not(:disabled):hover {
+@media (hover: hover) and (pointer: fine) {
+  .mp-opt:not(:disabled):not([aria-disabled="true"]):hover {
+    translate: 0 -2px;
+    border-color: var(--accent);
     box-shadow:
-      0 0 0 2px var(--red),
-      6px 6px 0 var(--ink);
+      0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent),
+      0 0 18px var(--mp-glow),
+      0 6px 16px rgb(0 0 0 / 0.25);
   }
 }
 
-.mp-opt:not(:disabled):not([aria-disabled="true"]):not(div):active {
-  translate: 1px 1px;
-  box-shadow: 2px 2px 0 var(--ink);
+.mp-opt:not(:disabled):not([aria-disabled="true"]):active {
+  translate: 0 1px;
+  box-shadow:
+    0 1px 0 rgb(0 0 0 / 0.22),
+    0 0 10px var(--mp-glow);
 }
 
 /* 얼음: 가로로 긴 카드 */
@@ -402,11 +1024,25 @@ body[data-mode="free"] .mix-panel {
 }
 
 .mp-ing .deltas {
-  gap: 3px;
+  gap: 4px;
 }
 
-.mp-ing .delta {
-  font-size: 10.5px;
+/* 맛 변화 칩: 그 맛 색 테두리, 올리면 색을 채우고 내리면 점선 */
+.mix-panel .delta {
+  padding: 1px 7px 2px;
+  background: transparent;
+  color: var(--on-surface);
+  border: 1px solid var(--taste, var(--muted));
+  border-radius: 999px;
+  font: 600 10.5px/1.35 var(--font-ui);
+}
+
+.mix-panel .delta.up {
+  background: color-mix(in srgb, var(--taste, var(--muted)) 30%, var(--surface-2));
+}
+
+.mix-panel .delta.down {
+  border-style: dashed;
 }
 
 .mp-stock {
@@ -419,14 +1055,31 @@ body[data-mode="free"] .mix-panel {
   font-size: 10px;
 }
 
+.mix-panel .pips {
+  gap: 2px;
+}
+
+.mix-panel .pips i {
+  width: 7px;
+  height: 9px;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--on-surface) 40%, transparent);
+  border-radius: 2px;
+  transform: none;
+}
+
+.mix-panel .pips i.on {
+  background: color-mix(in srgb, var(--on-surface) 75%, transparent);
+  border-color: transparent;
+}
+
 .mp-stock.low .pips i.on {
-  background: var(--red);
-  border-color: var(--red);
+  background: var(--accent-2);
 }
 
 .mp-stock.empty b {
   font: 800 12px var(--font-ui);
-  color: var(--red-deep);
+  color: var(--accent-2);
 }
 
 .mp-ing.empty:disabled > .mp-stock {
@@ -434,34 +1087,20 @@ body[data-mode="free"] .mix-panel {
 }
 
 .mp-ing.added {
-  border-color: var(--red);
+  border-color: color-mix(in srgb, var(--accent) 75%, transparent);
 }
 
 /* 이 재료를 부은 횟수 */
 .mp-count {
   position: absolute;
-  top: -10px;
-  right: -8px;
-  padding: 3px 7px 3px;
-  background: var(--red-text-bg);
-  color: var(--white);
-  border: 2px solid var(--ink);
+  top: -9px;
+  right: -7px;
+  padding: 3px 7px 4px;
+  background: var(--accent);
+  color: var(--on-accent);
+  border: 2px solid var(--surface);
   border-radius: 999px;
   font: 700 12px/1 var(--font-num);
-}
-
-/* 젓기 */
-.mp-stir {
-  padding: 14px 10px 12px;
-  gap: 5px;
-}
-
-.mp-big {
-  font: 700 32px/1 var(--font-display);
-}
-
-div.mp-stir {
-  grid-column: 1 / -1;
 }
 
 .mp-garnish {
@@ -486,25 +1125,55 @@ div.mp-stir {
 }
 
 .mp-foot .mp-next {
-  min-width: 52%;
-  padding: 12px 18px 13px;
+  min-width: 56%;
+  padding: 13px 18px 14px;
   font-size: 19px;
 }
 
-.mp-foot .mp-prev,
-.mp-foot .mp-restart {
-  padding: 10px 13px 11px;
+.mp-foot .mp-prev {
+  padding: 11px 14px 12px;
   font-size: 15px;
 }
 
 .mp-foot [aria-disabled="true"] {
-  opacity: 0.42;
+  opacity: 0.45;
   cursor: wait;
 }
 
-/* 초기화는 넓은 화면에서는 잔 아래에 있다 */
-.mp-restart {
-  display: none !important;
+/* ── 넓은 화면이지만 낮을 때: 맛 카드를 조금 줄여 주문 카드와 겹치지 않게 ── */
+@media (min-width: 861px) and (max-height: 780px) {
+  .meters {
+    width: 272px;
+    gap: 9px;
+    padding: 13px 16px 14px;
+  }
+
+  .meters h3 {
+    font-size: 17px;
+  }
+
+  .meter {
+    grid-template-columns: 48px 1fr 34px;
+    gap: 10px;
+  }
+
+  .meter .label {
+    font-size: 15px;
+  }
+
+  .meter .value {
+    font-size: 15px;
+  }
+
+  .track {
+    height: 12px;
+    margin-top: 16px;
+  }
+
+  .track .kw {
+    top: -18px;
+    font-size: 12px;
+  }
 }
 
 /* ── 좁은 화면(휴대폰) ─────────────────────── */
@@ -515,10 +1184,10 @@ div.mp-stir {
     left: 8px;
     right: 8px;
     width: auto;
-    grid-template-columns: 58px minmax(0, 1fr) 34px;
+    grid-template-columns: 58px minmax(0, 1fr) 36px;
     gap: 0 10px;
     padding: 9px 10px 9px 9px;
-    transform: rotate(-0.6deg);
+    border-radius: 14px;
   }
 
   body[data-mode="free"] .order-card {
@@ -530,13 +1199,20 @@ div.mp-stir {
     overflow-y: auto;
   }
 
+  .order-card::before,
+  .order-card::after {
+    width: 12px;
+    height: 12px;
+  }
+
   .oc-face {
     width: 58px;
     height: 70px;
+    border-radius: 10px;
   }
 
-  .who .ransom {
-    font-size: 19px;
+  .oc-name {
+    font-size: 20px;
   }
 
   .order-card .line {
@@ -550,22 +1226,26 @@ div.mp-stir {
     align-self: start;
     display: grid;
     place-items: center;
-    width: 34px;
-    height: 34px;
-    background: var(--white);
-    color: var(--ink);
-    border: 2px solid var(--ink);
-    border-radius: 6px;
-    box-shadow: 2px 2px 0 var(--red);
+    width: 36px;
+    height: 36px;
+    background: var(--surface-2);
+    color: var(--on-surface);
+    border: 1px solid var(--line);
+    border-radius: 50%;
     font: 700 15px/1 var(--font-ui);
+  }
+
+  .oc-toggle:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
   }
 
   .oc-actions {
     margin-top: 6px;
   }
 
-  .oc-actions .ghost {
-    padding: 5px 9px 6px;
+  .order-card .oc-actions .ghost {
+    padding: 6px 10px 7px;
     font-size: 13px;
   }
 
@@ -576,18 +1256,18 @@ div.mp-stir {
   }
 
   .order-card:not(.open) .oc-face {
-    width: 34px;
-    height: 38px;
-    border-width: 2px;
-    border-radius: 6px;
+    width: 36px;
+    height: 40px;
+    border-radius: 8px;
+    box-shadow: none;
   }
 
   .order-card:not(.open) .oc-toggle {
     align-self: center;
   }
 
-  .order-card:not(.open) .who .ransom {
-    font-size: 15px;
+  .order-card:not(.open) .oc-name {
+    font-size: 16px;
   }
 
   .order-card:not(.open) :is(.oc-title, .stamp, .oc-story, .oc-actions, .oc-hint, .oc-hints, .vague-note) {
@@ -612,10 +1292,17 @@ div.mp-stir {
     flex-wrap: nowrap;
     margin-top: 3px;
     overflow: hidden;
+    /* 잘린 칩은 끝을 흐려 '더 있음'을 보인다(펼치면 다 보인다). 마스크는 투명도만 쓴다 */
+    mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
   }
 
   .order-card:not(.open) .chip {
     flex: none;
+  }
+
+  .order-card .chip {
+    padding: 3px 8px 4px;
+    font-size: 12px;
   }
 
   .order-card.style-recipe:not(.open) .line {
@@ -626,44 +1313,67 @@ div.mp-stir {
     margin-top: 3px;
   }
 
-  /* 현재 맛: 잔 왼쪽의 좁은 기둥(단계 판 바로 위) */
+  /* 현재 맛: 잔 왼쪽의 기둥(단계 판 바로 위). 초기화 버튼은 이 기둥 위에 온다 */
   .meters {
     left: 8px;
     bottom: calc(min(44vh, 380px) + 10px);
-    width: 124px;
-    gap: 5px;
-    padding: 7px 8px 8px;
-    transform: none;
-    box-shadow: 4px 4px 0 var(--red);
+    width: 132px;
+    gap: 7px;
+    padding: 9px 10px 10px;
+    border-radius: 14px;
+  }
+
+  .meters::before,
+  .meters::after {
+    width: 10px;
+    height: 10px;
+    border-width: 1.5px;
+  }
+
+  .meters::before {
+    top: 5px;
+    left: 5px;
+  }
+
+  .meters::after {
+    right: 5px;
+    bottom: 5px;
   }
 
   .meters h3 {
-    font-size: 12px;
-    gap: 3px;
+    gap: 4px;
+    font-size: 14px;
   }
 
   .meters h3 > span:first-child {
-    padding: 3px 6px 4px;
+    padding-left: 4px;
   }
 
-  .meters .kw-pill {
-    font-size: 11px;
+  .kw-pill {
+    padding: 3px 7px 4px;
+    font-size: 12px;
   }
 
   .meter {
     grid-template-columns: 1fr auto;
-    gap: 0 4px;
+    gap: 0 6px;
   }
 
   .meter .label {
-    font-size: 13px;
+    justify-self: start;
+    padding: 3px 9px 4px;
+    font-size: 14px;
+  }
+
+  .meter .value {
+    font-size: 14px;
   }
 
   .meter .track {
     grid-column: 1 / -1;
     grid-row: 2;
-    height: 8px;
-    margin: 2px 0 0;
+    height: 9px;
+    margin: 5px 0 1px;
   }
 
   .track .kw {
@@ -672,22 +1382,40 @@ div.mp-stir {
 
   .track .band,
   .track .zero {
-    top: -3px;
-    bottom: -3px;
+    top: -4px;
+    bottom: -4px;
   }
 
   .track .knob {
-    width: 11px;
-    height: 11px;
+    width: 14px;
+    height: 14px;
+    border-width: 2px;
   }
 
-  /* 초기화는 단계 판 아래 줄로 옮긴다 */
-  .glass-actions {
-    display: none;
+  /* 잔 양옆 버튼: 조금 작게(누르는 자리는 44px보다 크게) */
+  .glass-btn {
+    width: 56px;
+    gap: 4px;
   }
 
-  .mp-restart {
-    display: inline-flex !important;
+  .gb-ring {
+    width: 50px;
+    height: 50px;
+  }
+
+  .gb-ic {
+    width: 24px;
+    height: 24px;
+  }
+
+  .gb-label {
+    padding: 1px 7px 2px;
+    font-size: 12.5px;
+  }
+
+  .pourbar .slots {
+    width: 18px;
+    gap: 4px;
   }
 
   /* 단계 판: 아래에서 올라온 시트 */
@@ -702,10 +1430,10 @@ div.mp-stir {
     justify-content: flex-start;
     gap: 0;
     padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-    background-color: var(--paper);
-    background-image: var(--grain);
-    border-top: 3px solid var(--ink);
-    box-shadow: 0 -5px 0 var(--red);
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -12px 30px rgb(0 0 0 / 0.35);
   }
 
   .mp-sheet {
@@ -717,22 +1445,33 @@ div.mp-stir {
     box-shadow: none;
   }
 
+  .mp-sheet::before,
+  .mp-sheet::after {
+    display: none;
+  }
+
   .mp-steps {
     padding-bottom: 6px;
   }
 
   .mp-steps li + li::before {
-    top: 10px;
+    top: 11px;
+    right: calc(50% + 16px);
+    width: calc(100% - 32px);
   }
 
   .mp-n {
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     font-size: 11px;
   }
 
+  .mp-steps li.done .mp-n {
+    font-size: 13px;
+  }
+
   .mp-l {
-    font-size: 10px;
+    font-size: 10.5px;
   }
 
   .mp-head {
@@ -750,6 +1489,7 @@ div.mp-stir {
   .mp-hn {
     width: 20px;
     height: 20px;
+    border-radius: 6px;
     font-size: 11px;
   }
 
@@ -774,6 +1514,7 @@ div.mp-stir {
 
   .mp-opt {
     padding: 7px 5px 8px;
+    border-radius: 10px;
   }
 
   .mp-opt strong {
@@ -811,13 +1552,9 @@ div.mp-stir {
     font-size: 13px;
   }
 
-  .mp-ing .delta {
-    padding: 0 4px;
+  .mix-panel .delta {
+    padding: 0 5px 1px;
     font-size: 10px;
-  }
-
-  .mp-big {
-    font-size: 26px;
   }
 
   .mp-foot {
@@ -828,13 +1565,12 @@ div.mp-stir {
   .mp-foot .mp-next {
     flex: 1;
     min-width: 0;
-    padding: 11px 12px 12px;
+    padding: 12px 12px 13px;
     font-size: 17px;
   }
 
-  .mp-foot .mp-prev,
-  .mp-foot .mp-restart {
-    padding: 9px 11px 10px;
+  .mp-foot .mp-prev {
+    padding: 10px 12px 11px;
     font-size: 14px;
   }
 }
@@ -842,7 +1578,15 @@ div.mp-stir {
 /* ── 움직임 줄이기 ─────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .mp-opt,
-  .mp-n {
+  .mp-n,
+  .gb-ring,
+  .track .knob,
+  .track .fill,
+  .track .band {
     transition: none;
+  }
+
+  .order-card {
+    animation-name: fade-only;
   }
 }
