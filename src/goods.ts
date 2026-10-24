@@ -5,6 +5,7 @@
 // 여기서는 그 밖에 손님이 그냥 사 가는 물건(평소 수요)을 정한다.
 
 import type { UpgradeId } from './campaign';
+import { hashId } from './guests';
 import { seeded } from './shift';
 import { GOOD_BY_ID, GOODS, type GoodId } from './world';
 
@@ -73,7 +74,9 @@ const FAVORITES: Record<string, GoodId[]> = {
  * 비 오는 밤엔 누구나 우산을, 축제 이틀은 누구나 가면을 찾는다. 진열장에 있어야 권할 수 있다.
  */
 export function wantsOf(who: string, day: number): GoodId[] {
-  const out = new Set<GoodId>(FAVORITES[who] ?? []);
+  // 지나가는 손님은 넷 중 하나꼴로 엽서나 별사탕을 사 간다(같은 손님이면 늘 같게).
+  const guest = FAVORITES[who] ? [] : seeded(hashId(who) + 31)() < 0.25 ? [seeded(hashId(who) + 37)() < 0.5 ? 'postcard' : 'candy'] : [];
+  const out = new Set<GoodId>([...(FAVORITES[who] ?? []), ...(guest as GoodId[])]);
   if (isRainy(day)) out.add('umbrella');
   if (isFestival(day) || (day > 7 && seeded(day * 911 + who.length)() < 0.3)) out.add('mask');
   return [...out];

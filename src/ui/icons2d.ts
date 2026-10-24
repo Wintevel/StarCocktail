@@ -1,14 +1,14 @@
 // 화면(DOM)에 쓰는 작은 2D 아이콘: 재료 병·잔·얼음·장식·진열장 물건.
-// 가게 그림과 같은 화풍으로 굵은 남보라 선 + 라벤더 흰 바탕 + 마젠타 포인트로 그린다. 외부 이미지 없이 SVG 문자열만 만든다.
+// 가게 그림과 같은 화풍으로 굵은 먹선 + 종이색 바탕 + 빨간 포인트로 그린다. 외부 이미지 없이 SVG 문자열만 만든다.
 // 열쇠: `ing:<재료>`, `glass:<잔>`, `ice:<얼음>`, `garnish:<장식>`, `good:<물건>`
 
 import { GARNISHES, GLASSES, ICES, INGREDIENTS, type IngredientId } from '../data';
 import { BOTTLE_KIND } from '../three/models';
 import { GOODS } from '../world';
 
-const INK = '#24104f';
-const PAPER = '#fbf6ff';
-const RED = '#e8238f';
+const INK = '#151313';
+const PAPER = '#f7f2e8';
+const RED = '#d8202a';
 
 const svg = (body: string, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 64 64" aria-hidden="true" focusable="false">${body}</svg>`;
 const p = (d: string, fill: string, stroke = INK, sw = 3, extra = '') =>
@@ -102,8 +102,8 @@ function glassIcon(id: string) {
 /** 각얼음 하나(위·왼쪽·오른쪽 면) */
 const cube = (x: number, y: number, s = 10) =>
   p(`M${x},${y} l${s},-${s / 2} l${s},${s / 2} l-${s},${s / 2} Z`, PAPER, INK, 2.2) +
-  p(`M${x},${y} v${s} l${s},${s / 2} v-${s} Z`, '#d9ccff', INK, 2.2) +
-  p(`M${x + s},${y + s / 2} v${s} l${s},-${s / 2} v-${s} Z`, '#9a86d6', INK, 2.2);
+  p(`M${x},${y} v${s} l${s},${s / 2} v-${s} Z`, '#cfc9be', INK, 2.2) +
+  p(`M${x + s},${y + s / 2} v${s} l${s},-${s / 2} v-${s} Z`, '#8e8a84', INK, 2.2);
 
 function iceIcon(id: string) {
   if (id === 'none') {

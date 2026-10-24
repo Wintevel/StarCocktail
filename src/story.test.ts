@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DAYS, LAST_DAY, unlocksFor } from './campaign';
+import { DAYS, LAST_DAY, storyVisits, unlocksFor } from './campaign';
 import { CUSTOMERS, type Attrs } from './data';
 import { type Grade } from './mix';
 import { seeded } from './shift';
@@ -27,7 +27,6 @@ import {
   heldFor,
   ITEMS,
   keyLit,
-  morningNews,
   newDay,
   nextBeat,
   post,
@@ -136,7 +135,7 @@ describe('이야기 데이터', () => {
       expect(epilogueLine(emptyStory(), c.id)).toBeTruthy();
     }
     for (let day = 1; day <= LAST_DAY; day++) {
-      const visitors = new Set(DAYS[day - 1].visits.map((v) => v.customer));
+      const visitors = new Set(storyVisits(day).map((v) => v.customer));
       const story = BEATS.filter((b) => visitors.has(b.who) && (!b.days || (b.days[0] <= day && b.days[1] >= day)) && !b.id.startsWith('drop_') && !b.id.startsWith('tell_') && !b.id.startsWith('conf_'));
       expect(new Set(story.map((b) => b.who)).size).toBeGreaterThanOrEqual(Math.min(3, visitors.size));
     }
@@ -208,8 +207,13 @@ function simulate(o: SimOpts) {
     if (r() < o.stockUp) for (const g of GOODS) if (g.from < day && r() < 0.6) goods[g.id] = Math.min(5, (goods[g.id] ?? 0) + 1);
     DAYS[day - 1].visits.forEach((v) => {
       const who = v.customer;
-      play({ day, who, when: 'before', goods, money });
       const grade: Grade = r() < o.perfect ? 'perfect' : r() < 0.6 ? 'good' : 'fail';
+      // 지나가는 손님은 이야기가 없다: 잔값만 받는다.
+      if (!LORE[who]) {
+        money += grade === 'perfect' ? 50 : grade === 'good' ? 30 : 0;
+        return;
+      }
+      play({ day, who, when: 'before', goods, money });
       const k = LORE[who].key;
       const canKey = grade === 'perfect' && keyable[day - 1].has(who);
       const attrs: Attrs = { sweet: Math.floor(r() * 7) - 2, strength: Math.floor(r() * 5) - 1, body: Math.floor(r() * 5) - 1, tone: 0 };
@@ -237,7 +241,8 @@ function simulate(o: SimOpts) {
 const keyable: Set<string>[] = DAYS.map((d, i) => {
   const out = new Set<string>();
   for (const v of d.visits) {
-    const k = LORE[v.customer].key;
+    const k = LORE[v.customer]?.key;
+    if (!k) continue;
     if (solve([...v.order, { kind: 'keyword', attr: k.attr, side: k.side }], unlocksFor(i + 1))) out.add(v.customer);
   }
   return out;
@@ -431,7 +436,8 @@ describe('이야기 규칙', () => {
     expect(s.flags.has('song_lyrics')).toBe(true);
     expect(s.flags.has('ev_anon')).toBe(true);
     expect(s.items).not.toContain('letter_e');
-    expect(morningNews(s, 4).some((n) => n.head === '피피의 배달 일지')).toBe(true);
+    // 배달은 그날 밤의 선택(엽서 표시)으로 남아 다음 날 아침 신문에 실린다
+    expect(s.deeds).toEqual([{ day: 3, beat: s.deeds[0].beat, i: s.deeds[0].i, post: true }]);
   });
 
   it('신뢰는 완벽한 잔에 오르고 기다리다 떠나면 내려가며, 0~5 사이에 머문다', () => {
@@ -442,14 +448,6 @@ describe('이야기 규칙', () => {
     expect(trustOf(s, 'mio')).toBe(4);
     served(s, 'grey', 'left');
     expect(trustOf(s, 'grey')).toBe(0);
-  });
-
-  it('아침 신문: 전날 밤 일이 기사로 실리고, 없으면 그날의 기본 기사', () => {
-    const s = emptyStory();
-    expect(morningNews(s, 4)[0].head).toContain('비');
-    s.news.push({ day: 3, head: '월광관 가수, 잃어버린 자장가를 되찾다', body: '…' });
-    expect(morningNews(s, 4)[0].head).toBe('월광관 가수, 잃어버린 자장가를 되찾다');
-    expect(morningNews(s, 5)[0].head).not.toBe('월광관 가수, 잃어버린 자장가를 되찾다');
   });
 
   it('Day 7 마감: 결말을 정하고, 끝내 전하지 못한 것은 기록에 남긴 채 카운터를 비운다', () => {

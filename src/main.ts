@@ -1,5 +1,18 @@
 import './style.css';
-import '@fontsource/jetbrains-mono/500.css';
+import './mix-panel.css';
+// 글꼴: 역할마다 다른 무료 한글 글꼴(한글은 유니코드 구간별로 나뉘어 쓰는 글자만 받는다)
+import '@fontsource/anton/400.css'; // 로마자·숫자 제목
+import '@fontsource/black-han-sans/400.css'; // 오려 붙인 굵은 글자·신문 큰 표제
+import '@fontsource/do-hyeon/400.css'; // 카드 제목·버튼
+import '@fontsource/hahmlet/700.css'; // 신문 제호·기사 제목(명조)
+import '@fontsource/hahmlet/900.css';
+import '@fontsource/ibm-plex-sans-kr/400.css'; // 본문
+import '@fontsource/ibm-plex-sans-kr/700.css';
+import '@fontsource/gowun-batang/400.css'; // 기사 본문·레시피북
+import '@fontsource/gowun-batang/700.css';
+import '@fontsource/gaegu/400.css'; // 손님 대사(손글씨)
+import '@fontsource/gaegu/700.css';
+import '@fontsource/jetbrains-mono/500.css'; // 숫자·시계·장부
 import '@fontsource/jetbrains-mono/700.css';
 import {
   arrivalsOn,
@@ -9,8 +22,6 @@ import {
   emptyLedger,
   finalRank,
   garnishCost,
-  GARNISH_DAY,
-  GLASS_DAY,
   income,
   INGREDIENT_DAY,
   LAST_DAY,
@@ -49,7 +60,7 @@ import {
   GARNISHES,
   type GarnishId,
   GLASS_BY_ID,
-  ICES,
+  type GlassId,
   type IceId,
   INGREDIENT_BY_ID,
   type IngredientId,
@@ -58,9 +69,9 @@ import {
   RECIPES,
   TONE_DAY,
 } from './data';
+import { guestSmallTalk, isGuest } from './guests';
 import {
   canPour,
-  canStir,
   capacityOf,
   check,
   computeAttrs,
@@ -117,8 +128,9 @@ import {
   josa,
   ITEMS,
   keyLit,
-  morningNews,
   newDay,
+  noteNight,
+  noteSale,
   nextBeat,
   type Outcome as StoryOutcome,
   post,
@@ -131,17 +143,20 @@ import {
   trustOf,
   type When,
 } from './story';
-import { type GlassAnchor, Stage3D, type Target, type View as StageView } from './three/stage';
+import { type Article, type Edition, morningEdition } from './paper';
+import { canLeave, chooseGlass, chooseIce, glassChangeLoses, type MixStep, nextStep, prevStep, reachable } from './mixSteps';
+import { type Frame, type GlassAnchor, Stage3D } from './three/stage';
 import { icons } from './ui/icons2d';
+import { renderPanel, resetPanel } from './ui/mixPanel';
 import { ransom } from './ui/ransom';
 import { GOOD_BY_ID, type GoodId, GOODS, LORE } from './world';
 
 /** 가게 안(손님이 스툴에 앉는 2D 화면) / 제조대(3D) */
 type View = 'shop' | 'mix';
-/** 제조 단계. result는 자유 제조에서만 쓴다(영업 중에는 서빙하면 곧바로 가게로 돌아간다). */
-type Phase = 'glass' | 'ice' | 'mix' | 'garnish' | 'result';
+/** 제조 단계(① 잔 → ② 얼음 → ③ 재료 → ④ 젓기 → ⑤ 장식). result는 자유 제조에서만 쓴다(영업 중에는 서빙하면 곧바로 가게로 돌아간다). */
+type Phase = MixStep | 'result';
 type Mode = 'shift' | 'free';
-type Overlay = 'title' | 'book' | 'dayStart' | 'dayEnd' | 'shop' | 'final' | null;
+type Overlay = 'title' | 'book' | 'paper' | 'dayStart' | 'dayEnd' | 'shop' | 'final' | null;
 /** 레시피북의 쪽: 레시피 / 단골 수첩 / 약속 장부 / 이야기 기록 */
 type BookTab = 'recipes' | 'patrons' | 'promises' | 'log';
 /** 오늘 손님 한 명의 결과: 판정 / 돌려보냄 / 기다리다 떠남 */
@@ -255,8 +270,10 @@ interface State {
   discovered: Set<string>;
   started: boolean;
   drawer: boolean;
-  /** 장식 화면에서 가운데에 놓인 장식 카드 */
+  /** 장식 단계에서 고른 장식 카드(←/→ 키로 넘길 때의 기준) */
   garnishSel: number;
+  /** 휴대폰에서 주문 카드를 펼쳐 보는 중(접으면 한 줄) */
+  orderOpen: boolean;
   /** 레시피북을 열 때 강조할 레시피(레시피 이름 주문) */
   bookFocus: string | null;
   bookTab: BookTab;
@@ -344,6 +361,7 @@ const state: State = {
   started: false,
   drawer: false,
   garnishSel: 0,
+  orderOpen: false,
   bookFocus: null,
   bookTab: 'recipes',
   talk: null,
@@ -352,8 +370,8 @@ const state: State = {
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
-  <div class="shop-view" id="shop" aria-label="별빛 바 가게 안: 스툴 네 개에 손님이 앉는다"></div>
-  <section class="mix-view" id="mixView" aria-label="제조대: 왼쪽 잔 쟁반, 가운데 잔, 오른쪽 병 진열대">
+  <div class="shop-view" id="shop" aria-label="가게 안: 스툴 네 개에 손님이 앉는다"></div>
+  <section class="mix-view" id="mixView" aria-label="제조대: 가운데 잔, 오른쪽 단계별 카드">
     <div class="mix-bg" aria-hidden="true">
       <div class="mb-paper"></div>
       <div class="mb-slab"></div>
@@ -361,8 +379,6 @@ app.innerHTML = `
       <div class="mb-shard s1"></div>
       <div class="mb-shard s2"></div>
       <div class="mb-shard s3"></div>
-      <div class="mb-type">STAR<br />COCKTAIL</div>
-      <div class="mb-strip"><span>LAST TRAIN · NOCTURNE 7 · 별빛 바 · OPEN 18:00 — 04:00 · </span><span>LAST TRAIN · NOCTURNE 7 · 별빛 바 · OPEN 18:00 — 04:00 · </span></div>
     </div>
     <div class="stage3d" id="stage"></div>
   </section>
@@ -372,18 +388,17 @@ app.innerHTML = `
   <section class="order-card" id="order" aria-live="polite"></section>
   <div class="hud" id="hud">
     <div class="meters" id="meters"></div>
-    <div class="pourbar" id="pourbar"></div>
-    <div class="ice-pick" id="ice"></div>
-    <div class="garnish-arc" id="garnish"></div>
+    <div class="pourbar" id="pourbar" role="img"></div>
     <div class="glass-actions" id="actions"></div>
   </div>
+  <aside class="mix-panel" id="mixPanel" aria-label="제조 단계"></aside>
+  <p class="sr-only" id="mixLive" aria-live="polite"></p>
   <p class="prompt" id="prompt"></p>
   <section class="result-card" id="result"></section>
   <section class="clip" id="clip" aria-live="polite"></section>
   <section class="talk" id="talk" role="dialog" aria-modal="false" tabindex="-1" hidden></section>
   <aside class="notebook" id="notebook" hidden></aside>
   <aside class="drawer" id="drawer"></aside>
-  <div class="tip-card" id="tip" hidden></div>
   <div class="overlay" id="overlay" hidden></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 `;
@@ -471,31 +486,13 @@ function syncTags() {
 /** 손님 상반신(주문 카드)·얼굴(스툴 목록) 그림. 가게 그림과 같은 SVG를 잘라 쓴다. */
 function portrait(id: string, mood: Mood = 'idle', crop: 'bust' | 'head' = 'bust') {
   const rig = rigFor(id);
-  const top = rig.top - 6;
-  // 머리 자르기: 애니메풍 큰 머리(정수리 -256, 턱 -150)를 정사각형에 가깝게 담는다(높은 모자는 조금 잘린다)
-  const box = crop === 'bust' ? `-84 ${top} 168 ${-top - 40}` : `-74 -286 148 150`;
-  return `<svg class="portrait ${crop}" viewBox="${box}" data-mood="${mood}" aria-hidden="true" focusable="false">${rig.svg}</svg>`;
+  // 자르는 상자는 그림마다 정해 둔다(상반신: 정수리 위 ~ 가슴 아래, 머리: 정수리 ~ 턱 아래. 높은 모자는 조금 잘린다)
+  return `<svg class="portrait ${crop}" viewBox="${crop === 'bust' ? rig.bust : rig.head}" data-mood="${mood}" aria-hidden="true" focusable="false">${rig.svg}</svg>`;
 }
 
 // ── 3D 제조대와 연결 ─────────────────────────────────────────
 
 stage.onIdle = () => render();
-stage.onBottleDrop = (id) => {
-  if (state.view !== 'mix' || state.phase !== 'mix' || state.overlay || stage.busy || !canPour(state.drink) || stockOf(id) <= 0) return false;
-  showTip(null, 0, 0);
-  doPour(id);
-  render();
-  return true;
-};
-stage.onGlassPick = (id) => {
-  if (state.view !== 'mix' || state.phase !== 'glass' || state.overlay) return;
-  if (!unlocked().glasses.has(id)) return;
-  state.drink = { ...emptyDrink(), glass: id };
-  state.phase = 'ice';
-  showTip(null, 0, 0);
-  render();
-};
-stage.onHover = (t, x, y) => showTip(t, x, y);
 stage.onLayout = (a) => layoutHud(a);
 
 // ── 가게 화면과 연결 ─────────────────────────────────────────
@@ -510,7 +507,6 @@ let viewTimer = 0;
 function goView(v: View) {
   if (state.view === v) return;
   state.view = v;
-  showTip(null, 0, 0);
   clearTimeout(viewTimer);
   if (v === 'mix') {
     stage.setActive(true);
@@ -526,52 +522,9 @@ function stockPips(id: IngredientId) {
   return `<span class="pips" aria-hidden="true">${Array.from({ length: STOCK_MAX }, (_, i) => `<i class="${i < left ? 'on' : ''}"></i>`).join('')}</span>`;
 }
 
-function showTip(t: Target | null, x: number, y: number) {
-  const el = $('tip');
-  if (!t || state.overlay || state.view !== 'mix') {
-    el.hidden = true;
-    return;
-  }
-  if (t.kind === 'bottle') {
-    const ing = INGREDIENT_BY_ID[t.id];
-    const left = stockOf(t.id);
-    const stockLine = shift()
-      ? `<span class="stock-line ${left === 0 ? 'empty' : left <= 1 ? 'low' : ''}">${stockPips(t.id)}<small>잔량 <b class="num">${stockPercent(state.stock, t.id)}%</b>${state.refills.has(t.id) ? ' · 내일 아침 리필' : ''}</small></span>`
-      : '';
-    const how =
-      left === 0
-        ? '<small class="empty-note">비었어요 · 서랍에서 리필을 주문하면 내일 아침 채워져요</small>'
-        : state.phase === 'mix'
-          ? '<small class="how">잔 위로 끌어다 놓으면 부어요</small>'
-          : '';
-    el.innerHTML = `
-      <strong>${ing.name}</strong><small>${ing.kind}</small>
-      <span class="deltas">${deltaChips(t.id)}</span>
-      ${stockLine}${how}`;
-  } else {
-    const g = GLASS_BY_ID[t.id];
-    const open = unlocked().glasses.has(t.id);
-    el.innerHTML = `<strong>${g.name}</strong><small>${open ? `재료 ${g.capacity}번까지` : `<span class="lock">Day ${GLASS_DAY[t.id]} 입고</span>`}</small>`;
-  }
-  el.hidden = false;
-  const w = el.offsetWidth;
-  el.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, x + 16))}px`;
-  el.style.top = `${Math.max(8, y - el.offsetHeight - 12)}px`;
-}
-
-/** 지금 단계에 맞는 3D 카메라 시선 */
-function stageView(): StageView {
-  if (state.phase === 'glass') return 'pick';
-  return state.phase === 'garnish' || state.phase === 'result' ? 'garnish' : 'mix';
-}
-
-/** 병 진열대·잔 쟁반·카메라처럼 DOM 밖(3D)에 반영할 것들 */
+/** 잔을 놓을 화면 영역 등 DOM 밖(3D)에 반영할 것들 */
 function syncStage() {
-  const free = !state.overlay && state.view === 'mix';
-  stage.setStock(shift() ? Object.fromEntries([...unlocked().ingredients].map((id) => [id, stockOf(id) / STOCK_MAX])) : null);
-  stage.setPourable(state.phase === 'mix' && free && canPour(state.drink) && !stage.busy);
-  stage.setGlassShelf(unlocked().glasses, state.drink.glass, state.phase === 'glass' && free);
-  stage.setView(stageView());
+  if (state.view === 'mix' && !state.overlay) stage.setFrame(stageFrame());
 }
 
 function syncShop() {
@@ -587,99 +540,31 @@ const place = (el: HTMLElement, left: number, top: number) => {
 };
 const clampX = (x: number, w: number) => Math.max(8, Math.min(window.innerWidth - w - 8, x));
 
-/** 잔의 화면 위치에 맞춰 게이지(왼쪽)·횟수 바(오른쪽)·버튼(아래)·장식 카드(위)를 붙인다. */
+/** 잔의 화면 위치에 맞춰 부은 횟수 바(오른쪽)와 초기화 버튼(아래)을 붙인다. */
 function layoutHud(a: GlassAnchor | null = anchor) {
   if (!a) return;
   anchor = a;
   const glassH = Math.max(60, a.bottom - a.top);
   const midY = (a.top + a.bottom) / 2;
 
-  const meters = $('meters');
-  if (!meters.classList.contains('compact')) {
-    const w = meters.offsetWidth;
-    const room = a.x - a.half - 28;
-    const docked = room < w + 8 || isMobile();
-    meters.classList.toggle('docked', docked);
-    if (docked) {
-      meters.style.left = meters.style.top = '';
-    } else {
-      const h = meters.offsetHeight;
-      let y = Math.max(midY - h / 2, 250);
-      // 주문 카드(이야기 귀띔이 붙어 길어질 수 있다)와 겹치면 그 아래로
-      const card = orderRect();
-      if (card && overlaps(card, room - w, y, w, h)) y = card.bottom + GAP;
-      place(meters, room - w, y);
-    }
-  }
-
   const bar = $('pourbar');
-  const barH = Math.min(220, Math.max(110, glassH * 0.9));
+  const barH = Math.min(200, Math.max(90, glassH * 0.8));
   bar.style.height = `${barH}px`;
-  place(bar, a.x + a.half + 20, midY - barH / 2);
+  place(bar, a.x + a.half + 18, midY - barH / 2);
 
   const actions = $('actions');
-  place(
-    actions,
-    clampX(a.x - actions.offsetWidth / 2, actions.offsetWidth),
-    Math.min(window.innerHeight - actions.offsetHeight - 70, a.bottom + 40),
-  );
-
-  // 얼음 고르기는 잔 바로 위 가운데. 주문 카드와 겹치면 카드 오른쪽으로 비켜 서고, 자리가 없으면 카드 아래로 내린다.
-  const ice = $('ice');
-  if (!ice.hidden) {
-    const w = ice.offsetWidth;
-    const h = ice.offsetHeight;
-    let x = clampX(a.x - w / 2, w);
-    let y = Math.max(isMobile() ? 230 : 120, a.top - h - 24);
-    const card = orderRect();
-    if (card && overlaps(card, x, y, w, h)) {
-      const right = card.right + GAP;
-      if (right + w <= window.innerWidth - 8) x = right;
-      else y = card.bottom + GAP;
-    }
-    place(ice, x, y);
-  }
-
-  // 장식 카드는 잔 위 한 점(사북)을 축으로 부채꼴로 펼친다. 가운데 카드가 가장 높고 크다.
-  // 축(#garnish)만 잔을 따라 매 프레임 옮기고, 카드는 축 기준 자리라서 카메라가 움직여도 흔들리지 않는다.
-  const arc = $('garnish');
-  if (!arc.hidden) {
-    const cards = [...arc.querySelectorAll<HTMLElement>('.g-card')];
-    const R = Math.min(300, window.innerWidth * (isMobile() ? 0.32 : 0.36));
-    const cy = Math.max(isMobile() ? 300 : 190, a.top - 30);
-    arc.style.transform = `translate(${Math.round(a.x)}px, ${Math.round(cy)}px)`;
-    const fresh = arc.dataset.fresh === '1';
-    // 새로 만든 카드는 전환 없이 제자리에 놓는다(왼쪽 위 모서리에서 날아오지 않게)
-    if (fresh) arc.classList.add('snap');
-    cards.forEach((c, i) => {
-      const k = i - state.garnishSel;
-      const th = k * 0.42;
-      const x = Math.sin(th) * R;
-      const y = -Math.cos(th) * 70;
-      c.style.transform = `translate(${Math.round(x - c.offsetWidth / 2)}px, ${Math.round(y - c.offsetHeight)}px) scale(${k === 0 ? 1 : 0.8}) rotate(${(th * 14).toFixed(2)}deg)`;
-      c.style.opacity = Math.abs(k) > 2 ? '0' : k === 0 ? '1' : '0.8';
-      c.style.pointerEvents = Math.abs(k) > 2 ? 'none' : '';
-      c.tabIndex = Math.abs(k) > 2 ? -1 : 0;
-    });
-    const arrows = arc.querySelectorAll<HTMLElement>('.g-arrow');
-    if (arrows.length === 2) {
-      place(arrows[0], Math.max(8, a.x - R - 70) - a.x, -70);
-      place(arrows[1], Math.min(window.innerWidth - 52, a.x + R + 26) - a.x, -70);
-    }
-    if (fresh) {
-      void arc.offsetWidth;
-      arc.classList.remove('snap');
-      delete arc.dataset.fresh;
-    }
-    if (garnishFanIn) {
-      garnishFanIn = false;
-      fanInGarnish(arc);
-    }
-  }
+  place(actions, clampX(a.x - actions.offsetWidth / 2, actions.offsetWidth), Math.min(window.innerHeight - actions.offsetHeight - 14, a.foot + 10));
 }
 
 /** 화면 요소끼리 띄울 간격 */
 const GAP = 14;
+/** 잔 오른쪽에 부은 횟수 바가 들어갈 자리 */
+const BAR_ROOM = 64;
+/** 휴대폰에서 왼쪽 맛 게이지 기둥이 차지하는 폭(mix-panel.css의 게이지 폭 + 여백) */
+const PHONE_METERS = 138;
+/** 휴대폰에서 접힌 주문 카드의 아래 끝(펼쳐 볼 때 잔이 움직이지 않도록 접혔을 때 값을 쓴다) */
+let orderLineBottom = 0;
+
 /** 보이는 주문 카드의 화면 상자(기울어진 카드는 바깥 상자) */
 function orderRect(): DOMRect | null {
   const el = $('order');
@@ -687,9 +572,50 @@ function orderRect(): DOMRect | null {
   const r = el.getBoundingClientRect();
   return r.width && r.height ? r : null;
 }
-const overlaps = (r: DOMRect, x: number, y: number, w: number, h: number) =>
-  x < r.right + GAP && x + w > r.left - GAP && y < r.bottom + GAP && y + h > r.top - GAP;
-window.addEventListener('resize', () => layoutHud());
+
+/**
+ * 잔을 놓을 화면 영역. 넓은 화면은 왼쪽 주문 카드·맛 게이지와 오른쪽 단계 판 사이,
+ * 휴대폰은 위쪽 자리 띠·주문 줄과 아래 단계 판 사이(왼쪽은 게이지 기둥)다. 오른쪽에는 횟수 바 자리를 남긴다.
+ */
+function stageFrame(): Frame {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const rect = (id: string) => {
+    const el = $(id);
+    return el.hidden ? null : el.getBoundingClientRect();
+  };
+  const panel = rect('mixPanel');
+  const seats = rect('seats');
+  const card = orderRect();
+  const topbar = $('topbar').getBoundingClientRect().bottom;
+  let top = Math.max(topbar, seats?.bottom ?? 0) + GAP;
+  let left: number;
+  let right: number;
+  let bottom: number;
+  if (isMobile()) {
+    if (card && !state.orderOpen) orderLineBottom = card.bottom;
+    if (card) top = Math.max(top, (orderLineBottom || card.top + 52) + 8);
+    left = PHONE_METERS;
+    right = W - 6;
+    bottom = (panel ? panel.top : H) - 8;
+  } else {
+    const meters = rect('meters');
+    left = Math.max(card?.right ?? 0, meters?.right ?? 0) + GAP;
+    right = (panel ? panel.left : W) - GAP;
+    // 잔 아래 초기화 버튼 자리를 남긴다.
+    bottom = H - 66;
+  }
+  // 자유 제조의 「완성!」 카드가 잔을 가리지 않게 그 위에 놓는다.
+  const result = rect('result');
+  if (result) bottom = Math.min(bottom, result.top - GAP);
+  const w = Math.max(120, right - left - BAR_ROOM);
+  return { x: left, y: top, w, h: Math.max(120, bottom - top) };
+}
+
+window.addEventListener('resize', () => {
+  syncStage();
+  layoutHud();
+});
 
 // ── 화면 그리기 ─────────────────────────────────────────────
 
@@ -702,6 +628,7 @@ function render() {
   renderOrder();
   renderMeters();
   renderHud();
+  renderMixPanel();
   renderResult();
   renderClip();
   renderTalk();
@@ -758,7 +685,7 @@ function renderTopbar() {
       ? `<div class="clock" aria-label="영업 시계"><span class="c-day">DAY<b>${state.day}</b>${infinite ? '<small class="inf">∞</small>' : ''}</span><span class="c-time ${over ? 'over' : ''}" id="clockTime">${clockLabel(minute())}</span></div>`
       : `<div class="clock free" aria-label="자유 제조 중"><span class="c-day">자유 제조</span></div>`;
   $('topbar').innerHTML = `
-    <div class="brand">${ransom('별빛 바', { seed: 5, cls: 'brand-rn' })}<span class="brand-en">STARCOCKTAIL</span></div>
+    <div class="brand">${ransom('★', { seed: 5, cls: 'brand-rn' })}<span class="brand-en">STARCOCKTAIL</span></div>
     ${clock}
     <div class="top-actions">
       ${closeButton()}
@@ -793,9 +720,14 @@ function orderView(v: Visit, attrs: ReturnType<typeof computeAttrs>) {
     case 'recipe': {
       const r = RECIPES.find((x) => x.id === v.recipe)!;
       const all = started && v.order.every((_, i) => ok(i));
+      // 레시피북과 같은 것을 카드에 바로 보여 준다: 아는 레시피는 조건, 모르는 레시피는 힌트
+      const known = state.discovered.has(r.id);
+      const hints = known
+        ? `<ul class="chips oc-hints" aria-label="레시피 조건">${v.order.map((o, i) => `<li class="chip ${ok(i) ? 'ok' : ''}">${describe(o, true)}</li>`).join('')}</ul>`
+        : `<p class="oc-hint"><b>레시피 힌트</b> ${r.hint}</p>`;
       return {
         line: v.greeting.replace(`「${r.name}」`, mark(`「${r.name}」`, all, '레시피북에서 조건을 확인하세요')),
-        extra: `<div class="order-extra"><button class="chip book-chip" data-act="book" data-id="${r.id}">레시피북에서 「${r.name}」 보기</button></div>`,
+        extra: `<div class="order-extra oc-recipe"><button class="chip book-chip" data-act="book" data-id="${r.id}" aria-label="레시피북에서 「${r.name}」 보기">「${r.name}」<small>${known ? '레시피북' : '???'}</small></button>${hints}</div>`,
       };
     }
     case 'vague':
@@ -809,12 +741,15 @@ function orderView(v: Visit, attrs: ReturnType<typeof computeAttrs>) {
   }
 }
 
-/** 제조대 위 주문 카드: 손님 얼굴·이름·칭호와 주문 */
+/** 휴대폰에서 주문 카드를 한 줄로 접고 펴는 단추 */
+const orderToggle = () =>
+  `<button class="oc-toggle" data-act="order-toggle" aria-expanded="${state.orderOpen}" aria-controls="order" aria-label="${state.orderOpen ? '주문 카드 접기' : '주문 카드 펼치기'}"><span aria-hidden="true">${state.orderOpen ? '▴' : '▾'}</span></button>`;
+
+/** 제조대 왼쪽 위에 고정된 주문 카드: 손님 얼굴·이름·칭호와 주문(대사·조건 칩·레시피 힌트·이야기 귀띔) */
 function renderOrder() {
   const el = $('order');
   const v = activeVisit();
-  const corner = state.phase === 'garnish';
-  el.className = `order-card ${corner ? 'corner' : ''} ${state.phase === 'mix' || state.phase === 'ice' ? 'slim' : ''} style-${v?.style ?? 'free'}`;
+  el.className = `order-card style-${v?.style ?? 'free'} ${state.orderOpen ? 'open' : ''}`;
   if (state.overlay || state.view !== 'mix' || state.phase === 'result') {
     el.hidden = true;
     return;
@@ -825,7 +760,8 @@ function renderOrder() {
       <div class="oc-main">
         <div class="who">${ransom('자유 제조', { seed: 9 })}<span class="oc-title">주문 없이 실험하기</span></div>
         <p class="line">마음대로 섞어 보세요. 이름 있는 조합을 만들면 레시피북에 기록돼요. 병은 줄지 않고 시계도 흐르지 않아요.</p>
-      </div>`;
+      </div>
+      ${orderToggle()}`;
     return;
   }
   const c = CUSTOMER_BY_ID[v.customer];
@@ -843,7 +779,8 @@ function renderOrder() {
     <div class="oc-actions">
       <button class="ghost back-btn" data-act="to-shop-view" title="만들던 잔은 그대로 두고 가게를 둘러봐요">← 가게로</button>
       <button class="away-btn" data-act="turn-away" title="만들 수 없는 주문이면 사과하고 돌려보내요 (수입 없음)">돌려보내기</button>
-    </div>`;
+    </div>
+    ${orderToggle()}`;
 }
 
 /** 주문 카드 아래 이야기 귀띔: 전할 것이 있으면 잔의 경향, 친해진 손님은 열쇠 맛 */
@@ -917,13 +854,11 @@ function meterKeys(): AttrKey[] {
   return deliveryTone() ? ATTR_KEYS : ['sweet', 'strength', 'body'];
 }
 
+/** 왼쪽 아래 현재 맛 게이지: 잔을 고른 뒤부터 보인다. */
 function renderMeters() {
   const el = $('meters');
-  const show = !state.overlay && state.view === 'mix' && ['ice', 'mix', 'garnish'].includes(state.phase);
+  const show = !state.overlay && state.view === 'mix' && state.phase !== 'result' && state.drink.glass !== null;
   el.hidden = !show;
-  el.classList.toggle('compact', state.phase === 'garnish');
-  if (state.phase === 'garnish') el.classList.remove('docked');
-  if (state.phase === 'garnish') el.style.left = el.style.top = '';
   if (!show) return;
   const attrs = computeAttrs(state.drink);
   const v = activeVisit();
@@ -936,7 +871,7 @@ function renderMeters() {
     return side ? [`<span class="kw-pill">${keywordLabel(k, side)}</span>`] : [];
   });
   el.innerHTML =
-    `<h3><span>${state.phase === 'garnish' ? '현재 맛' : '맛 게이지'}</span>${active.join('')}</h3>` +
+    `<h3><span>현재 맛</span>${active.join('')}</h3>` +
     keys
       .map((k) => {
         const val = attrs[k];
@@ -972,25 +907,9 @@ function renderMeters() {
       .join('');
 }
 
-function deltaChips(id: IngredientId) {
-  const d = INGREDIENT_BY_ID[id].delta;
-  const keys = toneShown() ? ATTR_KEYS : ATTR_KEYS.filter((k) => k !== 'tone');
-  return keys
-    .filter((k) => d[k] !== 0)
-    .map((k) => `<span class="delta ${k} ${d[k] > 0 ? 'up' : 'down'}">${ATTR_LABEL[k]} ${d[k] > 0 ? '+' : ''}${d[k]}</span>`)
-    .join('');
-}
-
-const PROMPTS: Partial<Record<Phase, string>> = {
-  glass: '카운터 왼쪽 쟁반에서 잔을 눌러 고르세요',
-  ice: '얼음을 고르세요',
-  mix: '오른쪽 진열대의 병을 잔 위로 끌어다 놓아 부으세요',
-  garnish: '← → 로 장식을 넘기고 눌러 고른 뒤 서빙하세요',
-};
-
+/** 아래 가운데 안내 띠(가게 화면). 제조대에서는 오른쪽 단계 판이 할 일을 알려 준다. */
 function promptText(): string {
-  if (state.view === 'mix') return PROMPTS[state.phase] ?? '';
-  if (!shift() || !state.open || state.talk) return '';
+  if (state.view === 'mix' || !shift() || !state.open || state.talk) return '';
   const st = shiftStage(minute());
   const waiting = waitingSeats().length + afterSeats().length;
   if (st === 'over') {
@@ -1006,26 +925,19 @@ function promptText(): string {
   return '손님을 기다리는 중… 그동안 서랍에서 리필을 주문해 둘 수 있어요';
 }
 
-/** 잔 둘레에 붙는 조작: 얼음 고르기, 부은 횟수 바, 제조 완료·젓기, 장식 부채꼴 */
+/** 안내 띠와 잔 둘레에 붙는 것: 부은 횟수 바(오른쪽), 초기화 버튼(아래) */
 function renderHud() {
   const d = state.drink;
   const free = !state.overlay;
-  const mix = free && state.view === 'mix';
-  const phase = state.phase;
+  const mix = free && state.view === 'mix' && state.phase !== 'result';
   const text = free ? promptText() : '';
   const prompt = $('prompt');
   prompt.innerHTML = text && state.view === 'shop' && shift() && state.open ? `${text}<small class="num">남은 손님 ${comingCount()} · 앉은 손님 ${waitingSeats().length + afterSeats().length}/${SEATS}</small>` : text;
   prompt.hidden = !text;
   prompt.classList.toggle('loud', state.view === 'shop' && closeKind() === 'next' && canCloseNow());
 
-  const ice = $('ice');
-  ice.hidden = !mix || phase !== 'ice';
-  ice.innerHTML = ICES.map(
-    (i) => `<button class="ice-chip" data-act="ice" data-id="${i.id}">${icon(`ice:${i.id}`)}<strong>${i.name}</strong><small>${i.note}</small></button>`,
-  ).join('');
-
   const bar = $('pourbar');
-  bar.hidden = !mix || !['ice', 'mix'].includes(phase);
+  bar.hidden = !mix || !d.glass;
   const cap = d.glass ? capacityOf(d) : 0;
   bar.innerHTML = `
     <div class="slots">${Array.from({ length: cap }, (_, i) => `<i class="${i < d.pours.length ? 'on' : ''}"></i>`).join('')}</div>
@@ -1033,92 +945,40 @@ function renderHud() {
   bar.setAttribute('aria-label', `부은 횟수 ${d.pours.length} / ${cap}`);
 
   const actions = $('actions');
-  actions.hidden = !mix || !['ice', 'mix', 'garnish'].includes(phase);
-  if (phase === 'garnish') {
-    const g = GARNISHES[state.garnishSel];
-    const cost = shift() ? garnishCost(g.id, state.upgrades) : 0;
-    actions.innerHTML = `
-      <button class="ghost" data-act="back-mix">← 재료로</button>
-      <button class="primary" data-act="serve">${shift() ? '서빙' : '완성'}${cost ? ` <small>${coin(cost)}</small>` : ''}</button>`;
-  } else {
-    const busy = stage.busy;
-    actions.innerHTML = `
-      <button class="ghost" data-act="restart" title="처음부터 다시${shift() && d.pours.length ? ' (부은 재료는 버려져요)' : ''}">↺ 다시</button>
-      ${phase === 'mix' ? `<button class="secondary" data-act="stir" ${canStir(d) && !busy ? '' : 'disabled'}>${d.stirAt === null ? '젓기 <small>바디 -1</small>' : '저었어요 ✓'}</button>` : ''}
-      ${phase === 'mix' ? `<button class="primary" data-act="to-garnish" ${d.pours.length && !busy ? '' : 'disabled'}>제조 완료 →</button>` : ''}`;
-  }
-
-  const arc = $('garnish');
-  const showArc = mix && phase === 'garnish';
-  arc.hidden = !showArc;
-  if (showArc) renderGarnish(arc);
-  // 장식 단계에 들어올 때마다 한 번 부채꼴을 펼친다(layoutHud에서 자리를 잡은 뒤)
-  if (showArc && !garnishOpen) garnishFanIn = true;
-  garnishOpen = showArc;
-}
-
-/** 장식 부채꼴이 보이는 중인가 / 다음 배치 때 펼침 연출을 할 것인가 */
-let garnishOpen = false;
-let garnishFanIn = false;
-
-/**
- * 장식 카드는 내용(열림·값)이 바뀔 때만 새로 만든다. 고르기만 바뀌면 클래스만 바꿔서,
- * 같은 카드가 제자리에서 부드럽게 돌아가게 한다(다시 만들면 카드가 순간이동한다).
- */
-function renderGarnish(arc: HTMLElement) {
-  const u = unlocked();
-  const key = GARNISHES.map((g) => `${g.id}:${u.garnishes.has(g.id) ? 1 : 0}:${shift() ? garnishCost(g.id, state.upgrades) : 0}`).join('|');
-  if (arc.dataset.key !== key) {
-    arc.dataset.key = key;
-    arc.dataset.fresh = '1';
-    arc.innerHTML =
-      `<button class="g-arrow" data-act="g-prev" aria-label="이전 장식">‹</button><button class="g-arrow" data-act="g-next" aria-label="다음 장식">›</button>` +
-      GARNISHES.map((g) => {
-        const open = u.garnishes.has(g.id);
-        const cost = garnishCost(g.id, state.upgrades);
-        return `<button class="g-card" data-act="garnish" data-id="${g.id}" ${open ? '' : 'disabled'}>
-          ${icon(`garnish:${g.id}`)}<strong>${g.name}</strong>
-          ${open ? (shift() && cost ? `<small>${coin(cost)}</small>` : '<small>&nbsp;</small>') : `<small class="lock">Day ${GARNISH_DAY[g.id]} 입고</small>`}
-        </button>`;
-      }).join('');
-  }
-  arc.querySelectorAll<HTMLElement>('.g-card').forEach((c, i) => {
-    const on = i === state.garnishSel;
-    c.classList.toggle('selected', on);
-    c.setAttribute('aria-pressed', String(on));
-  });
-  const opens = GARNISHES.map((g) => u.garnishes.has(g.id));
-  const [prev, next] = arc.querySelectorAll<HTMLButtonElement>('.g-arrow');
-  prev.disabled = !opens.slice(0, state.garnishSel).some(Boolean);
-  next.disabled = !opens.slice(state.garnishSel + 1).some(Boolean);
+  actions.hidden = !mix || !d.glass;
+  const restart = `<button class="ghost" data-act="restart" ${stage.busy ? 'aria-disabled="true"' : ''} title="잔부터 다시${shift() && d.pours.length ? ' (부은 재료는 버려져요)' : ''}">↺ 초기화</button>`;
+  if (actions.innerHTML !== restart) actions.innerHTML = restart;
 }
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/**
- * 장식 단계에 들어올 때: 카드가 잔 위 한 점(부채의 사북)에 모여 있다가 가운데 카드부터 차례로 제자리로 펼쳐진다.
- * 움직임 줄이기에서는 제자리에서 흐리게 나타나기만 한다.
- */
-function fanInGarnish(arc: HTMLElement) {
-  const reduce = reducedMotion();
-  const ease = 'cubic-bezier(0.23, 1, 0.32, 1)';
-  arc.querySelectorAll<HTMLElement>('.g-card').forEach((c, i) => {
-    const k = Math.abs(i - state.garnishSel);
-    const to = c.style.transform;
-    const op = Number(c.style.opacity || 1);
-    if (op === 0) return;
-    const from = reduce ? to : `translate(${Math.round(-c.offsetWidth / 2)}px, ${Math.round(-c.offsetHeight + 46)}px) scale(0.86) rotate(0deg)`;
-    c.animate(
-      [
-        { transform: from, opacity: 0 },
-        { transform: to, opacity: op },
-      ],
-      { duration: reduce ? 180 : 300, delay: reduce ? 0 : k * 45, easing: ease, fill: 'backwards' },
-    );
-  });
-  arc.querySelectorAll<HTMLElement>('.g-arrow').forEach((b) => {
-    b.animate([{ opacity: 0 }, { opacity: getComputedStyle(b).opacity }], { duration: 200, delay: reduce ? 0 : 120, easing: 'ease', fill: 'backwards' });
-  });
+/** 오른쪽 단계 판: 지금 단계의 카드와 「이전」·「다음 단계」 */
+function renderMixPanel() {
+  const el = $('mixPanel');
+  const step = state.phase;
+  el.hidden = !!state.overlay || state.view !== 'mix' || step === 'result';
+  if (el.hidden || step === 'result') {
+    resetPanel();
+    return;
+  }
+  renderPanel(
+    el,
+    {
+      step,
+      drink: state.drink,
+      free: !shift(),
+      unlocked: unlocked(),
+      stockLeft: stockOf,
+      stockPercent: (id) => (shift() ? stockPercent(state.stock, id) : 100),
+      refillOrdered: (id) => state.refills.has(id),
+      garnishCost: (id) => (shift() ? garnishCost(id, state.upgrades) : 0),
+      toneShown: toneShown(),
+      busy: stage.busy,
+      icon,
+      coin,
+    },
+    reducedMotion(),
+  );
 }
 
 const GRADE_VIEW: Record<Grade, { label: string; stars: string }> = {
@@ -1202,7 +1062,9 @@ function renderTalk() {
   const views = b && t.picked === null ? choicesOf(b, state.story, ctx) : [];
   const more = done && !!b && t.count < TALK_MAX && !!beatFor(s, t.when);
   const offers = done ? offersFor(s, b) : [];
-  const idle = IDLE[c.id] ?? [];
+  // 지나가는 손님은 이야기·신뢰가 없고 짧은 잡담만 한다.
+  const guest = isGuest(c.id);
+  const idle = guest ? guestSmallTalk(c.id) : (IDLE[c.id] ?? []);
   const lines = b ? b.lines : t.sold ? [] : idle;
   const mood = t.when === 'after' ? (s.drink?.grade ?? 'idle') : 'idle';
   // 고쳐 전하기가 걸린 장면에서는 방금 낸 잔의 경향을 보여 준다.
@@ -1226,7 +1088,7 @@ function renderTalk() {
       <div class="tk-face">${portrait(c.id, mood)}</div>
       <div class="tk-who">
         <div class="who">${ransom(c.name, { seed: c.id.charCodeAt(0) })}<span class="oc-title">${c.title}</span></div>
-        <div class="tk-meta"><span class="stamp">${b ? b.tag : '진열장'}</span>${stars(trustOf(state.story, c.id))}<small>${t.when === 'before' ? '잔을 내기 전' : '잔을 낸 뒤'}</small></div>
+        <div class="tk-meta"><span class="stamp">${b ? b.tag : guest ? '잡담' : '진열장'}</span>${guest ? '<small>지나가는 손님</small>' : stars(trustOf(state.story, c.id))}<small>${t.when === 'before' ? '잔을 내기 전' : '잔을 낸 뒤'}</small></div>
       </div>
     </div>
     <div class="tk-lines ${talkFresh ? 'fresh' : ''}">${lines.map(lineHtml).join('')}</div>
@@ -1317,10 +1179,10 @@ function renderNotebook() {
 /** 서랍을 막 열었다(열리는 움직임은 이때 한 번만) */
 let drawerOpening = false;
 
-/** 오른쪽 아래 서랍: 잔고·오늘 장부·리필·상점. 영업 중 언제든 열 수 있다. */
+/** 오른쪽 아래 서랍: 잔고·오늘 장부·리필·상점. 영업 중 가게 화면에서 언제든 열 수 있다(제조대는 단계 판이 오른쪽을 쓴다). */
 function renderDrawer() {
   const el = $('drawer');
-  el.hidden = !shift() || !state.started || (!!state.overlay && state.overlay !== 'book') || !!state.talk;
+  el.hidden = !shift() || !state.started || (!!state.overlay && state.overlay !== 'book') || !!state.talk || (state.view === 'mix' && state.overlay !== 'book');
   if (el.hidden) return;
   el.classList.toggle('open', state.drawer);
   const low = [...unlocked().ingredients].filter((id) => stockOf(id) === 0 && !state.refills.has(id)).length;
@@ -1543,6 +1405,7 @@ function bookPage(tab: BookTab) {
       return `
         <h2>${ransom('이야기 기록', { seed: 12 })} <small class="num">${story.log.length}건</small></h2>
         ${settled ? `<h3>꿈의 축제 · 결말</h3>${endingsHtml()}` : ''}
+        ${paperArchive()}
         ${
           days.length
             ? days
@@ -1573,29 +1436,142 @@ function endingsHtml() {
   }).join('')}</ol>`;
 }
 
-/** 녹턴 야간 신문 1면: 전날 밤 이야기(없으면 그날의 기본 기사), 피피의 배달 일지, 골목 소문 */
-function newsHtml() {
-  const news = morningNews(state.story, state.day);
-  const [lead, ...rest] = news;
-  const side = rest.filter((n) => n.head !== '피피의 배달 일지');
-  const posts = rest.filter((n) => n.head === '피피의 배달 일지');
-  const alley = alleyGossip(state.story);
-  // 어젯밤 카운터에서 이어진 이야기(소문 듣기는 빼고) 세 줄
-  const counter = state.story.log.filter((l) => l.day === state.day - 1 && l.who && !l.text.startsWith('소문을 들었다')).slice(-3);
+// ── 아침 신문 ─────────────────────────────────────────
+
+/** 기록 탭에서 다시 펼친 지난 신문의 날짜. null이면 오늘 아침 신문(다 읽으면 하루 시작 화면으로) */
+let paperBack: number | null = null;
+
+const paperOf = (day: number) => state.story.papers.find((p) => p.day === day) ?? null;
+
+/** 오늘 아침 신문이 아직 없으면 만들어 둔다: 어젯밤 선택들이 기사가 된다. */
+function ensurePaper() {
+  if (!paperOf(state.day)) state.story.papers.push(morningEdition(state.story, state.day));
+}
+
+/** 기사 하나: 어깨 제목·제목·「어젯밤 바텐더가 … → 그 결과 …」·작은 도장 */
+function articleHtml(a: Article, cls: string, photo: 'bust' | 'head') {
+  const text = a.cause
+    ? `<p class="pp-cause">${a.cause}</p><p class="pp-effect"><b class="pp-arrow">→ 그 결과</b> ${a.effect ?? ''}</p>`
+    : `<p class="pp-body">${a.body ?? ''}</p>`;
+  // 1면은 상반신 사진, 나머지 기사는 작은 얼굴 사진
+  const pic = a.who
+    ? `<figure class="pp-photo ${photo}">${portrait(a.who, 'idle', photo)}${photo === 'bust' ? `<figcaption>${nameOf(a.who)}</figcaption>` : ''}</figure>`
+    : '';
+  const notes = a.notes?.length ? `<p class="pp-notes">${a.notes.map((n) => `<span>${n}</span>`).join('')}</p>` : '';
+  return `<article class="${cls}"><p class="pp-kicker">${a.kicker}</p><h3 class="pp-head">${a.head}</h3>${pic}<div class="pp-text">${text}${notes}</div></article>`;
+}
+
+/** 「어젯밤 카운터」 칸: 손님 수·완벽한 잔·판 물건 */
+function nightBox(ed: Edition) {
+  const n = ed.night;
+  if (!n) return '';
+  const sold = Object.entries(n.sold).filter(([, k]) => (k ?? 0) > 0);
+  return `<section class="pp-box pp-night"><h4>어젯밤 카운터</h4><ul>
+    <li><span>잔을 받은 손님</span><b class="num">${n.served}명</b></li>
+    <li><span>단골 · 지나가는 손님</span><b class="num">${n.regulars.length} · ${n.guests}</b></li>
+    <li><span>완벽한 잔</span><b class="num">${n.perfect}잔</b></li>
+    ${n.left ? `<li><span>그냥 돌아간 손님</span><b class="num">${n.left}명</b></li>` : ''}
+    <li><span>진열장</span><b>${sold.length ? sold.map(([g, k]) => `${GOOD_BY_ID[g as GoodId].name} ×${k}`).join(', ') : '판 것 없음'}</b></li>
+  </ul></section>`;
+}
+
+/** 신문 한 면 */
+function paperHtml(ed: Edition, back: boolean) {
+  const til = ed.day < LAST_DAY ? `꿈의 축제까지 ${LAST_DAY - ed.day}일` : ed.day === LAST_DAY ? '오늘 밤 꿈의 축제' : '축제가 끝난 녹턴';
+  const foot = back
+    ? '<button class="primary" data-act="paper-close">신문 접기</button>'
+    : `<button class="primary" data-act="paper-next">신문을 접고 오늘 영업 준비 ▸</button>`;
   return `
-    <section class="news" aria-label="오늘의 기사">
-      <article class="news-lead"><p class="kicker">1면</p><h3 class="news-head">${lead.head}</h3><p>${lead.body}</p></article>
-      ${
-        side.length || posts.length || alley.length || counter.length
-          ? `<aside class="news-side">
-              ${side.map((n) => `<article><h4>${n.head}</h4><p>${n.body}</p></article>`).join('')}
-              ${counter.length ? `<article class="counter"><h4>어젯밤 카운터 일지</h4><ul>${counter.map((l) => `<li><b>${nameOf(l.who)}</b> ${l.text}</li>`).join('')}</ul></article>` : ''}
-              ${posts.length ? `<article class="post"><h4>피피의 배달 일지</h4><ul>${posts.map((n) => `<li>${n.body}</li>`).join('')}</ul></article>` : ''}
-              ${alley.length ? `<article class="alley"><h4>골목 소문</h4><ul>${alley.map((a) => `<li>${a}</li>`).join('')}</ul></article>` : ''}
-            </aside>`
-          : ''
-      }
-    </section>`;
+    <div class="paper-page" role="document" aria-label="녹턴 야간 신문 ${ed.day}일 아침">
+      <header class="pp-mast">
+        <p class="pp-ear">제 <b class="num">${ed.day}</b>호<br />DAY ${ed.day} 아침</p>
+        <h1 class="pp-name">녹턴 야간 신문</h1>
+        <p class="pp-ear r">날씨 · ${ed.weather}<br />막차 이후 발행</p>
+      </header>
+      <p class="pp-dateline"><span>유성 골목 7번지 소식</span><span>${til}</span><span>값 ✦1</span></p>
+      <div class="pp-grid">
+        ${articleHtml(ed.lead, 'pp-lead', 'bust')}
+        <div class="pp-cols">
+          ${ed.articles.map((a) => articleHtml(a, 'pp-art', 'head')).join('')}
+          ${ed.follow.length ? `<section class="pp-follow"><h4 class="pp-sec">후속 보도</h4>${ed.follow.map((a) => articleHtml(a, 'pp-art small', 'head')).join('')}</section>` : ''}
+        </div>
+        <aside class="pp-side">
+          ${nightBox(ed)}
+          ${ed.briefs.length ? `<section class="pp-box pp-briefs"><h4>거리 소식</h4>${ed.briefs.map((a) => `<p><b>${a.head}</b> ${a.body ?? ''}</p>`).join('')}</section>` : ''}
+          ${ed.ads.map((ad) => `<section class="pp-ad"><b>${ad.head}</b><span>${ad.body}</span></section>`).join('')}
+        </aside>
+      </div>
+      <footer class="pp-foot">${foot}<small>Enter 키로도 넘길 수 있어요</small></footer>
+    </div>`;
+}
+
+/** 기록 탭의 「지난 신문」 목록: 날짜를 누르면 그날 아침 신문을 다시 펼친다 */
+function paperArchive() {
+  const list = [...state.story.papers].sort((a, b) => b.day - a.day);
+  if (!list.length) return '';
+  return `<h3>지난 신문 <small>누르면 다시 펼쳐요</small></h3>
+    <ul class="pp-archive">${list
+      .map((p) => `<li><button class="secondary" data-act="paper-open" data-id="${p.day}"><span class="num">DAY ${p.day}</span><span>${p.lead.head}</span></button></li>`)
+      .join('')}</ul>`;
+}
+
+/** 신문을 넘기거나 접는다: 오늘 신문이면 하루 시작 화면으로, 지난 신문이면 기록 탭으로 */
+function leavePaper() {
+  if (paperBack !== null) {
+    paperBack = null;
+    state.bookTab = 'log';
+    state.overlay = 'book';
+  } else {
+    state.overlay = 'dayStart';
+  }
+}
+
+function showPaper(day: number | null) {
+  paperBack = day;
+  state.overlay = 'paper';
+  render();
+  $('overlay').scrollTop = 0;
+}
+
+// 신문 화면의 버튼(아래 공용 클릭 처리보다 먼저 받아서 끝낸다)
+document.addEventListener('click', (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-act^="paper-"]');
+  if (!btn) return;
+  e.stopImmediatePropagation();
+  switch (btn.dataset.act) {
+    case 'paper-next':
+    case 'paper-close':
+      leavePaper();
+      render();
+      $('overlay').scrollTop = 0;
+      break;
+    case 'paper-again':
+      showPaper(null);
+      break;
+    case 'paper-open': {
+      const day = Number(btn.dataset.id);
+      if (paperOf(day)) showPaper(day);
+      break;
+    }
+  }
+});
+
+// 신문 화면: Enter로 넘기고 Esc로 접는다. 스페이스는 끝까지 내려 읽은 뒤에만 넘긴다.
+document.addEventListener('keydown', (e) => {
+  if (state.overlay !== 'paper' || (e.target as HTMLElement).closest('button')) return;
+  const el = $('overlay');
+  const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
+  if (e.key === 'Enter' || e.key === 'Escape' || (e.key === ' ' && atEnd)) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    el.querySelector<HTMLButtonElement>('.pp-foot .primary')?.click();
+  }
+});
+
+/** 하루 시작 화면의 카운터 메모: 축제 준비·맡은 것·수첩의 소문 */
+function memoHtml() {
+  const memo = alleyGossip(state.story);
+  return memo.length ? `<ul class="day-memo" aria-label="카운터 메모">${memo.map((m) => `<li>${m}</li>`).join('')}</ul>` : '';
 }
 
 /** 하루 시작 화면의 진열장 한 줄: 진열한 개수와 오늘 잘 팔릴 물건 */
@@ -1618,7 +1594,7 @@ function todayStory() {
 }
 
 /** 신문 머리(제호 띠) */
-const masthead = (right: string, left = '★ 별빛 바', mid = '유성 골목 7번지 · 막차 이후의 바') =>
+const masthead = (right: string, left = '★ 유성 골목 7번지', mid = '막차 이후에 문을 여는 바') =>
   `<div class="masthead" aria-hidden="true"><span>${left}</span><span class="mh-mid">${mid}</span><span>${right}</span></div>`;
 
 const OUTCOME_VIEW: Record<Outcome, { stars: string; note?: string }> = {
@@ -1629,9 +1605,20 @@ const OUTCOME_VIEW: Record<Outcome, { stars: string; note?: string }> = {
   left: { stars: '☆☆☆', note: '기다리다 떠남' },
 };
 
+/** 마감 정산의 지나가는 손님 한 줄: 몇 명이 왔고 잔이 어땠는지 등급별로 센다. */
+function guestTally(visits: Visit[]) {
+  const got = visits.flatMap((v, i) => (isGuest(v.customer) && state.outcomes[i] ? [state.outcomes[i]!] : []));
+  if (!got.length) return '';
+  const order: Outcome[] = ['perfect', 'good', 'fail', 'left', 'away'];
+  const parts = order.flatMap((o) => {
+    const n = got.filter((x) => x === o).length;
+    return n ? [`${OUTCOME_VIEW[o].note ? `<small>${OUTCOME_VIEW[o].note}</small>` : OUTCOME_VIEW[o].stars} <b class="num">×${n}</b>`] : [];
+  });
+  return `<li class="o-guests"><span>지나가는 손님 <b class="num">${got.length}</b>명</span><span>${parts.join(' · ')}</span></li>`;
+}
+
 function renderOverlay() {
   const el = $('overlay');
-  if (state.overlay) showTip(null, 0, 0);
   if (!state.overlay) {
     el.hidden = true;
     el.innerHTML = '';
@@ -1651,10 +1638,10 @@ function renderOverlay() {
           <ol class="howto">
             <li>가게는 <b>18:00~04:00</b>. 손님은 띄엄띄엄 들어와 빈 <b>스툴(4개)</b>에 앉아요. 01:00부터 조기 마감할 수 있어요.</li>
             <li>앉은 손님을 <b>누르면</b> 그 손님의 잔을 만드는 제조대로 넘어가요. 다른 손님은 자리에서 기다려요(너무 오래 두면 화가 나서 나가요).</li>
-            <li>쟁반에서 잔을 고르고, 진열대의 병을 잔 위로 <b>끌어다 놓아</b> <b>단맛·도수·바디</b>(Day 4부터 <b>경향</b>)를 맞춰요.</li>
-            <li>제조 완료 → 장식을 골라 <b>서빙</b>하면 손님이 반응하고 잔을 들고 나가요.</li>
+            <li>오른쪽 카드에서 <b>잔 → 얼음 → 재료 → 젓기 → 장식</b>을 한 단계씩 골라요. 재료 카드를 누를 때마다 한 번 부어 <b>단맛·도수·바디</b>(Day 4부터 <b>경향</b>)를 맞춰요.</li>
+            <li>마지막 단계에서 <b>내기</b>를 누르면 손님이 반응하고 잔을 들고 나가요.</li>
             <li>머리 위에 <b>「…」</b>가 뜬 손님은 할 말이 있어요. 눌러서 듣고, 맡은 말·물건·소문을 다른 손님에게 <b>이어 주세요</b>. 고쳐 전할 때는 그 잔의 <b>경향</b>이 말투가 돼요.</li>
-            <li>병은 한 번 부을 때마다 20%씩 줄어요. 오른쪽 아래 <b>서랍</b>에서 리필과 <b>진열장 물건</b>을 주문하면 다음 날 아침 도착해요. 물건은 찾는 손님(<b>✦</b>)에게 권해 팔아요.</li>
+            <li>병은 한 번 부을 때마다 10%씩 줄어요(한 병에 열 번, 재료 카드에 남은 양이 보여요). 가게 화면 오른쪽 아래 <b>서랍</b>에서 리필과 <b>진열장 물건</b>을 주문하면 다음 날 아침 도착해요. 물건은 찾는 손님(<b>✦</b>)에게 권해 팔아요.</li>
             <li>왼쪽 아래 <b>수첩</b>에 맡은 것과 소문이, 레시피북의 <b>단골 수첩·약속 장부</b>에 알게 된 이야기가 쌓여요. 7일째 <b>꿈의 축제</b>에서 결말이 갈려요.</li>
           </ol>
           <div class="row center">
@@ -1680,18 +1667,29 @@ function renderOverlay() {
       document.getElementById('bookFocus')?.scrollIntoView({ block: 'center' });
       break;
     }
+    case 'paper': {
+      const ed = paperOf(paperBack ?? state.day);
+      if (!ed) {
+        state.overlay = 'dayStart';
+        renderOverlay();
+        return;
+      }
+      el.innerHTML = paperHtml(ed, paperBack !== null);
+      // 전날 밤 상점의 알림이 제호를 가리지 않게 걷는다.
+      $('toast').classList.remove('show');
+      break;
+    }
     case 'dayStart': {
       const plan = state.plan;
-      const news = shift() ? newsHtml() : '';
       el.innerHTML = `
-        <div class="card day-card paper ${news ? 'has-news' : ''}">
-          ${masthead(state.day > LAST_DAY ? '무한 영업' : `${state.day} / ${LAST_DAY}`, news ? '녹턴 야간 신문' : undefined)}
+        <div class="card day-card paper">
+          ${masthead(state.day > LAST_DAY ? '무한 영업' : `${state.day} / ${LAST_DAY}`)}
           <div class="day-head">
             <div class="day-no">${ransom(`DAY ${state.day}`, { seed: state.day * 13 })}</div>
             <h2 class="headline">${plan.title}</h2>
           </div>
           <p class="lede">${plan.intro}</p>
-          ${news}
+          ${memoHtml()}
           ${arrivalsList(state.day)}
           ${lowStockList()}
           <ul class="facts">
@@ -1702,7 +1700,7 @@ function renderOverlay() {
             <li><span>진열장 물건</span><strong>${shelfFact()}</strong></li>
             <li><span>가진 돈</span><strong class="${state.money < 0 ? 'debt' : ''}">${coin(state.money)}</strong></li>
           </ul>
-          <div class="row center"><button class="primary" data-act="begin-day">영업 시작</button></div>
+          <div class="row center">${paperOf(state.day) ? '<button class="secondary" data-act="paper-again">아침 신문 다시 보기</button>' : ''}<button class="primary" data-act="begin-day">영업 시작</button></div>
         </div>`;
       break;
     }
@@ -1719,11 +1717,13 @@ function renderOverlay() {
           <ul class="summary">
             ${plan.visits
               .map((v, i) => {
+                if (isGuest(v.customer)) return '';
                 const o = state.outcomes[i];
                 const view = o ? OUTCOME_VIEW[o] : null;
                 return `<li class="${o ? `o-${o}` : 'missed'}"><span>${CUSTOMER_BY_ID[v.customer].name}</span><span>${view ? `${view.note ? `<small>${view.note}</small> ` : ''}${view.stars}` : '오지 않음'}</span></li>`;
               })
               .join('')}
+            ${guestTally(plan.visits)}
           </ul>
           ${missed ? `<p class="sub small">마감이 빨라 ${missed}명은 오지 못했어요.</p>` : ''}
           ${todayStory()}
@@ -1744,7 +1744,7 @@ function renderOverlay() {
       el.innerHTML = `
         <div class="card shop paper">
           ${masthead(`Day ${next} 전날 밤`)}
-          <h2>${ransom('별빛 바 상점', { seed: 21 })}</h2>
+          <h2>${ransom('내일 장보기', { seed: 21 })}</h2>
           <p class="total">가진 돈 <strong class="${state.money < 0 ? 'debt' : ''}">${coin(state.money)}</strong></p>
           <p class="sub small">영업 중에도 오른쪽 아래 서랍에서 같은 상점을 열 수 있어요. 오늘 밤 주문한 것은 내일 아침 도착해요.</p>
           ${shopLists()}
@@ -1792,12 +1792,26 @@ function toast(html: string) {
 
 // ── 동작 ───────────────────────────────────────────────────
 
-/** 잔을 비우고 잔 고르기부터 */
+/** 잔을 비우고 ① 잔 고르기부터 */
 function newDrink() {
   state.drink = emptyDrink();
   state.phase = 'glass';
   state.result = null;
   state.garnishSel = 0;
+}
+
+/** 단계를 옮긴다. 장식 단계에 들어오면 고른 장식이 없을 때 「장식 없음」을 골라 둔다(곧바로 낼 수 있게). */
+function goStep(step: MixStep) {
+  state.phase = step;
+  if (step === 'garnish') {
+    const cur = GARNISHES.findIndex((g) => g.id === (state.drink.garnish ?? 'none'));
+    selectGarnish(Math.max(0, cur));
+  }
+}
+
+/** 화면 읽기 프로그램에 붓기 결과를 알린다. */
+function announce(text: string) {
+  $('mixLive').textContent = text;
 }
 
 function spend(n: number) {
@@ -1810,6 +1824,8 @@ function doPour(id: IngredientId) {
   if (!unlocked().ingredients.has(id) || !canPour(state.drink) || stockOf(id) <= 0) return;
   state.drink = pour(state.drink, id);
   if (shift()) state.stock = usePour(state.stock, id);
+  const name = INGREDIENT_BY_ID[id].name;
+  announce(`${name}${josa(name, '을', '를')} 부었어요 · ${state.drink.pours.length} / ${capacityOf(state.drink)}`);
 }
 
 /** 장식 카드를 한 칸 넘긴다. 아직 입고되지 않은 장식은 건너뛴다. */
@@ -1962,6 +1978,7 @@ function sellGood(s: Seat, g: GoodId): number {
   state.money += price;
   state.ledger.goods += price;
   s.bought.push(g);
+  noteSale(state.story, state.day, g);
   return price;
 }
 
@@ -2105,6 +2122,7 @@ function endDay() {
   state.talk = null;
   // Day 7 마감: 다섯 줄기의 결말을 정하고 이야기 장부를 닫는다.
   if (storyOn() && state.day === LAST_DAY) closeBook(state.story, state.day);
+  if (shift()) noteNightOf();
   const rent = rentFor(state.day);
   state.ledger.rent = rent;
   state.money -= rent;
@@ -2118,6 +2136,19 @@ function endDay() {
   state.overlay = 'dayEnd';
 }
 
+/** 마감: 그날 밤 손님 수를 이야기 장부에 적어 둔다(다음 날 아침 신문 「어젯밤 카운터」) */
+function noteNightOf() {
+  const came = state.plan.visits.flatMap((v, i) => (state.outcomes[i] ? [{ who: v.customer, o: state.outcomes[i]! }] : []));
+  noteNight(state.story, {
+    day: state.day,
+    served: came.filter((x) => x.o !== 'left' && x.o !== 'away').length,
+    perfect: came.filter((x) => x.o === 'perfect').length,
+    left: came.filter((x) => x.o === 'left' || x.o === 'away').length,
+    guests: came.filter((x) => isGuest(x.who)).length,
+    regulars: [...new Set(came.filter((x) => !isGuest(x.who)).map((x) => x.who))],
+  });
+}
+
 function snapshot(): Save {
   return {
     v: SAVE_VERSION,
@@ -2127,7 +2158,7 @@ function snapshot(): Save {
     early: [...state.early],
     perfect: state.perfectTotal,
     stock: state.stock,
-    met: [...state.met],
+    met: [...state.met].filter((id) => !isGuest(id)),
     goods: state.goods,
     story: storyToSave(state.story),
   };
@@ -2171,10 +2202,12 @@ function loadCampaign(s: Save | null) {
   state.started = true;
   state.ledger = emptyLedger();
   resetFloor();
+  // 아침 신문을 먼저 펼친다(저장된 그날 신문이 없으면 지금 만든다).
+  ensurePaper();
   writeSave(snapshot());
   goView('shop');
-  stage.setShelf(unlocked().ingredients, false);
-  state.overlay = 'dayStart';
+  paperBack = null;
+  state.overlay = 'paper';
 }
 
 function beginDay() {
@@ -2185,7 +2218,6 @@ function beginDay() {
   state.outcomes = [];
   state.overlay = null;
   goView('shop');
-  stage.setShelf(unlocked().ingredients, false);
   const a = arrivalsOn(state.day);
   const names = [
     ...a.ingredients.map((id) => INGREDIENT_BY_ID[id].name),
@@ -2208,6 +2240,8 @@ function advanceDay() {
   // 밤사이 피피가 엽서를 배달한다(아침 신문 「피피의 배달 일지」).
   newDay(state.story);
   if (prev <= LAST_DAY) deliverPosted(state.story, prev, state.goods, state.money);
+  // 어젯밤의 선택들로 오늘 아침 신문을 찍어 둔다.
+  ensurePaper();
   writeSave(snapshot());
 }
 
@@ -2222,7 +2256,6 @@ function startFree() {
   const s = loadSave();
   setDay(s?.day ?? 1);
   state.early = new Set(s?.early ?? []);
-  stage.setShelf(unlocked().ingredients, false);
   goView('mix');
 }
 
@@ -2241,37 +2274,60 @@ document.addEventListener('click', (e) => {
   if (!btn || btn.disabled) return;
   const act = btn.dataset.act!;
   const id = btn.dataset.id;
-  // 붓기·젓기 연출 중에는 술을 바꾸는 입력을 받지 않는다.
-  if (stage.busy && ['stir', 'to-garnish', 'restart', 'turn-away', 'pick-seat'].includes(act)) return;
+  // 붓기·젓기 연출 중에는 단계를 넘기거나 잔을 바꾸는 입력을 받지 않는다(붓기는 이어서 할 수 있다).
+  const steady = ['glass', 'ice', 'stir', 'no-stir', 'mp-next', 'mp-prev', 'mp-step', 'serve', 'restart', 'turn-away', 'pick-seat'];
+  if (stage.busy && steady.includes(act)) return;
+  const mixing = state.view === 'mix' && !state.overlay;
 
   switch (act) {
-    case 'ice':
-      state.drink = { ...state.drink, ice: id as IceId };
-      state.phase = 'mix';
-      break;
-    case 'stir':
-      state.drink = stir(state.drink);
-      break;
-    case 'to-garnish': {
-      state.phase = 'garnish';
-      const cur = GARNISHES.findIndex((g) => g.id === (state.drink.garnish ?? 'none'));
-      selectGarnish(Math.max(0, cur));
+    case 'glass': {
+      const g = id as GlassId;
+      if (!mixing || state.phase !== 'glass' || !unlocked().glasses.has(g)) break;
+      if (glassChangeLoses(state.drink, g)) toast('잔을 바꿔서 <strong>부은 재료를 비웠어요</strong>');
+      state.drink = chooseGlass(state.drink, g);
+      // 하나만 고르는 단계는 고르면 다음 단계로 넘어간다.
+      goStep('ice');
       break;
     }
+    case 'ice':
+      if (!mixing || state.phase !== 'ice') break;
+      state.drink = chooseIce(state.drink, id as IceId);
+      goStep('pour');
+      break;
+    case 'pour':
+      if (mixing && state.phase === 'pour') doPour(id as IngredientId);
+      break;
+    case 'stir':
+      if (mixing && state.phase === 'stir') state.drink = stir(state.drink);
+      break;
+    case 'no-stir':
+      if (mixing && state.phase === 'stir') goStep('garnish');
+      break;
+    case 'mp-next': {
+      if (!mixing || state.phase === 'result' || !canLeave(state.phase, state.drink)) break;
+      const to = nextStep(state.phase);
+      if (to) goStep(to);
+      break;
+    }
+    case 'mp-prev': {
+      if (!mixing || state.phase === 'result') break;
+      const to = prevStep(state.phase);
+      if (to) goStep(to);
+      break;
+    }
+    case 'mp-step': {
+      const to = id as MixStep;
+      if (mixing && state.phase !== 'result' && reachable(to, state.drink)) goStep(to);
+      break;
+    }
+    case 'order-toggle':
+      state.orderOpen = !state.orderOpen;
+      break;
     case 'garnish':
-      selectGarnish(GARNISHES.findIndex((g) => g.id === (id as GarnishId)));
-      break;
-    case 'g-prev':
-      stepGarnish(-1);
-      break;
-    case 'g-next':
-      stepGarnish(1);
-      break;
-    case 'back-mix':
-      state.phase = 'mix';
+      if (mixing && state.phase === 'garnish') selectGarnish(GARNISHES.findIndex((g) => g.id === (id as GarnishId)));
       break;
     case 'serve':
-      serve();
+      if (mixing && state.phase === 'garnish') serve();
       break;
     case 'turn-away':
       turnAway();
@@ -2367,11 +2423,14 @@ document.addEventListener('click', (e) => {
       break;
     case 'to-final':
       // 7일째 밤이 지나면 무한 영업 첫날 아침으로 저장해 둔다.
+      // 결산 뒤에는 장보기를 거치지 않으니, 축제 답례로 할의 옛 거래처가 빈 병을 모두 채워 둔다(아침 신문 단신).
+      for (const id of unlocked().ingredients) state.refills.add(id);
       advanceDay();
       state.overlay = 'final';
       break;
     case 'go-infinite':
-      state.overlay = 'dayStart';
+      paperBack = null;
+      state.overlay = 'paper';
       break;
     case 'buy': {
       const g = UPGRADES.find((x) => x.id === id);
@@ -2404,7 +2463,8 @@ document.addEventListener('click', (e) => {
     }
     case 'next-day':
       advanceDay();
-      state.overlay = 'dayStart';
+      paperBack = null;
+      state.overlay = 'paper';
       break;
     case 'start-free':
       startFree();
@@ -2449,29 +2509,18 @@ document.addEventListener('keydown', (e) => {
     goView('shop');
     render();
   } else if (!state.overlay && state.view === 'mix' && state.phase === 'garnish' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    // 장식 단계: ←/→ 로 장식을 넘기고, 초점도 고른 카드로 옮긴다.
     e.preventDefault();
     stepGarnish(e.key === 'ArrowLeft' ? -1 : 1);
     render();
+    if ($('mixPanel').contains(document.activeElement)) {
+      $('mixPanel').querySelector<HTMLElement>(`[data-act="garnish"][data-id="${GARNISHES[state.garnishSel].id}"]`)?.focus();
+    }
   }
 });
 
-// 장식 부채꼴 위에서 휠을 굴리면 좌우로 넘긴다.
-let wheelAt = 0;
-$('garnish').addEventListener(
-  'wheel',
-  (e) => {
-    e.preventDefault();
-    const now = performance.now();
-    if (now - wheelAt < 180) return;
-    wheelAt = now;
-    stepGarnish((e.deltaY || e.deltaX) > 0 ? 1 : -1);
-    render();
-  },
-  { passive: false },
-);
-
 // ── 영업 시계 ───────────────────────────────────────────────
-// 실제 시간으로 흐른다(게임 1시간 = 30초). 메뉴·레시피북·하루 시작/마감 화면이 열려 있거나
+// 실제 시간으로 흐른다(게임 1시간 = 45초). 메뉴·레시피북·하루 시작/마감 화면이 열려 있거나
 // 탭을 떠나 있으면 멈춘다. 서랍은 열어 둬도 시간이 흐른다.
 
 let lastTick = performance.now();
@@ -2528,12 +2577,11 @@ document.addEventListener('visibilitychange', () => {
   lastTick = performance.now();
 });
 
-stage.setShelf(unlocksFor(loadSave()?.day ?? 1).ingredients, false);
 render();
 
-// 테스트·디버그용: 진열대 병·스툴 손님의 화면 좌표, 스툴 상태
+// 테스트·디버그용: 스툴 손님의 화면 좌표, 스툴 상태, 제조 단계
 const debug = window as unknown as Record<string, unknown>;
-debug.__bottleAt = (id: IngredientId) => stage.screenOf(id);
+debug.__mix = () => ({ step: state.phase, drink: { ...state.drink }, busy: stage.busy });
 debug.__patronAt = (seat: number) => {
   const s = state.seats[seat];
   return s ? shop.screenOf(s.key) : null;
@@ -2554,16 +2602,26 @@ debug.__talk = () => {
   };
 };
 debug.__story = () => ({ flags: [...state.story.flags], items: [...state.story.items], trust: { ...state.story.trust }, endings: { ...state.story.endings }, goods: { ...state.goods } });
+debug.__night = () => ({ day: state.day, total: state.plan.visits.length, outcomes: state.plan.visits.map((v, i) => [v.customer, state.outcomes[i] ?? null]), paper: paperOf(state.day)?.lead.head ?? null });
 
 // 주소에 ?debug가 있을 때만: 지금 손님의 주문을 완벽하게 맞춘 잔을 곧바로 낸다(화면 검증용). 경향 부호·열쇠 맛을 덧붙일 수 있다.
 if (new URLSearchParams(location.search).has('debug')) {
+  // 화면을 차례로 눌러 보는 검증용: 지금 손님의 주문을 맞추는 잔을 찾기만 한다(내지 않는다).
+  debug.__solve = async () => {
+    const v = activeVisit();
+    if (!v) return null;
+    const { solve } = await import('./solver');
+    const u = unlocked();
+    const stock = Object.fromEntries([...u.ingredients].map((id) => [id, stockOf(id)]));
+    return solve([...v.order], { ingredients: u.ingredients, glasses: u.glasses, garnishes: u.garnishes, stock });
+  };
   debug.__perfect = async (opt: { key?: boolean; tone?: -1 | 0 | 1 } = {}) => {
     const v = activeVisit();
     if (!v || state.view !== 'mix') return false;
     const { solve } = await import('./solver');
     const conds = [...v.order];
-    const k = LORE[v.customer].key;
-    if (opt.key) conds.push({ kind: 'keyword', attr: k.attr, side: k.side });
+    const k = LORE[v.customer]?.key;
+    if (opt.key && k) conds.push({ kind: 'keyword', attr: k.attr, side: k.side });
     if (opt.tone === -1) conds.push({ kind: 'attr', attr: 'tone', op: '<=', value: -1 });
     if (opt.tone === 1) conds.push({ kind: 'attr', attr: 'tone', op: '>=', value: 1 });
     if (opt.tone === 0) conds.push({ kind: 'attr', attr: 'tone', op: '==', value: 0 });

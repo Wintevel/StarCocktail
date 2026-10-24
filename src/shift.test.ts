@@ -15,16 +15,16 @@ import {
 } from './shift';
 
 describe('영업 시계', () => {
-  it('18:00에 열어 04:00에 닫고, 게임 1시간은 실제 30초다', () => {
+  it('18:00에 열어 04:00에 닫고, 게임 1시간은 실제 45초다', () => {
     expect(clockLabel(0)).toBe('18:00');
     expect(clockLabel(59.9)).toBe('18:59');
     expect(clockLabel(6 * 60)).toBe('00:00');
     expect(clockLabel(MUST_OPEN_MINUTES)).toBe('01:00');
     expect(clockLabel(DAY_MINUTES)).toBe('04:00');
     expect(clockLabel(DAY_MINUTES + 30)).toBe('04:00');
-    expect(60 * REAL_MS_PER_MINUTE).toBe(30_000);
-    // 하루는 약 5분
-    expect((DAY_MINUTES * REAL_MS_PER_MINUTE) / 60_000).toBe(5);
+    expect(60 * REAL_MS_PER_MINUTE).toBe(45_000);
+    // 하루는 약 7분 반
+    expect((DAY_MINUTES * REAL_MS_PER_MINUTE) / 60_000).toBe(7.5);
   });
 
   it('01:00까지는 반드시 영업하고, 그 뒤 조기 마감, 04:00 이후는 영업 끝', () => {
@@ -37,7 +37,7 @@ describe('영업 시계', () => {
 });
 
 describe('손님 도착', () => {
-  const counts = [...DAYS.map((d) => d.visits.length), INFINITE_VISITS];
+  const counts = [...DAYS.map((d) => d.visits.length), ...INFINITE_VISITS];
 
   it('같은 날은 항상 같은 일정이 나온다', () => {
     expect(arrivalsFor(3, 4)).toEqual(arrivalsFor(3, 4));
@@ -81,8 +81,8 @@ describe('손님 도착', () => {
 });
 
 describe('손님의 인내', () => {
-  it('넉넉하게 게임 속 4시간(실제 2분)을 기다리고, 다 떨어지면 0에서 멈춘다', () => {
-    expect(PATIENCE_MINUTES * REAL_MS_PER_MINUTE).toBe(120_000);
+  it('넉넉하게 게임 속 4시간(실제 3분)을 기다리고, 다 떨어지면 0에서 멈춘다', () => {
+    expect(PATIENCE_MINUTES * REAL_MS_PER_MINUTE).toBe(180_000);
     let p = 1;
     p = drainPatience(p, 60);
     expect(p).toBeCloseTo(0.75);

@@ -42,23 +42,20 @@ export function lemonTexture() {
   });
 }
 
-/** 병 라벨: 라벤더 흰 종이에 남보라 테두리, 시안 줄과 강조색 별 (2D 가게의 네온 팔레트) */
+/** 병 라벨: 신문지 같은 종이에 검은 테두리와 빨간 별 (2D 세계와 같은 흑백+빨강) */
 export function labelTexture(accent: string) {
   // 병 둘레를 한 바퀴 감는 띠라서 위아래 줄만 긋고(이음매가 보이지 않게), 가운데에 별 하나와 글줄 두 개.
   return canvasTexture(256, 128, (ctx) => {
-    const bg = ctx.createLinearGradient(0, 0, 0, 128);
-    bg.addColorStop(0, '#fbf6ff');
-    bg.addColorStop(1, '#e9ddff');
-    ctx.fillStyle = bg;
+    ctx.fillStyle = '#f2ece0';
     ctx.fillRect(0, 0, 256, 128);
-    ctx.fillStyle = '#24104f';
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    for (let y = 4; y < 128; y += 8) for (let x = (y / 8) % 2 ? 4 : 0; x < 256; x += 8) ctx.fillRect(x, y, 2, 2);
+    ctx.fillStyle = '#151313';
     ctx.fillRect(0, 0, 256, 9);
     ctx.fillRect(0, 119, 256, 9);
-    ctx.fillStyle = '#3fe8ff';
-    ctx.fillRect(0, 12, 256, 4);
     ctx.fillStyle = accent;
     ctx.fillRect(0, 106, 256, 8);
-    ctx.fillStyle = '#24104f';
+    ctx.fillStyle = '#151313';
     ctx.fillRect(150, 40, 70, 7);
     ctx.fillRect(150, 58, 48, 7);
     ctx.fillStyle = accent;
@@ -77,9 +74,9 @@ export function labelTexture(accent: string) {
 export function shadowTexture() {
   return canvasTexture(128, 128, (ctx) => {
     const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-    g.addColorStop(0, 'rgba(20,6,52,0.75)');
-    g.addColorStop(0.6, 'rgba(20,6,52,0.25)');
-    g.addColorStop(1, 'rgba(20,6,52,0)');
+    g.addColorStop(0, 'rgba(0,0,0,0.75)');
+    g.addColorStop(0.6, 'rgba(0,0,0,0.25)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 128, 128);
   }, false);
@@ -101,19 +98,15 @@ export function sparkleTexture() {
 }
 
 /**
- * 카운터 윗면: 짙은 보라 바탕에 아주 옅은 격자(베이퍼웨이브 바닥 격자).
- * 선과 바탕의 밝기 차이를 작게 둬서 후처리가 격자를 외곽선으로 오해하지 않게 한다.
+ * 카운터 윗면: 회색 판에 아주 옅은 나뭇결 줄(후처리가 그 위에 하프톤 점을 앉힌다).
+ * 줄과 바탕의 밝기 차이를 작게 둬서 후처리가 결을 외곽선으로 오해하지 않게 한다.
  */
 export function counterTexture() {
   const tex = canvasTexture(256, 256, (ctx) => {
-    ctx.fillStyle = '#3b2178';
+    ctx.fillStyle = '#8f8a83';
     ctx.fillRect(0, 0, 256, 256);
-    ctx.fillStyle = '#5a2f9c';
+    ctx.fillStyle = '#86817a';
     ctx.fillRect(0, 0, 256, 3);
-    ctx.fillRect(0, 0, 3, 256);
-    ctx.fillStyle = 'rgba(255, 120, 220, 0.35)';
-    ctx.fillRect(0, 0, 256, 1);
-    ctx.fillRect(0, 0, 1, 256);
   });
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   return tex;
