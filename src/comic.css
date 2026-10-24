@@ -227,6 +227,24 @@
   border-radius: 3px;
 }
 
+/* 나란한 두 칸(짧은 말 둘): 아래를 맞춘다 */
+.cm-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+}
+
+.cm-half {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cm-half .cm-bal {
+  max-width: 96%;
+}
+
 /* 물건 칸은 조금 좁게, 칸마다 좌우를 번갈아 */
 .cm-insert .cm-frame {
   width: 92%;
@@ -278,7 +296,7 @@
   max-width: min(64%, 430px);
   margin-bottom: calc(-1 * var(--cm-overlap));
   padding: 12px 20px 13px;
-  font: 700 19.5px/1.4 var(--font-speech);
+  font: 700 21px/1.4 var(--font-speech);
   color: var(--cm-bal-ink);
   background: var(--bb);
   border: 2.5px solid var(--bi);
@@ -609,7 +627,7 @@
   grid-template-columns: auto minmax(0, 1fr);
   align-content: start;
   gap: 8px 10px;
-  min-height: 104px;
+  min-height: 88px;
   padding: 14px 14px 13px 12px;
   text-align: left;
   color: var(--on-surface);

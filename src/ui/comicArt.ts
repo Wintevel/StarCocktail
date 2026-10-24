@@ -10,7 +10,7 @@ import { type Mood, miniGlass, rigFor, starPath } from '../shop/art';
 export const PW = 600;
 
 /** 구도마다 칸 높이(viewBox). 휴대폰에서도 같은 비율로 줄어든다. */
-export const PH = { open: 340, wide: 300, medium: 400, close: 380, xclose: 210, drama: 420, insert: 270, memory: 290, sold: 330, half: 400 } as const;
+export const PH = { open: 310, wide: 300, medium: 380, close: 350, xclose: 210, drama: 420, insert: 270, memory: 290, sold: 330, half: 400 } as const;
 
 /** 밤 가게 팔레트 */
 const K = {
@@ -286,8 +286,8 @@ export function openSvg(who: string, mood: Mood, sc: SceneOpts, seed: string) {
   const H = PH.open;
   const r = rng(seed);
   const fx = W * 0.66;
-  const top = H * 0.17;
-  const face = 84;
+  const top = H * 0.13;
+  const face = 96;
   const cy = top + waistDrop(who, face);
   return wrap(
     W,
@@ -341,28 +341,27 @@ export function cutSvg(shot: Shot, who: string, mood: Mood, side: Side, sc: Scen
       );
     }
     case 'medium': {
+      // 상반신: 허리 위까지 칸을 채운다
       const H = half ? PH.half : PH.medium;
-      const face = half ? 92 : 118;
-      const top = H * 0.12;
-      const cy = top + waistDrop(who, face) + 14;
+      const face = half ? 104 : 148;
+      const top = H * 0.1;
       return wrap(
         W,
         H,
         rect(0, 0, W, H, 'url(#cm-wall)') +
           bokeh(W, H, r, half ? 5 : 9) +
-          (half ? '' : sconce(side === 'r' ? W * 0.18 : W * 0.82, H * 0.16)) +
+          (half ? '' : sconce(side === 'r' ? W * 0.16 : W * 0.84, H * 0.18)) +
           circ(fx, top + face * 0.8, face * 2.2, 'url(#cm-halo)') +
           moodBack(mood, W, H, fx, top + face * 0.6, r) +
           figure(who, mood, fx, top, face) +
-          (cy < H - 16 ? counter(W, H, cy) : '') +
-          (sc.glass && cy < H - 16 && !half ? glassOn(fx + (side === 'l' ? 150 : -150), cy - 4, sc.glass, 2) : '') +
           vignette(W, H),
       );
     }
     case 'close': {
       const H = half ? PH.half : PH.close;
-      const face = half ? 150 : 172;
-      const top = H * 0.11;
+      // 얼굴: 정수리부터 어깨까지
+      const face = half ? 150 : 205;
+      const top = H * 0.09;
       return wrap(W, H, rect(0, 0, W, H, 'url(#cm-close)') + bokeh(W, H, r, half ? 3 : 6, 1.5) + circ(fx, top + face * 0.6, face * 1.5, 'url(#cm-halo)') + moodBack(mood, W, H, fx, top + face * 0.5, r) + figure(who, mood, fx, top, face) + vignette(W, H));
     }
     case 'xclose': {
