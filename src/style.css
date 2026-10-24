@@ -37,6 +37,21 @@
   --glow-cyan: 2px 2px 0 rgba(21, 19, 19, 0.85);
   --panel: var(--ink);
 
+  /* v8 의미 토큰: 화면 부품은 이 이름만 쓴다(색 양식을 바꿀 때 값만 고친다) */
+  --surface: var(--paper); /* 카드·판 바탕 */
+  --surface-2: var(--paper-2); /* 카드 안 칸·눌린 바탕 */
+  --on-surface: var(--ink); /* 카드 위 글자·선 */
+  --muted: var(--gray); /* 카드 위 흐린 글자 */
+  --line: var(--ink); /* 테두리 선 */
+  --accent: var(--red); /* 주 강조(주요 버튼·선택 표시) */
+  --on-accent: var(--white); /* 주 강조 위 글자 */
+  --accent-2: var(--cyan); /* 보조 강조 */
+  /* 맛마다 다른 색(게이지·재료 카드의 맛 변화 칩) */
+  --taste-sweet: #ff7eb6;
+  --taste-strength: #f2a93b;
+  --taste-body: #3fbf9b;
+  --taste-tone: #8b6bff;
+
   --topbar: 64px;
   --wipe: 420ms;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
