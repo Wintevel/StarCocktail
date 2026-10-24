@@ -389,8 +389,8 @@ app.innerHTML = `
   <div class="hud" id="hud">
     <div class="meters" id="meters"></div>
     <div class="pourbar" id="pourbar" role="img"></div>
-    <button type="button" class="glass-btn reset-btn" id="resetBtn" data-act="restart"><span class="gb-ring" aria-hidden="true"><span class="gb-ic">↺</span></span><span class="gb-label">초기화</span></button>
-    <button type="button" class="glass-btn stir-btn" id="stirBtn" data-act="stir"><span class="gb-ring" aria-hidden="true"><span class="gb-ic">↻</span></span><span class="gb-label">젓기</span></button>
+    <button type="button" class="glass-btn reset-btn" id="resetBtn" data-act="restart" hidden><span class="gb-ring" aria-hidden="true"></span><span class="gb-label"></span></button>
+    <button type="button" class="glass-btn stir-btn" id="stirBtn" data-act="stir" hidden><span class="gb-ring" aria-hidden="true"></span><span class="gb-label"></span></button>
   </div>
   <aside class="mix-panel" id="mixPanel" aria-label="제조 단계"></aside>
   <p class="sr-only" id="mixLive" aria-live="polite"></p>
@@ -964,8 +964,18 @@ function promptText(): string {
   return '손님을 기다리는 중… 그동안 서랍에서 리필을 주문해 둘 수 있어요';
 }
 
+/** 잔 둘레 동그라미 버튼의 그림(선은 글자색을 따른다) */
+const GLASS_BTN_ICON = {
+  // 반시계 화살표: 잔부터 다시
+  reset: '<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 3.8v4.6h4.6"/>',
+  // 바 스푼과 소용돌이: 젓기
+  stir: '<path d="M18 2.6 13.1 13.2"/><path d="M19.5 13.6A8 4.2 0 1 1 4.5 13.6"/><path d="M2.2 13.9 5 12.8l.1 3"/>',
+  // 끝냄 표시
+  done: '<path d="M5 12.6l4.4 4.4L19 7.4"/>',
+} as const;
+
 /** 잔 둘레 동그라미 버튼 하나를 고친다. 버튼은 그대로 두고 바뀐 속성만 바꿔 초점을 지킨다. */
-function syncGlassBtn(el: HTMLButtonElement, v: { show: boolean; state: string; icon: string; label: string; aria: string; title: string; off: boolean; wait: boolean }) {
+function syncGlassBtn(el: HTMLButtonElement, v: { show: boolean; state: string; icon: keyof typeof GLASS_BTN_ICON; label: string; aria: string; title: string; off: boolean; wait: boolean }) {
   el.hidden = !v.show;
   if (!v.show) return;
   el.dataset.state = v.state;
@@ -974,8 +984,10 @@ function syncGlassBtn(el: HTMLButtonElement, v: { show: boolean; state: string; 
   else el.removeAttribute('aria-disabled');
   el.setAttribute('aria-label', v.aria);
   el.title = v.title;
-  const ic = el.querySelector('.gb-ic')!;
-  if (ic.textContent !== v.icon) ic.textContent = v.icon;
+  if (el.dataset.icon !== v.icon) {
+    el.dataset.icon = v.icon;
+    el.querySelector('.gb-ring')!.innerHTML = `<svg class="gb-ic" viewBox="0 0 24 24" focusable="false">${GLASS_BTN_ICON[v.icon]}</svg>`;
+  }
   const label = el.querySelector('.gb-label')!;
   if (label.textContent !== v.label) label.textContent = v.label;
 }
@@ -1004,7 +1016,7 @@ function renderHud() {
   syncGlassBtn($('resetBtn') as HTMLButtonElement, {
     show: mix && !!d.glass,
     state: 'ready',
-    icon: '↺',
+    icon: 'reset',
     label: '초기화',
     aria: `초기화: 잔부터 다시${lose}`,
     title: `잔부터 다시${lose}`,
@@ -1016,7 +1028,7 @@ function renderHud() {
   syncGlassBtn($('stirBtn') as HTMLButtonElement, {
     show: mix && !!d.glass,
     state: st,
-    icon: st === 'done' ? '✓' : '↻',
+    icon: st === 'done' ? 'done' : 'stir',
     label: st === 'done' ? '저었어요' : '젓기',
     aria:
       st === 'done'
