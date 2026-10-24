@@ -1,20 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { type Drink, emptyDrink, pour, stir } from './mix';
-import { canLeave, chooseGlass, chooseIce, glassChangeLoses, nextStep, prevStep, reachable, STEPS, stepDone } from './mixSteps';
+import { canLeave, chooseGlass, chooseIce, glassChangeLoses, nextStep, prevStep, reachable, STEPS, stepDone, stirButton } from './mixSteps';
 
 const poured = (): Drink => pour(pour({ ...emptyDrink(), glass: 'rocks', ice: 'more' }, 'gin'), 'syrup');
 
 describe('제조 단계 순서', () => {
-  it('잔 → 얼음 → 재료 → 젓기 → 장식 순서로 하나씩 넘어간다', () => {
-    expect(STEPS.map((s) => s.id)).toEqual(['glass', 'ice', 'pour', 'stir', 'garnish']);
+  it('잔 → 얼음 → 재료 → 장식 순서로 하나씩 넘어간다(젓기는 단계가 아니다)', () => {
+    expect(STEPS.map((s) => s.id)).toEqual(['glass', 'ice', 'pour', 'garnish']);
     expect(nextStep('glass')).toBe('ice');
-    expect(nextStep('stir')).toBe('garnish');
+    expect(nextStep('pour')).toBe('garnish');
     expect(nextStep('garnish')).toBeNull();
     expect(prevStep('glass')).toBeNull();
     expect(prevStep('pour')).toBe('ice');
+    expect(prevStep('garnish')).toBe('pour');
   });
 
-  it('잔·얼음·재료는 고르거나 부어야 넘어가고, 젓기·장식은 그냥 넘어갈 수 있다', () => {
+  it('잔·얼음·재료는 고르거나 부어야 넘어가고, 장식은 그냥 넘어갈 수 있다', () => {
     const d = emptyDrink();
     expect(canLeave('glass', d)).toBe(false);
     const g = chooseGlass(d, 'coupe');
@@ -24,7 +25,6 @@ describe('제조 단계 순서', () => {
     expect(canLeave('ice', i)).toBe(true);
     expect(canLeave('pour', i)).toBe(false);
     expect(canLeave('pour', pour(i, 'gin'))).toBe(true);
-    expect(canLeave('stir', i)).toBe(true);
     expect(canLeave('garnish', i)).toBe(true);
   });
 
@@ -34,17 +34,40 @@ describe('제조 단계 순서', () => {
     expect(reachable('ice', emptyDrink())).toBe(false);
     expect(reachable('ice', d)).toBe(true);
     expect(reachable('pour', d)).toBe(false);
+    expect(reachable('garnish', { ...d, ice: 'less' })).toBe(false);
     // 되돌아가 고친 뒤에도 앞선 단계가 모두 끝나 있으면 장식까지 건너뛸 수 있다
     expect(reachable('garnish', poured())).toBe(true);
   });
 
-  it('젓기·장식의 ✓는 실제로 저었거나 장식을 골랐을 때만 붙는다', () => {
+  it('장식의 ✓는 장식을 골랐을 때만 붙는다(「장식 없음」도 고른 것)', () => {
     const d = poured();
     expect(stepDone('pour', d)).toBe(true);
-    expect(stepDone('stir', d)).toBe(false);
-    expect(stepDone('stir', stir(d))).toBe(true);
     expect(stepDone('garnish', d)).toBe(false);
     expect(stepDone('garnish', { ...d, garnish: 'none' })).toBe(true);
+  });
+});
+
+describe('잔 오른쪽 젓기 버튼', () => {
+  it('재료를 한 번 이상 부어야 켜진다', () => {
+    expect(stirButton(emptyDrink())).toBe('off');
+    expect(stirButton({ ...emptyDrink(), glass: 'rocks', ice: 'none' })).toBe('off');
+    expect(stirButton(pour({ ...emptyDrink(), glass: 'rocks', ice: 'none' }, 'gin'))).toBe('ready');
+  });
+
+  it('한 번 저으면 끝난 상태로 남고, 그 뒤에 더 부어도 다시 저을 수 없다', () => {
+    const d = stir(poured());
+    expect(stirButton(d)).toBe('done');
+    expect(stir(d)).toBe(d);
+    const more = pour(d, 'soda');
+    expect(more.stirAt).toBe(2);
+    expect(stirButton(more)).toBe('done');
+  });
+
+  it('되돌리려면 초기화: 빈 잔에서 다시 시작하면 꺼진다', () => {
+    expect(stirButton(stir(poured()))).toBe('done');
+    expect(stirButton(emptyDrink())).toBe('off');
+    // 잔을 바꿔 부은 재료를 비워도 젓기는 지워진다
+    expect(stirButton(chooseGlass(stir(poured()), 'coupe'))).toBe('off');
   });
 });
 

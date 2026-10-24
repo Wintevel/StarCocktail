@@ -144,7 +144,7 @@ import {
   type When,
 } from './story';
 import { type Article, type Edition, morningEdition } from './paper';
-import { canLeave, chooseGlass, chooseIce, glassChangeLoses, type MixStep, nextStep, prevStep, reachable } from './mixSteps';
+import { canLeave, chooseGlass, chooseIce, glassChangeLoses, type MixStep, nextStep, prevStep, reachable, stirButton } from './mixSteps';
 import { type Frame, type GlassAnchor, Stage3D } from './three/stage';
 import { icons } from './ui/icons2d';
 import { renderPanel, resetPanel } from './ui/mixPanel';
@@ -153,7 +153,7 @@ import { GOOD_BY_ID, type GoodId, GOODS, LORE } from './world';
 
 /** 가게 안(손님이 스툴에 앉는 2D 화면) / 제조대(3D) */
 type View = 'shop' | 'mix';
-/** 제조 단계(① 잔 → ② 얼음 → ③ 재료 → ④ 젓기 → ⑤ 장식). result는 자유 제조에서만 쓴다(영업 중에는 서빙하면 곧바로 가게로 돌아간다). */
+/** 제조 단계(① 잔 → ② 얼음 → ③ 재료 → ④ 장식, 젓기는 잔 오른쪽 버튼). result는 자유 제조에서만 쓴다(영업 중에는 서빙하면 곧바로 가게로 돌아간다). */
 type Phase = MixStep | 'result';
 type Mode = 'shift' | 'free';
 type Overlay = 'title' | 'book' | 'paper' | 'dayStart' | 'dayEnd' | 'shop' | 'final' | null;
@@ -389,7 +389,8 @@ app.innerHTML = `
   <div class="hud" id="hud">
     <div class="meters" id="meters"></div>
     <div class="pourbar" id="pourbar" role="img"></div>
-    <div class="glass-actions" id="actions"></div>
+    <button type="button" class="glass-btn reset-btn" id="resetBtn" data-act="restart"><span class="gb-ring" aria-hidden="true"><span class="gb-ic">↺</span></span><span class="gb-label">초기화</span></button>
+    <button type="button" class="glass-btn stir-btn" id="stirBtn" data-act="stir"><span class="gb-ring" aria-hidden="true"><span class="gb-ic">↻</span></span><span class="gb-label">젓기</span></button>
   </div>
   <aside class="mix-panel" id="mixPanel" aria-label="제조 단계"></aside>
   <p class="sr-only" id="mixLive" aria-live="polite"></p>
@@ -538,32 +539,70 @@ const place = (el: HTMLElement, left: number, top: number) => {
   el.style.left = `${Math.round(left)}px`;
   el.style.top = `${Math.round(top)}px`;
 };
-const clampX = (x: number, w: number) => Math.max(8, Math.min(window.innerWidth - w - 8, x));
+/** 두 상자가 겹치는가(여백 pad만큼 넓혀 본다) */
+const overlaps = (a: DOMRect, b: { left: number; top: number; right: number; bottom: number }, pad = 0) =>
+  a.left < b.right + pad && b.left < a.right + pad && a.top < b.bottom + pad && b.top < a.bottom + pad;
 
-/** 잔의 화면 위치에 맞춰 부은 횟수 바(오른쪽)와 초기화 버튼(아래)을 붙인다. */
+/**
+ * 잔의 화면 위치에 맞춰 잔 둘레 조작을 붙인다: 오른쪽에 부은 횟수 바와 그 아래 젓기 버튼, 왼쪽에 초기화 버튼.
+ * 두 동그라미 버튼은 잔 바닥 높이에 나란히 놓는다(휴대폰은 단계 시트 위로). 휴대폰에서 초기화가
+ * 왼쪽 맛 기둥에 닿으면 기둥 위로 올린다. 횟수 바는 잔 윗부분과 젓기 버튼 사이 가운데에 둔다.
+ */
 function layoutHud(a: GlassAnchor | null = anchor) {
   if (!a) return;
   anchor = a;
+  const mobile = isMobile();
+  const side = mobile ? 10 : 18;
   const glassH = Math.max(60, a.bottom - a.top);
-  const midY = (a.top + a.bottom) / 2;
+  const stirEl = $('stirBtn');
+  const resetEl = $('resetBtn');
+  const w = stirEl.offsetWidth || 64;
+  const h = stirEl.offsetHeight || 76;
+  const panel = $('mixPanel');
+  const floor = (mobile && !panel.hidden ? panel.getBoundingClientRect().top : window.innerHeight) - 10;
+  const top = Math.max(frameTop, Math.min(floor - h, a.bottom - h + 6));
+  const right = Math.min(window.innerWidth - w - 6, a.x + a.half + side);
+  place(stirEl, right, top);
 
+  const left = Math.max(6, a.x - a.half - side - w);
+  let resetTop = top;
+  const box = () => ({ left, top: resetTop, right: left + w, bottom: resetTop + h });
+  const meters = $('meters');
+  if (mobile && !meters.hidden) {
+    const m = meters.getBoundingClientRect();
+    if (overlaps(m, box(), 6)) resetTop = Math.max(frameTop, m.top - h - 8);
+  }
+  // 휴대폰에서 펼쳐 본 주문 카드는 잠깐 덮는 것이라 피하지 않는다.
+  const order = orderRect();
+  if (order && !(mobile && state.orderOpen) && overlaps(order, box(), 6)) resetTop = order.bottom + 8;
+  place(resetEl, left, resetTop);
+
+  // 횟수 바: 잔 윗부분과 젓기 버튼 사이 가운데. 낮은 잔이라 자리가 모자라면(휴대폰) 위로 늘린다.
   const bar = $('pourbar');
-  const barH = Math.min(200, Math.max(90, glassH * 0.8));
-  bar.style.height = `${barH}px`;
-  place(bar, a.x + a.half + 18, midY - barH / 2);
-
-  const actions = $('actions');
-  place(actions, clampX(a.x - actions.offsetWidth / 2, actions.offsetWidth), Math.min(window.innerHeight - actions.offsetHeight - 14, a.foot + 10));
+  const end = top - 12;
+  let barH = Math.min(200, Math.max(90, glassH * 0.8));
+  let barTop = a.top + Math.max(0, (end - a.top - barH) / 2);
+  if (barTop + barH > end) barTop = end - barH;
+  if (barTop < frameTop) {
+    barH = Math.max(40, end - frameTop);
+    barTop = end - barH;
+  }
+  bar.style.height = `${Math.round(barH)}px`;
+  place(bar, right + (w - bar.offsetWidth) / 2, barTop);
 }
 
 /** 화면 요소끼리 띄울 간격 */
 const GAP = 14;
-/** 잔 오른쪽에 부은 횟수 바가 들어갈 자리 */
-const BAR_ROOM = 64;
+/** 잔 양옆에 동그라미 버튼(왼쪽 초기화, 오른쪽 횟수 바와 젓기)이 들어갈 자리 */
+const SIDE_ROOM = 88;
+/** 휴대폰에서 잔 오른쪽 자리(횟수 바·젓기 버튼 줄). 초기화는 맛 기둥 위로 올라가므로 왼쪽 자리는 따로 두지 않는다. */
+const PHONE_SIDE_ROOM = 72;
 /** 휴대폰에서 왼쪽 맛 게이지 기둥이 차지하는 폭(mix-panel.css의 게이지 폭 + 여백) */
-const PHONE_METERS = 138;
+const PHONE_METERS = 146;
 /** 휴대폰에서 접힌 주문 카드의 아래 끝(펼쳐 볼 때 잔이 움직이지 않도록 접혔을 때 값을 쓴다) */
 let orderLineBottom = 0;
+/** 잔 영역의 위 끝(잔 둘레 버튼·횟수 바가 이보다 위로 올라가지 않는다) */
+let frameTop = 0;
 
 /** 보이는 주문 카드의 화면 상자(기울어진 카드는 바깥 상자) */
 function orderRect(): DOMRect | null {
@@ -575,7 +614,8 @@ function orderRect(): DOMRect | null {
 
 /**
  * 잔을 놓을 화면 영역. 넓은 화면은 왼쪽 주문 카드·맛 게이지와 오른쪽 단계 판 사이,
- * 휴대폰은 위쪽 자리 띠·주문 줄과 아래 단계 판 사이(왼쪽은 게이지 기둥)다. 오른쪽에는 횟수 바 자리를 남긴다.
+ * 휴대폰은 위쪽 자리 띠·주문 줄과 아래 단계 판 사이(왼쪽은 게이지 기둥)다.
+ * 잔 양옆에는 동그라미 버튼 자리를 남긴다(넓은 화면은 양쪽, 휴대폰은 오른쪽만).
  */
 function stageFrame(): Frame {
   const W = window.innerWidth;
@@ -596,20 +636,19 @@ function stageFrame(): Frame {
     if (card && !state.orderOpen) orderLineBottom = card.bottom;
     if (card) top = Math.max(top, (orderLineBottom || card.top + 52) + 8);
     left = PHONE_METERS;
-    right = W - 6;
+    right = W - 6 - PHONE_SIDE_ROOM;
     bottom = (panel ? panel.top : H) - 8;
   } else {
     const meters = rect('meters');
-    left = Math.max(card?.right ?? 0, meters?.right ?? 0) + GAP;
-    right = (panel ? panel.left : W) - GAP;
-    // 잔 아래 초기화 버튼 자리를 남긴다.
-    bottom = H - 66;
+    left = Math.max(card?.right ?? 0, meters?.right ?? 0) + GAP + SIDE_ROOM;
+    right = (panel ? panel.left : W) - GAP - SIDE_ROOM;
+    bottom = H - 26;
   }
   // 자유 제조의 「완성!」 카드가 잔을 가리지 않게 그 위에 놓는다.
   const result = rect('result');
   if (result) bottom = Math.min(bottom, result.top - GAP);
-  const w = Math.max(120, right - left - BAR_ROOM);
-  return { x: left, y: top, w, h: Math.max(120, bottom - top) };
+  frameTop = top;
+  return { x: left, y: top, w: Math.max(120, right - left), h: Math.max(120, bottom - top) };
 }
 
 window.addEventListener('resize', () => {
@@ -758,7 +797,7 @@ function renderOrder() {
   if (!v) {
     el.innerHTML = `
       <div class="oc-main">
-        <div class="who">${ransom('자유 제조', { seed: 9 })}<span class="oc-title">주문 없이 실험하기</span></div>
+        <div class="who"><strong class="oc-name">자유 제조</strong><span class="oc-title">주문 없이 실험하기</span></div>
         <p class="line">마음대로 섞어 보세요. 이름 있는 조합을 만들면 레시피북에 기록돼요. 병은 줄지 않고 시계도 흐르지 않아요.</p>
       </div>
       ${orderToggle()}`;
@@ -771,7 +810,7 @@ function renderOrder() {
   el.innerHTML = `
     <div class="oc-face">${portrait(c.id)}</div>
     <div class="oc-main">
-      <div class="who">${ransom(c.name, { seed: c.id.charCodeAt(0) })}<span class="oc-title">${c.title}</span>${seat?.first ? '<span class="stamp">첫 손님</span>' : ''}</div>
+      <div class="who"><strong class="oc-name">${c.name}</strong><span class="oc-title">${c.title}</span>${seat?.first ? '<span class="stamp">첫 손님</span>' : ''}</div>
       <p class="line">${view.line}</p>
       ${view.extra}
       ${storyHints(c.id, attrs)}
@@ -868,7 +907,7 @@ function renderMeters() {
   const pct = (n: number) => ((Math.max(METER_MIN, Math.min(METER_MAX, n)) - METER_MIN) / (METER_MAX - METER_MIN)) * 100;
   const active = keys.flatMap((k) => {
     const side = keywordSide(attrs[k]);
-    return side ? [`<span class="kw-pill">${keywordLabel(k, side)}</span>`] : [];
+    return side ? [`<span class="kw-pill ${k}">${keywordLabel(k, side)}</span>`] : [];
   });
   el.innerHTML =
     `<h3><span>현재 맛</span>${active.join('')}</h3>` +
@@ -925,7 +964,23 @@ function promptText(): string {
   return '손님을 기다리는 중… 그동안 서랍에서 리필을 주문해 둘 수 있어요';
 }
 
-/** 안내 띠와 잔 둘레에 붙는 것: 부은 횟수 바(오른쪽), 초기화 버튼(아래) */
+/** 잔 둘레 동그라미 버튼 하나를 고친다. 버튼은 그대로 두고 바뀐 속성만 바꿔 초점을 지킨다. */
+function syncGlassBtn(el: HTMLButtonElement, v: { show: boolean; state: string; icon: string; label: string; aria: string; title: string; off: boolean; wait: boolean }) {
+  el.hidden = !v.show;
+  if (!v.show) return;
+  el.dataset.state = v.state;
+  el.disabled = v.off;
+  if (v.wait) el.setAttribute('aria-disabled', 'true');
+  else el.removeAttribute('aria-disabled');
+  el.setAttribute('aria-label', v.aria);
+  el.title = v.title;
+  const ic = el.querySelector('.gb-ic')!;
+  if (ic.textContent !== v.icon) ic.textContent = v.icon;
+  const label = el.querySelector('.gb-label')!;
+  if (label.textContent !== v.label) label.textContent = v.label;
+}
+
+/** 안내 띠와 잔 둘레에 붙는 것: 부은 횟수 바·젓기 버튼(오른쪽), 초기화 버튼(왼쪽) */
 function renderHud() {
   const d = state.drink;
   const free = !state.overlay;
@@ -944,10 +999,35 @@ function renderHud() {
     <span class="num">${d.pours.length}/${cap}</span>`;
   bar.setAttribute('aria-label', `부은 횟수 ${d.pours.length} / ${cap}`);
 
-  const actions = $('actions');
-  actions.hidden = !mix || !d.glass;
-  const restart = `<button class="ghost" data-act="restart" ${stage.busy ? 'aria-disabled="true"' : ''} title="잔부터 다시${shift() && d.pours.length ? ' (부은 재료는 버려져요)' : ''}">↺ 초기화</button>`;
-  if (actions.innerHTML !== restart) actions.innerHTML = restart;
+  // 잔 왼쪽 초기화: 잔부터 다시(부은 재료는 버려진다). 젓기를 물리는 유일한 방법이기도 하다.
+  const lose = shift() && d.pours.length ? ' (부은 재료는 버려져요)' : '';
+  syncGlassBtn($('resetBtn') as HTMLButtonElement, {
+    show: mix && !!d.glass,
+    state: 'ready',
+    icon: '↺',
+    label: '초기화',
+    aria: `초기화: 잔부터 다시${lose}`,
+    title: `잔부터 다시${lose}`,
+    off: false,
+    wait: stage.busy,
+  });
+  // 잔 오른쪽 젓기: 재료를 한 번 이상 부은 뒤 한 번만. 저은 뒤에는 끝난 표시로 남는다.
+  const st = stirButton(d);
+  syncGlassBtn($('stirBtn') as HTMLButtonElement, {
+    show: mix && !!d.glass,
+    state: st,
+    icon: st === 'done' ? '✓' : '↻',
+    label: st === 'done' ? '저었어요' : '젓기',
+    aria:
+      st === 'done'
+        ? '저었어요: 젓기는 한 번뿐이에요 (되돌리려면 초기화)'
+        : st === 'ready'
+          ? '젓기: 층이 하나로 섞이고 바디 -1 (한 번만)'
+          : '젓기: 재료를 한 번 이상 부은 뒤 저을 수 있어요',
+    title: st === 'done' ? '젓기는 한 번뿐이에요 · 되돌리려면 초기화' : st === 'ready' ? '저으면 층이 하나로 섞이고 바디 -1 · 젓지 않으면 층이 남아요' : '재료를 한 번 이상 부은 뒤 저을 수 있어요',
+    off: st === 'off',
+    wait: stage.busy || st === 'done',
+  });
 }
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1638,7 +1718,7 @@ function renderOverlay() {
           <ol class="howto">
             <li>가게는 <b>18:00~04:00</b>. 손님은 띄엄띄엄 들어와 빈 <b>스툴(4개)</b>에 앉아요. 01:00부터 조기 마감할 수 있어요.</li>
             <li>앉은 손님을 <b>누르면</b> 그 손님의 잔을 만드는 제조대로 넘어가요. 다른 손님은 자리에서 기다려요(너무 오래 두면 화가 나서 나가요).</li>
-            <li>오른쪽 카드에서 <b>잔 → 얼음 → 재료 → 젓기 → 장식</b>을 한 단계씩 골라요. 재료 카드를 누를 때마다 한 번 부어 <b>단맛·도수·바디</b>(Day 4부터 <b>경향</b>)를 맞춰요.</li>
+            <li>오른쪽 카드에서 <b>잔 → 얼음 → 재료 → 장식</b>을 한 단계씩 골라요. 재료 카드를 누를 때마다 한 번 부어 <b>단맛·도수·바디</b>(Day 4부터 <b>경향</b>)를 맞춰요. 잔 오른쪽 <b>↻ 젓기</b>는 재료를 부은 뒤 한 번, 왼쪽 <b>↺ 초기화</b>는 잔부터 다시예요.</li>
             <li>마지막 단계에서 <b>내기</b>를 누르면 손님이 반응하고 잔을 들고 나가요.</li>
             <li>머리 위에 <b>「…」</b>가 뜬 손님은 할 말이 있어요. 눌러서 듣고, 맡은 말·물건·소문을 다른 손님에게 <b>이어 주세요</b>. 고쳐 전할 때는 그 잔의 <b>경향</b>이 말투가 돼요.</li>
             <li>병은 한 번 부을 때마다 10%씩 줄어요(한 병에 열 번, 재료 카드에 남은 양이 보여요). 가게 화면 오른쪽 아래 <b>서랍</b>에서 리필과 <b>진열장 물건</b>을 주문하면 다음 날 아침 도착해요. 물건은 찾는 손님(<b>✦</b>)에게 권해 팔아요.</li>
@@ -2275,7 +2355,7 @@ document.addEventListener('click', (e) => {
   const act = btn.dataset.act!;
   const id = btn.dataset.id;
   // 붓기·젓기 연출 중에는 단계를 넘기거나 잔을 바꾸는 입력을 받지 않는다(붓기는 이어서 할 수 있다).
-  const steady = ['glass', 'ice', 'stir', 'no-stir', 'mp-next', 'mp-prev', 'mp-step', 'serve', 'restart', 'turn-away', 'pick-seat'];
+  const steady = ['glass', 'ice', 'stir', 'mp-next', 'mp-prev', 'mp-step', 'serve', 'restart', 'turn-away', 'pick-seat'];
   if (stage.busy && steady.includes(act)) return;
   const mixing = state.view === 'mix' && !state.overlay;
 
@@ -2298,10 +2378,11 @@ document.addEventListener('click', (e) => {
       if (mixing && state.phase === 'pour') doPour(id as IngredientId);
       break;
     case 'stir':
-      if (mixing && state.phase === 'stir') state.drink = stir(state.drink);
-      break;
-    case 'no-stir':
-      if (mixing && state.phase === 'stir') goStep('garnish');
+      // 잔 오른쪽 젓기 버튼: 어느 단계에서든 재료를 부은 뒤 한 번만(되돌리려면 초기화).
+      if (mixing && state.phase !== 'result' && stirButton(state.drink) === 'ready') {
+        state.drink = stir(state.drink);
+        announce('저었어요 · 층이 하나로 섞이고 바디 -1');
+      }
       break;
     case 'mp-next': {
       if (!mixing || state.phase === 'result' || !canLeave(state.phase, state.drink)) break;
@@ -2346,6 +2427,13 @@ document.addEventListener('click', (e) => {
       break;
     case 'restart':
       newDrink();
+      announce('초기화했어요 · 잔부터 다시 골라요');
+      // 누른 초기화 버튼은 잔이 없어지면 사라지므로 초점을 단계 판 제목으로 옮긴다.
+      if (btn.id === 'resetBtn') {
+        render();
+        $('mixPanel').querySelector<HTMLElement>('#mpTitle')?.focus({ preventScroll: true });
+        return;
+      }
       break;
     case 'book':
       openBook(id ?? activeVisit()?.recipe ?? null, (btn.dataset.tab as BookTab | undefined) ?? 'recipes');
