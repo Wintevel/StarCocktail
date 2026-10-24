@@ -1,5 +1,6 @@
 import './style.css';
 import './mix-panel.css';
+import './book.css';
 // 글꼴: 역할마다 다른 무료 한글 글꼴(한글은 유니코드 구간별로 나뉘어 쓰는 글자만 받는다)
 import '@fontsource/anton/400.css'; // 로마자·숫자 제목
 import '@fontsource/black-han-sans/400.css'; // 오려 붙인 굵은 글자·신문 큰 표제
@@ -146,6 +147,7 @@ import {
 import { type Article, type Edition, morningEdition } from './paper';
 import { canLeave, chooseGlass, chooseIce, glassChangeLoses, type MixStep, nextStep, prevStep, reachable, stirButton } from './mixSteps';
 import { type Frame, type GlassAnchor, Stage3D } from './three/stage';
+import { type BookTab, type BookView, renderBook } from './ui/book';
 import { icons } from './ui/icons2d';
 import { renderPanel, resetPanel } from './ui/mixPanel';
 import { ransom } from './ui/ransom';
@@ -157,8 +159,6 @@ type View = 'shop' | 'mix';
 type Phase = MixStep | 'result';
 type Mode = 'shift' | 'free';
 type Overlay = 'title' | 'book' | 'paper' | 'dayStart' | 'dayEnd' | 'shop' | 'final' | null;
-/** 레시피북의 쪽: 레시피 / 단골 수첩 / 약속 장부 / 이야기 기록 */
-type BookTab = 'recipes' | 'patrons' | 'promises' | 'log';
 /** 오늘 손님 한 명의 결과: 판정 / 돌려보냄 / 기다리다 떠남 */
 type Outcome = Grade | 'away' | 'left';
 
@@ -277,6 +277,10 @@ interface State {
   /** 레시피북을 열 때 강조할 레시피(레시피 이름 주문) */
   bookFocus: string | null;
   bookTab: BookTab;
+  /** 레시피북에서 쪽마다 고른 항목(오른쪽 쪽에 펼친다) */
+  bookSel: Partial<Record<BookTab, string>>;
+  /** 폰: 목차 대신 고른 항목 쪽을 보는 중 */
+  bookReading: boolean;
   /** 열려 있는 대화 카드 */
   talk: Talk | null;
   /** 왼쪽 아래 수첩(맡은 것·소문)이 열려 있다 */
@@ -364,6 +368,8 @@ const state: State = {
   orderOpen: false,
   bookFocus: null,
   bookTab: 'recipes',
+  bookSel: {},
+  bookReading: false,
   talk: null,
   notebook: false,
 };
@@ -1431,92 +1437,43 @@ function lowStockList() {
       .join('')}</ul>`;
 }
 
-function bookList() {
-  return RECIPES.map((r) => {
-    const found = state.discovered.has(r.id);
-    const focus = state.bookFocus === r.id;
-    // 손님이 이름으로 주문한 레시피는 아직 몰라도 이름은 보인다.
-    const name = found || focus ? r.name : '???';
-    return `<li class="${found ? 'found' : ''} ${focus ? 'focus' : ''}" ${focus ? 'id="bookFocus"' : ''}>
-      <strong>${name}${focus ? ' <em>주문 중</em>' : ''}</strong>
-      <span>${found ? r.desc : '힌트: ' + r.hint}</span>
-      ${found ? `<ul class="chips mini">${r.conditions.map((c) => `<li class="chip">${describe(c, true)}</li>`).join('')}</ul>` : ''}
-    </li>`;
-  }).join('');
-}
-
-const BOOK_TABS: { id: BookTab; label: string }[] = [
-  { id: 'recipes', label: '레시피' },
-  { id: 'patrons', label: '단골 수첩' },
-  { id: 'promises', label: '약속 장부' },
-  { id: 'log', label: '이야기 기록' },
-];
-
-function bookTabs(tab: BookTab) {
-  return `<nav class="book-tabs" role="tablist" aria-label="레시피북 쪽">${BOOK_TABS.map(
-    (t) => `<button role="tab" class="bt ${t.id === tab ? 'on' : ''}" aria-selected="${t.id === tab}" data-act="book-tab" data-id="${t.id}">${t.label}</button>`,
-  ).join('')}</nav>`;
-}
-
-function bookPage(tab: BookTab) {
+/** 레시피북에 펼칠 것들을 모은다(그림·별·이름은 여기서 HTML로 만들어 넘긴다). */
+function bookView(): BookView {
   const story = state.story;
-  switch (tab) {
-    case 'patrons': {
-      const metN = CUSTOMERS.filter((c) => state.met.has(c.id)).length;
-      return `
-        <h2>${ransom('단골 수첩', { seed: 6 })} <small class="num">만난 손님 ${metN} / ${CUSTOMERS.length}</small></h2>
-        <ul class="patrons">${CUSTOMERS.map((c) => {
-          const met = state.met.has(c.id);
-          const facts = factsOf(story, c.id);
-          return `<li class="pt ${met ? '' : 'unmet'}">
-            <div class="pt-face">${portrait(c.id, 'idle', 'head')}</div>
-            <div class="pt-main">
-              <p class="pt-name"><strong>${met ? c.name : '???'}</strong><small>${met ? c.title : '아직 만나지 않은 손님'}</small>${confessed(story, c.id) ? '<span class="stamp">고백</span>' : ''}</p>
-              ${
-                met
-                  ? `<p class="pt-meta">${stars(trustOf(story, c.id))}<span class="pt-key">열쇠 맛 ${keyKnown(c.id) ? `<b>「${keyLabel(c.id)}」</b>` : '<b>???</b> <small>완벽한 잔을 내면 알게 돼요</small>'}</span></p>
-                     ${facts.length ? `<ul class="pt-facts">${facts.map((f) => `<li>${f}</li>`).join('')}</ul>` : '<p class="pt-none">아직 아는 것이 없어요.</p>'}`
-                  : ''
-              }
-            </div>
-          </li>`;
-        }).join('')}</ul>`;
-    }
-    case 'promises': {
-      const list = promisesOf(story);
-      return `
-        <h2>${ransom('약속 장부', { seed: 8 })} <small class="num">줄 그은 약속 ${list.filter((p) => p.done).length} / ${list.length}</small></h2>
-        <p class="sub small">할이 남긴 장부. 단골마다 끝내지 못한 이야기가 한 줄씩 적혀 있다. 줄기를 끝내면 줄이 그어지고, 무한 영업에서는 끝낸 약속에 따라 단골의 말이 바뀌어요.</p>
-        <ol class="promises">${list
-          .map((p) => `<li class="${p.done ? 'done' : ''}"><span class="pr-who">${nameOf(p.who)}</span><span class="pr-text">${p.text}</span>${p.done ? '<span class="stamp">끝냄</span>' : ''}</li>`)
-          .join('')}</ol>`;
-    }
-    case 'log': {
-      const days = [...new Set(story.log.map((l) => l.day))].sort((a, b) => b - a);
-      const settled = Object.keys(story.endings).length > 0;
-      return `
-        <h2>${ransom('이야기 기록', { seed: 12 })} <small class="num">${story.log.length}건</small></h2>
-        ${settled ? `<h3>꿈의 축제 · 결말</h3>${endingsHtml()}` : ''}
-        ${paperArchive()}
-        ${
-          days.length
-            ? days
-                .map(
-                  (d) =>
-                    `<h3>DAY ${d}</h3><ul class="story-log">${story.log
-                      .filter((l) => l.day === d)
-                      .map((l) => `<li>${l.who ? `<b>${nameOf(l.who)}</b> ` : ''}${l.text}</li>`)
-                      .join('')}</ul>`,
-                )
-                .join('')
-            : '<p class="sub small">아직 기록된 이야기가 없어요. 손님 머리 위 「…」을 눌러 이야기를 들어 보세요.</p>'
-        }`;
-    }
-    default:
-      return `
-        <h2>${ransom('레시피북', { seed: 4 })} <small class="num">${state.discovered.size} / ${RECIPES.length}</small></h2>
-        <ul class="recipes">${bookList()}</ul>`;
-  }
+  const tab = shift() ? state.bookTab : 'recipes';
+  const u = unlocked();
+  return {
+    tab,
+    sel: state.bookSel[tab] ?? null,
+    reading: state.bookReading,
+    tabs: shift(),
+    recipes: { discovered: state.discovered, focus: state.bookFocus, limits: { ingredients: u.ingredients, glasses: u.glasses, garnishes: u.garnishes } },
+    // 단골·장부·기록은 영업 중에만 펼친다(자유 제조는 레시피 쪽만).
+    patrons:
+      tab !== 'patrons'
+        ? []
+        : CUSTOMERS.map((c) => ({
+            id: c.id,
+            met: state.met.has(c.id),
+            name: c.name,
+            title: c.title,
+            confessed: confessed(story, c.id),
+            trust: stars(trustOf(story, c.id)),
+            key: keyKnown(c.id) ? `<b>「${keyLabel(c.id)}」</b>` : '<b>???</b> <small>완벽한 잔을 내면 알게 돼요</small>',
+            facts: factsOf(story, c.id),
+            head: portrait(c.id, 'idle', 'head'),
+            bust: portrait(c.id, 'idle', 'bust'),
+          })),
+    promises: tab === 'promises' ? promisesOf(story).map((p) => ({ ...p, who: nameOf(p.who) })) : [],
+    log: {
+      total: story.log.length,
+      endings: tab === 'log' && Object.keys(story.endings).length > 0 ? endingsHtml() : null,
+      papers: [...story.papers].sort((a, b) => b.day - a.day).map((p) => ({ day: p.day, head: p.lead.head })),
+      days: [...new Set(story.log.map((l) => l.day))]
+        .sort((a, b) => b - a)
+        .map((d) => ({ day: d, lines: story.log.filter((l) => l.day === d).map((l) => ({ who: l.who ? nameOf(l.who) : '', text: l.text })) })),
+    },
+  };
 }
 
 /** 다섯 줄기의 결말(Day 7 마감 때 정해진다) */
@@ -1597,16 +1554,6 @@ function paperHtml(ed: Edition, back: boolean) {
     </div>`;
 }
 
-/** 기록 탭의 「지난 신문」 목록: 날짜를 누르면 그날 아침 신문을 다시 펼친다 */
-function paperArchive() {
-  const list = [...state.story.papers].sort((a, b) => b.day - a.day);
-  if (!list.length) return '';
-  return `<h3>지난 신문 <small>누르면 다시 펼쳐요</small></h3>
-    <ul class="pp-archive">${list
-      .map((p) => `<li><button class="secondary" data-act="paper-open" data-id="${p.day}"><span class="num">DAY ${p.day}</span><span>${p.lead.head}</span></button></li>`)
-      .join('')}</ul>`;
-}
-
 /** 신문을 넘기거나 접는다: 오늘 신문이면 하루 시작 화면으로, 지난 신문이면 기록 탭으로 */
 function leavePaper() {
   if (paperBack !== null) {
@@ -1632,11 +1579,15 @@ document.addEventListener('click', (e) => {
   e.stopImmediatePropagation();
   switch (btn.dataset.act) {
     case 'paper-next':
-    case 'paper-close':
+    case 'paper-close': {
+      const back = paperBack;
       leavePaper();
       render();
       $('overlay').scrollTop = 0;
+      // 레시피북 기록 탭으로 돌아오면 펼쳤던 신문 줄에 초점을 둔다.
+      if (back !== null) $('overlay').querySelector<HTMLElement>(`.rb-paper[data-id="${back}"]`)?.focus({ preventScroll: true });
       break;
+    }
     case 'paper-again':
       showPaper(null);
       break;
@@ -1749,14 +1700,17 @@ function renderOverlay() {
         </div>`;
       break;
     case 'book': {
-      const tab = shift() ? state.bookTab : 'recipes';
-      el.innerHTML = `
-        <div class="card book paper tab-${tab}">
-          ${shift() ? bookTabs(tab) : ''}
-          ${bookPage(tab)}
-          <div class="row center"><button class="primary" data-act="close">닫기</button></div>
-        </div>`;
-      document.getElementById('bookFocus')?.scrollIntoView({ block: 'center' });
+      // 시계·손님 때문에 다시 그려도 내용이 같으면 그대로 둔다(스크롤·초점을 지킨다).
+      const html = renderBook(bookView());
+      const opening = !el.querySelector('.rb');
+      if (html === bookHtml && !opening) break;
+      el.innerHTML = html;
+      bookHtml = html;
+      // 펼치는 움직임은 처음 열 때만(쪽을 넘길 때마다 책이 다시 뜨지 않게).
+      if (opening) el.querySelector('.rb')?.classList.add('enter');
+      // 목차는 보던 자리를 지킨다(오른쪽 쪽은 새로 펼치면 맨 위부터).
+      const index = el.querySelector<HTMLElement>('.rb-page.left .rb-scroll');
+      if (index) index.scrollTop = bookScroll[shift() ? state.bookTab : 'recipes'] ?? 0;
       break;
     }
     case 'paper': {
@@ -1938,14 +1892,48 @@ function selectGarnish(i: number) {
   state.drink = { ...state.drink, garnish: GARNISHES[i].id };
 }
 
+/** 마지막으로 그린 레시피북 HTML(같으면 다시 그리지 않는다) */
+let bookHtml = '';
+/** 쪽마다 목차를 어디까지 내려 봤는지 */
+const bookScroll: Partial<Record<BookTab, number>> = {};
+const phoneBook = () => matchMedia('(max-width: 860px)').matches;
+
 function openBook(focus: string | null = activeVisit()?.recipe ?? null, tab: BookTab = 'recipes') {
   state.bookFocus = focus;
   state.bookTab = tab;
+  // 이름 주문 레시피를 들고 열면 그 쪽을 바로 펼친다(폰에서도 목차를 건너뛴다).
+  if (focus && tab === 'recipes') state.bookSel.recipes = focus;
+  state.bookReading = !!focus && tab === 'recipes';
   state.overlay = 'book';
   state.drawer = false;
   state.notebook = false;
+  bookScroll[tab] = 0;
   render();
+  document.getElementById('bookFocus')?.scrollIntoView({ block: 'nearest' });
+  focusBook(state.bookReading ? 'entry' : 'row');
 }
+
+/** 레시피북을 다시 그린 뒤 초점: 폰에서 항목 쪽을 보면 그 제목, 아니면 고른 목차 줄(없으면 책갈피 탭) */
+function focusBook(to: 'entry' | 'row' | 'tab') {
+  const el = $('overlay');
+  const pick =
+    to === 'entry' && (state.bookReading || !phoneBook())
+      ? el.querySelector<HTMLElement>(phoneBook() ? '#rbTitle' : '.rb-row.on')
+      : to === 'row'
+        ? el.querySelector<HTMLElement>('.rb-row.on')
+        : null;
+  (pick ?? el.querySelector<HTMLElement>('.rb-tab.on') ?? el.querySelector<HTMLElement>('.rb-x'))?.focus({ preventScroll: true });
+}
+
+// 목차를 내려 본 자리를 쪽마다 기억한다(다시 그려도 그 자리로). 스크롤은 거품이 일지 않아 잡는 단계에서 받는다.
+document.addEventListener(
+  'scroll',
+  (e) => {
+    const t = e.target;
+    if (state.overlay === 'book' && t instanceof HTMLElement && t.matches('.rb-page.left .rb-scroll')) bookScroll[shift() ? state.bookTab : 'recipes'] = t.scrollTop;
+  },
+  true,
+);
 
 /** 잔에 부은 재료 색의 평균(손님이 들고 나가는 작은 잔의 술 색) */
 function drinkColor(d: Drink) {
@@ -2453,7 +2441,26 @@ document.addEventListener('click', (e) => {
     case 'book-tab':
       state.bookTab = id as BookTab;
       state.bookFocus = null;
-      break;
+      state.bookReading = false;
+      render();
+      focusBook('tab');
+      return;
+    case 'book-sel': {
+      // 목차에서 항목을 고르면 오른쪽 쪽에 펼친다(폰에서는 그 쪽으로 넘긴다).
+      const tab = shift() ? state.bookTab : 'recipes';
+      state.bookSel[tab] = id;
+      state.bookReading = true;
+      render();
+      $('overlay').querySelector('.rb-page.right .rb-scroll')?.scrollTo(0, 0);
+      focusBook('entry');
+      return;
+    }
+    case 'book-back':
+      state.bookReading = false;
+      render();
+      focusBook('row');
+      $('overlay').querySelector('.rb-row.on')?.scrollIntoView({ block: 'nearest' });
+      return;
     case 'drawer':
       state.drawer = !state.drawer;
       drawerOpening = state.drawer;
@@ -2597,6 +2604,14 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.notebook) {
     state.notebook = false;
     render();
+    return;
+  }
+  // 레시피북 책갈피 탭: ←/→ 로 옆 쪽으로
+  if (state.overlay === 'book' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && (e.target as HTMLElement).matches?.('.rb-tab')) {
+    const tabs = [...$('overlay').querySelectorAll<HTMLButtonElement>('.rb-tab')];
+    const i = tabs.indexOf(e.target as HTMLButtonElement);
+    e.preventDefault();
+    tabs[(i + (e.key === 'ArrowLeft' ? tabs.length - 1 : 1)) % tabs.length]?.click();
     return;
   }
   if (e.key === 'Escape' && (state.overlay === 'book' || (state.overlay === 'title' && state.started))) {
