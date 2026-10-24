@@ -315,8 +315,8 @@ function row(id: string, on: boolean, cls: string, inner: string, extra = '') {
 
 const TASTES: AttrKey[] = ['sweet', 'strength', 'body'];
 
-/** 만드는 법: 제조대 네 단계(잔 → 얼음 → 재료 → 장식)를 그대로 따라 적는다 */
-function method(d: Drink): string {
+/** 만드는 법: 제조대 네 단계(잔 → 얼음 → 재료 → 장식)를 그대로 따라 적는다. 층이 조건이면 젓지 말라고 적는다 */
+function method(d: Drink, layered: boolean): string {
   const counts = new Map<IngredientId, number>();
   for (const id of d.pours) counts.set(id, (counts.get(id) ?? 0) + 1);
   const ings = [...counts]
@@ -328,8 +328,8 @@ function method(d: Drink): string {
   const how =
     d.stirAt !== null
       ? `<p class="rb-how stir"><span aria-hidden="true">↻</span> ${d.stirAt >= d.pours.length ? '다 부은 뒤 한 번 저어요' : `${d.stirAt}번째까지 붓고 저은 뒤 나머지를 위에 부어요`}</p>`
-      : isLayered(d)
-        ? '<p class="rb-how">젓지 않고 층을 그대로 둬요</p>'
+      : layered && isLayered(d)
+        ? '<p class="rb-how stir">젓지 않고 층을 그대로 둬요</p>'
         : '';
   const a = computeAttrs(d);
   const taste = TASTES.map((k) => `<li class="rb-taste ${k}"><span>${ATTR_LABEL[k]}</span><b class="num">${a[k] > 0 ? '+' : ''}${a[k]}</b></li>`).join('');
@@ -372,7 +372,7 @@ function recipesPages(v: BookView, sel: string): [string, string] {
   const status = isFocus ? '<em class="rb-badge">주문 중</em>' : found ? '찾은 레시피' : '아직 비어 있는 쪽';
   const body = found
     ? `<section class="rb-sec"><h4>주문 조건</h4><ul class="rb-conds">${r.conditions.map((c) => `<li>${describe(c, true)}</li>`).join('')}</ul></section>
-       <section class="rb-sec"><h4>만드는 법 <small>예시 · 조건만 맞으면 다른 조합도 돼요</small></h4>${ex ? method(ex) : ''}</section>`
+       <section class="rb-sec"><h4>만드는 법 <small>예시 · 조건만 맞으면 다른 조합도 돼요</small></h4>${ex ? method(ex, r.conditions.some((c) => c.kind === 'layered')) : ''}</section>`
     : `<p class="rb-note">이 조건을 맞춘 잔을 처음 내면 이 쪽에 만드는 법이 적혀요.</p>`;
   const right = `<article class="rb-entry">
       ${BACK}
