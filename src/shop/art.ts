@@ -1738,10 +1738,11 @@ function guestLook(id: string): Look {
   return look;
 }
 
-// 지나가는 손님 색 팔레트: 밤의 바 조명에 어울리게 남보라·청록·자주·밤색 쪽으로, 너무 튀는 원색은 강조 한 군데에만
+// 지나가는 손님 색 팔레트: 밤의 바 조명에 어울리게 남색·청록·자주·밤색·올리브 쪽으로(보라 벽에 묻히지 않게 보라는 적게),
+// 너무 튀는 원색은 강조 한 군데에만
 const CLOTH_DARK: Hex[] = ['#252c5e', '#3a2356', '#1f3b3d', '#4a1e33', '#3b2a22', '#2f3a1e', '#402030', '#2a2a3c'];
-const CLOTH_DEEP: Hex[] = ['#5e3a7e', '#2a6a62', '#7e2f45', '#6e4c2c', '#56662a', '#3b4a8c'];
-const CLOTH_MID: Hex[] = ['#7d4f9e', '#2f8a7e', '#a8405a', '#9a6a3a', '#b85a8a', '#6f8a3e', '#c0703a', '#4f63b0', '#c79a3a'];
+const CLOTH_DEEP: Hex[] = ['#2f5f8a', '#2a6a62', '#7e2f45', '#6e4c2c', '#56662a', '#3b4a8c'];
+const CLOTH_MID: Hex[] = ['#3f8f5a', '#2f8a7e', '#a8405a', '#9a6a3a', '#b85a8a', '#6f8a3e', '#c0703a', '#4f63b0', '#c79a3a'];
 const CLOTH_LIGHT: Hex[] = ['#e9dcc2', '#d8cdef', '#cfe4df', '#f2d3dc', '#efe0b2', '#dfe3ea'];
 const HAIR_DARK: Hex[] = ['#1c1828', '#2a1a14', '#182038', '#33182c'];
 const HAIR_DEEP: Hex[] = ['#4a3426', '#3b2f4f', '#4f2a24'];

@@ -14,8 +14,8 @@ export const PAPER = 0xfbf3e6;
 export const INK_HEX = 0x1a1030;
 /** 장미빛 포인트 */
 export const RED_HEX = 0xff5f9e;
-/** 금빛 */
-export const GOLD_HEX = 0xffd36b;
+/** 금빛(빛을 받지 않는 띠라 화면 금빛보다 조금 짙게) */
+export const GOLD_HEX = 0xe8b04a;
 /** 분홍 빛 띠 */
 export const PINK_HEX = 0xff8fc8;
 

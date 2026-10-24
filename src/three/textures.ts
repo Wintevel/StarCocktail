@@ -83,6 +83,18 @@ export function shadowTexture() {
   }, false);
 }
 
+/** 등 아래 카운터에 고이는 따뜻한 빛 웅덩이(더하기 섞기로 얹는다) */
+export function lightPoolTexture() {
+  return canvasTexture(256, 256, (ctx) => {
+    const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+    g.addColorStop(0, 'rgba(255,206,140,0.55)');
+    g.addColorStop(0.45, 'rgba(255,170,150,0.22)');
+    g.addColorStop(1, 'rgba(255,150,200,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 256, 256);
+  });
+}
+
 /** 별빛 입자 스프라이트 */
 export function sparkleTexture() {
   return canvasTexture(64, 64, (ctx) => {
@@ -104,12 +116,12 @@ export function sparkleTexture() {
  */
 export function counterTexture() {
   const tex = canvasTexture(256, 256, (ctx) => {
-    ctx.fillStyle = '#4e2a22';
+    ctx.fillStyle = '#583224';
     ctx.fillRect(0, 0, 256, 256);
     // 결: 바탕과 밝기가 거의 같은 줄 몇 개
-    ctx.fillStyle = '#48261f';
+    ctx.fillStyle = '#512e21';
     for (const [y, h] of [[0, 3], [38, 2], [97, 4], [128, 2], [171, 3], [214, 2]]) ctx.fillRect(0, y, 256, h);
-    ctx.fillStyle = '#55302a';
+    ctx.fillStyle = '#603828';
     for (const [y, h] of [[60, 2], [150, 3], [236, 2]]) ctx.fillRect(0, y, 256, h);
   });
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;

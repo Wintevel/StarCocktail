@@ -15,7 +15,7 @@ import { fxTime, inkMaterial, neonCyanMaterial, neonPinkMaterial, redMaterial, s
 import { fillDepth, GLASS_SHAPES, type GlassShape, iceMaterial, makeGarnish, makeIce, rimY } from './models';
 import { InkRenderer } from './post';
 import { quality, setQuality } from './quality';
-import { counterTexture, shadowTexture } from './textures';
+import { counterTexture, lightPoolTexture, shadowTexture } from './textures';
 
 const POUR_MS = 1000;
 /** 잔 모양 치수(models.ts)는 잔 기준 단위라서 카운터 위에서는 줄여 둔다. */
@@ -780,7 +780,15 @@ function makeCounter() {
   front.position.set(0.5, -0.92, 1.5);
   const band = new THREE.Mesh(new THREE.BoxGeometry(16, 0.06, 0.03), neonPinkMaterial);
   band.position.set(0.5, -0.32, 1.57);
-  g.add(top, front, band);
+  // 잔 위 등에서 내려온 금빛 빛 웅덩이
+  const pool = new THREE.Mesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({ map: lightPoolTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+  );
+  pool.rotation.x = -Math.PI / 2;
+  pool.scale.set(5.2, 3.4, 1);
+  pool.position.set(0, 0.002, 0.15);
+  g.add(top, front, band, pool);
   return g;
 }
 

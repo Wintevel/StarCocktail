@@ -3838,7 +3838,7 @@ body:not([data-talk=""]) .p-tag {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(8, 4, 20, 0.9) 0%, rgba(8, 4, 20, 0.7) 30%, rgba(8, 4, 20, 0.18) 58%, rgba(8, 4, 20, 0) 74%),
+    linear-gradient(90deg, rgba(8, 4, 20, 0.9) 0%, rgba(8, 4, 20, 0.78) 34%, rgba(8, 4, 20, 0.45) 52%, rgba(8, 4, 20, 0.1) 66%, rgba(8, 4, 20, 0) 76%),
     linear-gradient(0deg, rgba(8, 4, 20, 0.75) 0%, rgba(8, 4, 20, 0) 26%),
     linear-gradient(180deg, rgba(8, 4, 20, 0.55) 0%, rgba(8, 4, 20, 0) 18%);
 }
@@ -4196,8 +4196,8 @@ body:not([data-talk=""]) .p-tag {
 
   .ks-shade {
     background:
-      linear-gradient(180deg, rgba(8, 4, 20, 0.85) 0%, rgba(8, 4, 20, 0.2) 26%, rgba(8, 4, 20, 0) 40%),
-      linear-gradient(0deg, rgba(8, 4, 20, 0.92) 0%, rgba(8, 4, 20, 0.72) 34%, rgba(8, 4, 20, 0) 56%);
+      linear-gradient(180deg, rgba(8, 4, 20, 0.85) 0%, rgba(8, 4, 20, 0.45) 18%, rgba(8, 4, 20, 0) 32%),
+      linear-gradient(0deg, rgba(8, 4, 20, 0.92) 0%, rgba(8, 4, 20, 0.6) 22%, rgba(8, 4, 20, 0) 34%);
   }
 }
 
