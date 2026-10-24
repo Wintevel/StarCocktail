@@ -1,0 +1,1201 @@
+/* ────────────────────────────────────────────────────────────
+   v8 이야기 만화: 단골의 이야기 장면을 화면 전체를 덮는 세로 만화(웹툰)로 (src/ui/comic.ts)
+   - 가운데 세로 띠(넓은 화면 680px, 휴대폰은 화면 폭), 뒤의 가게는 어둡게 눌러 둔다
+   - 칸: 먹 테두리 + 금빛 머리카락 선(--line), 그림은 밤 가게 팔레트(src/ui/comicArt.ts)
+   - 말풍선은 크림색 바탕에 손글씨(개구), 설명 상자는 바탕체(고운바탕), 선택지는 칸 모양 버튼
+   - 띠·글자·버튼 색은 의미 토큰(--surface·--line·--accent …)만 쓴다. 그림 위에 얹는 것만 고정 색
+   - 움직임: 칸이 아래에서 떠오르고 말풍선이 톡 튀어나온다(움직임 줄이기 설정이면 바로 나타난다)
+   ──────────────────────────────────────────────────────────── */
+
+.comic {
+  /* 칸 테두리·말풍선 테두리(먹)와 말풍선 바탕·글자 */
+  --cm-ink: #0b0618;
+  --cm-bal: #fffaf0;
+  --cm-bal-ink: #1a1236;
+  --cm-w: 680px;
+  --cm-pad: 24px;
+  --cm-gap: 30px;
+  --cm-overlap: 40px;
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: rgba(6, 3, 14, 0.8);
+  backdrop-filter: blur(4px);
+  outline: none;
+  animation: cm-dim 260ms ease-out both;
+}
+
+.cm-strip {
+  position: relative;
+  width: min(var(--cm-w), 100%);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 0 var(--cm-pad) calc(128px + env(safe-area-inset-bottom));
+  background: var(--surface);
+  color: var(--on-surface);
+  border-inline: 1px solid var(--line);
+  box-shadow: 0 0 80px rgba(0, 0, 0, 0.55);
+  animation: cm-strip-in 380ms var(--ease-out) both;
+}
+
+/* ── 머리글: 손님 얼굴·이름·신뢰, 날짜·시각(시계 멈춤), 닫기 ── */
+
+.cm-head {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0 calc(-1 * var(--cm-pad)) 22px;
+  padding: max(10px, env(safe-area-inset-top)) 16px 10px 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+}
+
+.cm-face {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #2a1d52;
+  border: 1.5px solid var(--line);
+}
+
+.cm-face .portrait {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cm-id {
+  min-width: 0;
+}
+
+.cm-id h2 {
+  margin: 0;
+  font: 400 23px/1.1 var(--font-title-ko);
+  color: var(--on-surface);
+}
+
+.cm-id p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.cm-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.comic .trust {
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.comic .trust i {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.cm-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  margin: 0;
+  font: 700 12px/1.2 var(--font-num);
+  color: var(--muted);
+}
+
+.cm-pause {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px 3px 7px;
+  font: 500 11.5px/1.2 var(--font-ui);
+  color: var(--on-surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+/* 일시 정지 표시(세로 막대 둘) */
+.cm-pause i {
+  width: 8px;
+  height: 9px;
+  border-inline: 2.5px solid var(--accent);
+}
+
+.cm-x {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  color: var(--on-surface);
+  font-size: 15px;
+  transition: background 140ms ease, transform 140ms var(--ease-out);
+}
+
+.cm-x:hover {
+  background: var(--surface-2);
+}
+
+.cm-x:active {
+  transform: scale(0.94);
+}
+
+.comic button:focus-visible {
+  outline: 2.5px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* ── 칸 ── */
+
+.cm-units {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cm-gap);
+}
+
+.cm-u {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.cm-frame {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  background: #140c2c;
+  border: 2.5px solid var(--cm-ink);
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 1.5px var(--line),
+    0 12px 26px rgba(6, 3, 14, 0.35);
+}
+
+.cm-art {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* 손님 그림은 앞모습만(표정은 data-mood) */
+.cm-art .portrait .v-back,
+.cm-art .portrait .emote {
+  display: none;
+}
+
+/* 집중선 칸: 비스듬히 잘린 모양을 그림이 직접 테두리까지 그린다 */
+.cm-frame.shape-drama {
+  overflow: visible;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 12px 18px rgba(6, 3, 14, 0.35));
+}
+
+.cm-art .cm-edge-hl {
+  stroke: var(--line);
+}
+
+/* 회상 칸: 둥글고 점선 테두리, 보랏빛으로 번진다 */
+.cm-frame.shape-memory {
+  border: 2px dashed rgba(255, 246, 230, 0.75);
+  border-radius: 36px / 28px;
+  box-shadow:
+    0 0 0 1.5px var(--line),
+    0 0 34px rgba(139, 107, 255, 0.35);
+}
+
+.cm-frame.shape-xclose {
+  border-radius: 3px;
+}
+
+/* 물건 칸은 조금 좁게, 칸마다 좌우를 번갈아 */
+.cm-insert .cm-frame {
+  width: 92%;
+  align-self: flex-end;
+}
+
+.cm-insert:nth-child(even) .cm-frame {
+  align-self: flex-start;
+}
+
+/* ── 설명 상자(지문) ── */
+
+.cm-cap {
+  position: relative;
+  z-index: 3;
+  align-self: flex-start;
+  max-width: min(84%, 540px);
+  margin: 0 0 0 12px;
+  padding: 9px 14px 10px;
+  font: 400 15.5px/1.62 var(--font-book);
+  color: var(--on-surface);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: 0 6px 14px rgba(6, 3, 14, 0.28);
+  word-break: keep-all;
+}
+
+.cm-cap + .cm-frame {
+  margin-top: -16px;
+}
+
+.cm-cap + .cm-bal {
+  margin-top: 10px;
+}
+
+/* 첫 칸의 설명 상자는 그림 아래쪽에 걸친다 */
+.cm-cap.below {
+  margin: -22px 0 0 12px;
+}
+
+/* ── 말풍선 ── */
+
+.cm-bal {
+  --bb: var(--cm-bal);
+  --bi: var(--cm-ink);
+  position: relative;
+  z-index: 2;
+  max-width: min(64%, 430px);
+  margin-bottom: calc(-1 * var(--cm-overlap));
+  padding: 12px 20px 13px;
+  font: 700 19.5px/1.4 var(--font-speech);
+  color: var(--cm-bal-ink);
+  background: var(--bb);
+  border: 2.5px solid var(--bi);
+  border-radius: 30px;
+  box-shadow: 0 6px 16px rgba(6, 3, 14, 0.28);
+  word-break: keep-all;
+}
+
+.cm-bal p {
+  margin: 0;
+}
+
+.cm-bal.at-l {
+  align-self: flex-start;
+  margin-left: 4px;
+  transform-origin: 85% 100%;
+}
+
+.cm-bal.at-r {
+  align-self: flex-end;
+  margin-right: 4px;
+  transform-origin: 15% 100%;
+}
+
+.cm-bal.at-c {
+  align-self: center;
+  max-width: 94%;
+  transform-origin: 50% 100%;
+}
+
+/* 꼬리: 풍선 아래 테두리를 덮고 손님 쪽으로 휜다 */
+.cm-tail {
+  position: absolute;
+  bottom: -31px;
+  width: 40px;
+  height: 32px;
+  overflow: visible;
+}
+
+.at-l .cm-tail {
+  right: 16%;
+}
+
+.at-r .cm-tail {
+  left: 16%;
+  transform: scaleX(-1);
+}
+
+.cm-tail.c {
+  left: calc(50% - 20px);
+  transform: none;
+}
+
+.cm-tail .tf {
+  fill: var(--bb);
+}
+
+.cm-tail .ts {
+  fill: none;
+  stroke: var(--bi);
+  stroke-width: 2.6;
+  stroke-linejoin: round;
+}
+
+/* 외침: 뾰족한 풍선(겉 먹 + 속 크림) */
+.cm-bal.v-shout {
+  isolation: isolate;
+  padding: 24px 36px 26px;
+  font-size: 22px;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 6px 12px rgba(6, 3, 14, 0.3));
+}
+
+.cm-bal.v-shout::before,
+.cm-bal.v-shout::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  clip-path: polygon(4% 16%, 10% 0%, 18% 14%, 27% 2%, 35% 13%, 44% 0%, 52% 13%, 61% 1%, 69% 13%, 78% 0%, 86% 14%, 94% 2%, 92% 20%, 100% 32%, 93% 42%, 100% 56%, 92% 66%, 99% 80%, 90% 86%, 94% 100%, 82% 88%, 73% 99%, 65% 87%, 56% 100%, 48% 87%, 39% 98%, 31% 87%, 22% 100%, 14% 86%, 6% 97%, 8% 80%, 0% 70%, 7% 58%, 1% 45%, 8% 34%, 0% 24%);
+}
+
+.cm-bal.v-shout::before {
+  inset: -4px -8px;
+  background: var(--cm-ink);
+}
+
+.cm-bal.v-shout::after {
+  inset: 0 -3px;
+  background: var(--cm-bal);
+}
+
+/* 속삭임: 점선, 작은 글씨 */
+.cm-bal.v-whisper {
+  --bb: #f4efff;
+  padding: 10px 18px 11px;
+  font-size: 17.5px;
+  color: #3a2f66;
+  border-width: 2px;
+  border-style: dashed;
+}
+
+.v-whisper .cm-tail .ts {
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+}
+
+/* 회상: 바랜 보랏빛 풍선, 그림 아래쪽에 걸친다 */
+.cm-bal.v-memory {
+  --bb: #efe8ff;
+  max-width: min(76%, 470px);
+  margin: calc(-1 * var(--cm-overlap) - 6px) 0 0 14px;
+  font-size: 18.5px;
+  border-style: dotted;
+  border-radius: 22px;
+}
+
+.cm-bal.v-memory small {
+  display: block;
+  margin-top: 4px;
+  font: 400 12.5px/1.4 var(--font-book);
+  color: #5b4f86;
+}
+
+/* 바텐더(나)의 말: 금빛 풍선, 오른쪽 아래(읽는 사람 쪽)로 꼬리 */
+.cm-you {
+  align-items: flex-end;
+}
+
+.cm-bal.v-you {
+  --bb: #ffe9b0;
+  max-width: min(72%, 460px);
+  margin: 10px 6px 26px 0;
+  border-radius: 26px 26px 8px 26px;
+}
+
+.cm-bal.v-you .cm-tail.c {
+  left: auto;
+  right: 12%;
+}
+
+.cm-who {
+  position: absolute;
+  top: -11px;
+  left: 18px;
+  padding: 1px 9px;
+  font: 700 11px/1.6 var(--font-ui);
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+/* 바텐더가 한 일(묻어 두기·소문 들려주기 …): 가운데 지문 줄 */
+.cm-you.act {
+  align-items: center;
+}
+
+.cm-act {
+  margin: 0;
+  padding: 9px 22px 10px;
+  font: 400 16px/1.5 var(--font-book);
+  color: var(--on-surface);
+  text-align: center;
+  border-block: 1px solid var(--line);
+}
+
+.cm-act-k {
+  display: block;
+  font: 700 11px/1.4 var(--font-ui);
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+/* ── 첫 칸·이어지는 이야기 ── */
+
+.cm-stamp {
+  display: inline-block;
+  padding: 4px 10px 5px;
+  font: 400 15px/1 var(--font-title-ko);
+  letter-spacing: 0.04em;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 4px;
+}
+
+.cm-stamp.alt {
+  color: #1a1236;
+  background: var(--accent-2);
+}
+
+.cm-open .cm-stamp {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  transform: rotate(-3deg);
+  box-shadow: 0 4px 10px rgba(6, 3, 14, 0.45);
+}
+
+.cm-chip {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  padding: 3px 10px;
+  font: 600 11.5px/1.4 var(--font-ui);
+  color: #fff6e6;
+  background: rgba(12, 7, 24, 0.66);
+  border: 1px solid rgba(255, 214, 140, 0.55);
+  border-radius: 999px;
+}
+
+.cm-next {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 2px;
+}
+
+.cm-next p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font: 400 15px/1 var(--font-title-ko);
+  color: var(--on-surface);
+  white-space: nowrap;
+}
+
+.cm-next small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.cm-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/* ── 잔의 경향(고쳐 전하기) ── */
+
+.cm-tone {
+  align-items: center;
+}
+
+.cm-tonebox {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  max-width: 94%;
+  padding: 12px 20px 13px;
+  text-align: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.cm-tonebox p {
+  margin: 0;
+  font: 400 16px/1.3 var(--font-title-ko);
+}
+
+.cm-tonebox small {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.cm-gauge {
+  display: flex;
+  gap: 4px;
+}
+
+.cm-gauge i {
+  width: 24px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--line);
+  opacity: 0.4;
+}
+
+.cm-gauge i.on {
+  background: var(--taste-tone);
+  opacity: 1;
+  box-shadow: 0 0 0 1.5px var(--on-surface);
+}
+
+/* ── 바텐더의 선택(칸 모양 버튼) ── */
+
+.cm-choices {
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.cm-ch-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 2px;
+  font: 400 17px/1.2 var(--font-title-ko);
+  color: var(--on-surface);
+}
+
+.cm-ch-h small {
+  font: 500 12px/1 var(--font-ui);
+  color: var(--muted);
+}
+
+.cm-ch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cm-ch-grid.n1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cm-ch-grid.n3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cm-ch {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: start;
+  gap: 8px 10px;
+  min-height: 104px;
+  padding: 14px 14px 13px 12px;
+  text-align: left;
+  color: var(--on-surface);
+  background: var(--surface-2);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 8px 18px rgba(6, 3, 14, 0.22);
+  transition:
+    transform 140ms var(--ease-out),
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+@media (hover: hover) {
+  .cm-ch:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+    box-shadow: 0 12px 22px rgba(6, 3, 14, 0.3);
+  }
+}
+
+.cm-ch:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.cm-ch-n {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font: 700 14px/1 var(--font-num);
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+.cm-ch-body {
+  display: grid;
+  gap: 5px;
+}
+
+.cm-ch-body strong {
+  font: 400 18px/1.3 var(--font-title-ko);
+  word-break: keep-all;
+}
+
+.cm-ch-body small {
+  font: 400 13px/1.45 var(--font-ui);
+  color: var(--muted);
+  word-break: keep-all;
+}
+
+.cm-ch-badge {
+  grid-column: 2;
+  justify-self: start;
+  padding: 2px 9px;
+  font: 700 11.5px/1.5 var(--font-ui);
+  color: var(--on-surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+/* 전하는 꼴마다 왼쪽 띠 */
+.cm-ch.st-soft {
+  border-left: 5px solid var(--taste-tone);
+}
+
+.cm-ch.st-blunt {
+  border-left: 5px solid var(--accent-2);
+}
+
+.cm-ch.st-bury {
+  border-left-style: dashed;
+}
+
+.cm-ch:disabled {
+  cursor: not-allowed;
+  opacity: 0.66;
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.cm-ch:disabled .cm-ch-n {
+  background: var(--muted);
+}
+
+.cm-ch-body small.cm-lock {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  color: var(--on-surface);
+}
+
+.cm-lock-ic {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  margin-top: 2px;
+}
+
+/* ── 결과 도장·진열장·판 물건 ── */
+
+.cm-notes ul,
+.cm-sold-note {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cm-notes li,
+.cm-sold-note li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  font: 600 13.5px/1.3 var(--font-ui);
+  color: var(--on-surface);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.cm-notes li::before,
+.cm-sold-note li::before {
+  color: var(--accent);
+}
+
+.cm-notes li.n-gain::before {
+  content: "＋";
+}
+
+.cm-notes li.n-lost {
+  border-style: dashed;
+}
+
+.cm-notes li.n-lost::before {
+  content: "→";
+}
+
+.cm-notes li.n-money::before,
+.cm-notes li.n-sold::before,
+.cm-sold-note li.n-sold::before {
+  content: "✦";
+}
+
+.cm-notes li b,
+.cm-sold-note li b {
+  color: var(--accent);
+}
+
+.cm-sold-note {
+  margin-top: 12px;
+}
+
+.cm-shelf {
+  gap: 10px;
+  padding: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.cm-shelf-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font: 400 17px/1.2 var(--font-title-ko);
+}
+
+.cm-shelf-h small {
+  font: 500 12.5px/1 var(--font-ui);
+  color: var(--muted);
+}
+
+.cm-shelf-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cm-good {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px 8px 8px;
+  text-align: left;
+  color: var(--on-surface);
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  transition:
+    transform 140ms var(--ease-out),
+    border-color 140ms ease;
+}
+
+@media (hover: hover) {
+  .cm-good:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+  }
+}
+
+.cm-good:active {
+  transform: scale(0.97);
+}
+
+.cm-good .icon2d .ic {
+  width: 42px;
+  height: 42px;
+}
+
+.cm-good strong {
+  display: block;
+  font: 400 16px/1.25 var(--font-title-ko);
+}
+
+.cm-good small {
+  font: 500 12px/1.4 var(--font-ui);
+  color: var(--muted);
+}
+
+.cm-held {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 66px;
+  height: 66px;
+  background: #fff6e6;
+  border: 2.5px solid var(--cm-ink);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(255, 211, 107, 0.6);
+}
+
+.cm-held .icon2d .ic {
+  width: 44px;
+  height: 44px;
+}
+
+/* ── 끝: 카운터로 돌아가는 칸 ── */
+
+.cm-end {
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+  padding: 18px 16px 20px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.cm-fin {
+  margin: 0;
+  font: 400 15px/1.2 var(--font-book);
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.cm-end-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.cm-btn {
+  min-width: 180px;
+  min-height: 52px;
+  padding: 0 26px;
+  font: 400 19px/1 var(--font-title-ko);
+  border-radius: 14px;
+  transition:
+    transform 140ms var(--ease-out),
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+
+.cm-primary {
+  color: var(--on-accent);
+  background: var(--accent);
+  box-shadow: 0 8px 20px rgba(6, 3, 14, 0.3);
+}
+
+.cm-secondary {
+  color: var(--on-surface);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+@media (hover: hover) {
+  .cm-btn:hover {
+    transform: translateY(-1px);
+  }
+
+  .cm-secondary:hover {
+    background: var(--surface);
+  }
+}
+
+.cm-btn:active {
+  transform: scale(0.97);
+}
+
+/* ── 다음 칸 안내(화면 아래에 떠 있다) ── */
+
+.cm-more {
+  position: sticky;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 28px auto 0;
+  padding: 10px 20px 11px;
+  font: 400 15px/1 var(--font-title-ko);
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 999px;
+  box-shadow: 0 8px 22px rgba(6, 3, 14, 0.45);
+}
+
+.cm-more i {
+  width: 9px;
+  height: 9px;
+  border-right: 2.5px solid currentColor;
+  border-bottom: 2.5px solid currentColor;
+  transform: translateY(-3px) rotate(45deg);
+  animation: cm-bob 1.4s ease-in-out infinite;
+}
+
+/* ── 움직임 ── */
+
+.cm-u.enter {
+  animation: cm-rise 380ms var(--ease-out) both;
+}
+
+.cm-u.enter .cm-cap {
+  animation: cm-slide 320ms 60ms var(--ease-out) both;
+}
+
+.cm-u.enter .cm-bal {
+  animation: cm-pop 320ms 150ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.cm-u.enter.shot-drama .cm-frame {
+  animation: cm-slam 360ms var(--ease-out) both;
+}
+
+.cm-u.enter .cm-ch,
+.cm-u.enter .cm-good,
+.cm-u.enter li {
+  animation: cm-rise 320ms var(--ease-out) both;
+}
+
+.cm-u.enter .cm-ch:nth-child(2),
+.cm-u.enter .cm-good:nth-child(2),
+.cm-u.enter li:nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.cm-u.enter .cm-ch:nth-child(3),
+.cm-u.enter .cm-good:nth-child(3),
+.cm-u.enter li:nth-child(3) {
+  animation-delay: 120ms;
+}
+
+.cm-u.enter .cm-ch:nth-child(n + 4),
+.cm-u.enter li:nth-child(n + 4) {
+  animation-delay: 170ms;
+}
+
+@keyframes cm-dim {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes cm-strip-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}
+
+@keyframes cm-rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+}
+
+@keyframes cm-slide {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+@keyframes cm-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes cm-slam {
+  from {
+    opacity: 0;
+    transform: scale(1.08) rotate(-1.2deg);
+  }
+}
+
+@keyframes cm-bob {
+  50% {
+    transform: translateY(1px) rotate(45deg);
+  }
+}
+
+/* ── 휴대폰: 화면 폭 전체, 글씨·풍선을 조금 작게, 선택지는 한 줄에 하나 ── */
+
+@media (max-width: 860px) {
+  .comic {
+    --cm-pad: 12px;
+    --cm-gap: 24px;
+    --cm-overlap: 26px;
+    backdrop-filter: none;
+  }
+
+  .cm-strip {
+    width: 100%;
+    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+    border-inline: 0;
+  }
+
+  .cm-head {
+    gap: 9px;
+    margin-bottom: 16px;
+    padding: max(8px, env(safe-area-inset-top)) 10px 8px 12px;
+  }
+
+  .cm-face {
+    width: 40px;
+    height: 40px;
+  }
+
+  .cm-id h2 {
+    font-size: 20px;
+  }
+
+  .cm-meta {
+    font-size: 11px;
+  }
+
+  .cm-pause {
+    padding: 2px 7px 2px 6px;
+    font-size: 10.5px;
+  }
+
+  .cm-x {
+    width: 38px;
+    height: 38px;
+  }
+
+  .cm-cap {
+    max-width: 92%;
+    margin-left: 8px;
+    padding: 8px 11px 9px;
+    font-size: 14.5px;
+    line-height: 1.58;
+  }
+
+  .cm-cap + .cm-frame {
+    margin-top: -12px;
+  }
+
+  .cm-cap.below {
+    margin: -14px 0 0 8px;
+  }
+
+  .cm-bal {
+    max-width: 80%;
+    padding: 10px 15px 11px;
+    font-size: 17.5px;
+    border-width: 2px;
+    border-radius: 24px;
+  }
+
+  .cm-bal.v-shout {
+    padding: 20px 28px 22px;
+    font-size: 19px;
+  }
+
+  .cm-bal.v-whisper {
+    font-size: 16px;
+  }
+
+  .cm-bal.v-memory {
+    max-width: 88%;
+    font-size: 16.5px;
+  }
+
+  .cm-bal.v-you {
+    max-width: 84%;
+  }
+
+  .cm-tail {
+    bottom: -25px;
+    width: 32px;
+    height: 26px;
+  }
+
+  .cm-tail.c {
+    left: calc(50% - 16px);
+  }
+
+  .cm-split {
+    gap: 8px;
+  }
+
+  .cm-half .cm-bal {
+    padding: 8px 11px 9px;
+    font-size: 15.5px;
+  }
+
+  .cm-open .cm-stamp {
+    top: 8px;
+    right: 8px;
+    font-size: 13.5px;
+  }
+
+  .cm-chip {
+    top: 9px;
+    left: 9px;
+    font-size: 10.5px;
+  }
+
+  .cm-insert .cm-frame {
+    width: 100%;
+  }
+
+  .cm-ch-grid,
+  .cm-ch-grid.n3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cm-ch {
+    min-height: 0;
+    padding: 12px 12px 12px 10px;
+  }
+
+  .cm-ch-body strong {
+    font-size: 17px;
+  }
+
+  .cm-btn {
+    flex: 1 1 140px;
+    min-width: 0;
+    padding: 0 16px;
+    font-size: 18px;
+  }
+
+  .cm-held {
+    width: 52px;
+    height: 52px;
+  }
+
+  .cm-held .icon2d .ic {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .comic,
+  .comic *,
+  .comic *::before,
+  .comic *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
