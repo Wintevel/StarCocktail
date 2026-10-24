@@ -41,7 +41,7 @@ const TAIL = '<svg class="cm-tail" viewBox="0 0 44 34" aria-hidden="true" focusa
 const TAIL_C = '<svg class="cm-tail c" viewBox="0 0 44 34" aria-hidden="true" focusable="false"><path class="tf" d="M8,0 C14,12 20,22 24,34 C26,22 30,12 34,0 Z"/><path class="ts" d="M8,0 C14,12 20,22 24,34 C26,22 30,12 34,0"/></svg>';
 const LOCK = '<svg class="cm-lock-ic" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5,7 L4.5,5 A3.5,3.5 0 0 1 11.5,5 L11.5,7" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="7" width="10" height="7.5" rx="1.6" fill="currentColor"/></svg>';
 
-/** 고쳐 전하기 장면의 경향 설명(대화 카드와 같은 말) */
+/** 고쳐 전하기 장면의 경향 설명(예전 대화 카드와 같은 말) */
 const toneText = (t: number) => (t < 0 ? '「완곡함」 쪽 — 부드럽게 고쳐 전할 수 있어요' : t > 0 ? '「직설적」 쪽 — 단도직입으로 고쳐 전할 수 있어요' : '경향 0 — 말투를 고칠 수 없어요');
 
 /** el의 위쪽 끝(스크롤 상자 안 좌표). 들어오는 움직임(transform)에 흔들리지 않게 offsetTop으로 잰다. */
@@ -53,6 +53,15 @@ function offTop(el: HTMLElement, stop: HTMLElement) {
     n = n.offsetParent as HTMLElement | null;
   }
   return y;
+}
+
+/** 다시 그려져도 같은 버튼을 찾을 선택자(id 또는 data-act·data-id). 없으면 null */
+function selectorOf(el: HTMLElement): string | null {
+  if (el.id) return `#${CSS.escape(el.id)}`;
+  const act = el.dataset.act;
+  if (!act) return null;
+  const id = el.dataset.id;
+  return `[data-act="${CSS.escape(act)}"]${id ? `[data-id="${CSS.escape(id)}"]` : ''}`;
 }
 
 export class Comic {
@@ -69,8 +78,9 @@ export class Comic {
   /** 그려 둔 칸(같은 내용이면 다시 그리지 않는다) */
   private els = new Map<string, { el: HTMLElement; sig: string }>();
   private headHtml = '';
-  /** 닫으면 초점을 돌려줄 곳 */
+  /** 닫으면 초점을 돌려줄 곳(그 사이 다시 그려졌으면 같은 자리를 선택자로 찾는다) */
   private returnTo: HTMLElement | null = null;
+  private returnSel: string | null = null;
   private lastStep = 0;
   private wheelAcc = 0;
   private touchY: number | null = null;
@@ -178,6 +188,8 @@ export class Comic {
     this.lastStep = performance.now();
     const added = this.render();
     this.follow(added);
+    // 다 펼쳐서 「다음 칸」 버튼이 숨으면 그 버튼에 있던 초점을 대화 상자로 옮긴다.
+    if (!this.root.contains(document.activeElement)) this.root.focus({ preventScroll: true });
     this.announce(added);
     return true;
   }
@@ -247,6 +259,7 @@ export class Comic {
   private reset(session: number) {
     const a = document.activeElement as HTMLElement | null;
     this.returnTo = a && a !== document.body && !this.root.contains(a) ? a : null;
+    this.returnSel = this.returnTo ? selectorOf(this.returnTo) : null;
     this.clear();
     this.session = session;
   }
@@ -268,8 +281,14 @@ export class Comic {
     this.root.hidden = true;
     this.clear();
     this.session = -1;
-    if (had && this.returnTo?.isConnected) this.returnTo.focus({ preventScroll: true });
+    const back = this.returnTo?.isConnected
+      ? this.returnTo
+      : this.returnSel
+        ? [...document.querySelectorAll<HTMLElement>(this.returnSel)].find((el) => el.getClientRects().length > 0)
+        : null;
+    if (had && back) back.focus({ preventScroll: true });
     this.returnTo = null;
+    this.returnSel = null;
   }
 
   /** 펼친 칸들(앞에서부터 이어진 것만)을 그린다. 새로 생긴 칸을 돌려준다. */
