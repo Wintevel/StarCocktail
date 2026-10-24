@@ -281,7 +281,7 @@ interface State {
   /** 레시피북을 열 때 강조할 레시피(레시피 이름 주문) */
   bookFocus: string | null;
   bookTab: BookTab;
-  /** 열려 있는 대화 카드 */
+  /** 열려 있는 대화(장면은 이야기 만화, 장면 없는 잡담·진열장은 대화 카드) */
   talk: Talk | null;
   /** 왼쪽 아래 수첩(맡은 것·소문)이 열려 있다 */
   notebook: boolean;
@@ -1032,7 +1032,7 @@ function renderClip() {
     ${r.stay === 'after' ? `<p class="clip-story">「…」 할 말이 남았대요 · ${r.name}${josa(r.name, '을', '를')} 눌러요</p>` : r.stay === 'shop' ? `<p class="clip-story">「✦」 ${r.name}${josa(r.name, '이', '가')} 진열장을 기웃거려요</p>` : ''}`;
 }
 
-// ── 대화 카드·수첩 ─────────────────────────────────────────
+// ── 이야기 만화·대화 카드·수첩 ─────────────────────────────────────────
 
 /** 대사 한 줄: 괄호로 시작하면 지문, 아니면 손님의 말 */
 const lineHtml = (line: string) => (line.startsWith('(') ? `<p class="tk-narr">${line}</p>` : `<p class="tk-say">${line}</p>`);
@@ -2011,7 +2011,7 @@ function sellGood(s: Seat, g: GoodId): number {
   return price;
 }
 
-/** 대화 카드의 진열장 줄: 손님이 찾는 물건을 권한다. */
+/** 이야기 만화·대화 카드의 진열장 줄: 손님이 찾는 물건을 권한다. */
 function talkSell(g: GoodId) {
   const t = state.talk;
   const s = t ? state.seats[t.seat] : null;
