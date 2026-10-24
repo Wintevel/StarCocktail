@@ -2401,9 +2401,13 @@ body[data-view="mix"] .wipe-edge {
   max-height: calc(100vh - var(--topbar) - 40px);
   overflow: auto;
   padding: 14px 20px 18px;
-  border: 3px solid var(--ink);
-  filter: drop-shadow(9px 9px 0 var(--ink));
-  transform: rotate(-0.6deg);
+  background: var(--panel-bg);
+  color: var(--on-surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
   animation: talk-in 260ms var(--ease-out);
   scrollbar-width: thin;
   word-break: keep-all;
@@ -2418,13 +2422,12 @@ body[data-view="mix"] .wipe-edge {
 
 .talk.side-right {
   right: 28px;
-  transform: rotate(0.6deg);
 }
 
 @keyframes talk-in {
   from {
     opacity: 0;
-    transform: translateY(18px) rotate(-2deg);
+    transform: translateY(18px);
   }
 }
 
@@ -2448,10 +2451,9 @@ body[data-view="mix"] .wipe-edge {
   width: 76px;
   height: 92px;
   overflow: hidden;
-  background:
-    radial-gradient(circle, rgba(21, 19, 19, 0.5) 1.6px, transparent 2px) 0 0 / 7px 7px,
-    var(--lgray);
-  border: 3px solid var(--ink);
+  background: radial-gradient(ellipse at 50% 30%, rgba(255, 143, 200, 0.28), var(--surface-2) 72%);
+  border: 1px solid var(--line);
+  border-radius: 12px;
 }
 
 .tk-face .portrait {
@@ -2477,7 +2479,7 @@ body[data-view="mix"] .wipe-edge {
 .tk-meta small {
   font: 700 11px var(--font-num);
   letter-spacing: 0.04em;
-  color: var(--gray);
+  color: var(--muted);
 }
 
 .trust {
@@ -2495,7 +2497,7 @@ body[data-view="mix"] .wipe-edge {
 .tk-lines {
   margin: 12px 0 0;
   padding: 10px 0 0;
-  border-top: 3px solid var(--ink);
+  border-top: 1px solid var(--line);
 }
 
 .tk-lines.fresh > * {
@@ -2524,43 +2526,41 @@ body[data-view="mix"] .wipe-edge {
 .tk-say {
   margin: 0 0 6px;
   font: 20px/1.4 var(--font-speech);
-  color: var(--ink);
+  color: var(--on-surface);
 }
 
 .tk-say::before {
   content: "「";
-  color: var(--red);
+  color: var(--accent-2);
 }
 
 .tk-say::after {
   content: "」";
-  color: var(--red);
+  color: var(--accent-2);
 }
 
 .tk-narr {
   margin: 0 0 6px;
   font: italic 14px/1.6 var(--font-book);
-  color: var(--ink-2);
+  color: var(--muted);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .tk-good:hover {
-    transform: translate(-1px, -2px);
-    box-shadow:
-      -3px -2px 0 var(--cyan),
-      4px 4px 0 var(--red);
+    transform: translateY(-2px);
+    border-color: var(--line-strong);
+    box-shadow: 0 6px 18px rgba(255, 211, 107, 0.2);
   }
 }
 
 .tk-good:active {
   transform: scale(0.98);
-  box-shadow: 1px 1px 0 var(--ink);
 }
 
 .tk-reply {
   margin: 12px 0 0;
   padding: 2px 0 2px 12px;
-  border-left: 4px solid var(--red);
+  border-left: 3px solid var(--accent-2);
   animation: line-in 260ms var(--ease-out);
 }
 
@@ -2577,16 +2577,13 @@ body[data-view="mix"] .wipe-edge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 8px 4px;
-  background: var(--ink);
-  color: var(--paper);
+  padding: 3px 10px 4px;
+  background: var(--surface-2);
+  color: var(--on-surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
   font: 600 12.5px/1.25 var(--font-ui);
-  transform: rotate(-1deg);
   animation: note-in 240ms var(--ease-out) backwards;
-}
-
-.tk-notes li:nth-child(even) {
-  transform: rotate(1deg);
 }
 
 .tk-notes li:nth-child(2) {
@@ -2598,23 +2595,24 @@ body[data-view="mix"] .wipe-edge {
 }
 
 .tk-notes .n-gain {
-  background: var(--red);
-  color: var(--white);
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
 }
 
 .tk-notes .n-lost {
-  background: var(--white);
-  color: var(--ink);
-  border: 2px solid var(--ink);
+  background: transparent;
+  color: var(--muted);
+  border-style: dashed;
 }
 
 .tk-notes .trust {
-  color: var(--white);
+  color: var(--accent);
   font-size: 12px;
 }
 
 .tk-notes .trust i {
-  color: rgba(247, 242, 232, 0.4);
+  color: rgba(246, 239, 255, 0.35);
 }
 
 @keyframes note-in {
@@ -2631,7 +2629,7 @@ body[data-view="mix"] .wipe-edge {
   gap: 8px;
   margin: 12px 0 0;
   padding: 10px 0 0;
-  border-top: 1px dashed var(--ink);
+  border-top: 1px dashed var(--line);
 }
 
 .tk-shelf-h {
@@ -2642,20 +2640,22 @@ body[data-view="mix"] .wipe-edge {
 .tk-shelf-h small {
   margin-top: 3px;
   font: 600 10px var(--font-ui);
-  color: var(--gray);
+  color: var(--muted);
 }
 
 .tk-good {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 10px 3px 4px;
-  background: var(--white);
-  border: 2px solid var(--ink);
-  box-shadow: 3px 3px 0 var(--ink);
+  padding: 4px 12px 4px 6px;
+  background: var(--surface-2);
+  color: var(--on-surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
   text-align: left;
   transition:
     transform 160ms var(--ease-out),
+    border-color 160ms ease,
     box-shadow 160ms var(--ease-out);
 }
 
@@ -2675,15 +2675,15 @@ body[data-view="mix"] .wipe-edge {
 
 .tk-good small {
   font: 500 11px var(--font-ui);
-  color: var(--ink-2);
+  color: var(--muted);
 }
 
 .tk-good b {
-  color: var(--red);
+  color: var(--accent);
 }
 
 .tk-reply.sold {
-  border-left-color: var(--ink);
+  border-left-color: var(--accent);
 }
 
 .tk-foot {
@@ -4022,11 +4022,6 @@ body:not([data-talk=""]) .p-tag {
     columns: 1;
     font-size: 13px;
   }
-
-  .title-en {
-    font-size: 18px;
-    letter-spacing: 0.4em;
-  }
 }
 
 /* 좁은 화면: 대화 카드는 아래에서 올라오는 시트, 수첩은 서랍처럼 화면 폭 */
@@ -4040,9 +4035,8 @@ body:not([data-talk=""]) .p-tag {
     width: auto;
     max-height: min(74vh, calc(100vh - var(--topbar) - 12px));
     padding: 10px 14px calc(14px + env(safe-area-inset-bottom));
-    border-width: 3px 0 0;
-    filter: drop-shadow(0 -6px 0 var(--ink));
-    transform: none;
+    border-width: 1px 0 0;
+    border-radius: var(--radius) var(--radius) 0 0;
     animation: sheet-in 260ms var(--ease-drawer);
   }
 

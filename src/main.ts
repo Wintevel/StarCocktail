@@ -1239,7 +1239,7 @@ function renderTalk() {
   // 넓은 화면에서는 이야기하는 손님을 가리지 않게 손님 반대편에 카드를 둔다.
   const at = shop.screenOf(s.key);
   const side = at && at.x < window.innerWidth / 2 ? 'right' : 'left';
-  el.className = `talk paper when-${t.when} side-${side}`;
+  el.className = `talk when-${t.when} side-${side}`;
   el.setAttribute('aria-label', `${c.name}${josa(c.name, '과', '와')} 이야기`);
   if (html !== talkHtml) {
     talkHtml = html;
