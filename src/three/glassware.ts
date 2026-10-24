@@ -1,10 +1,11 @@
 // 잔: 2D 그림처럼 보이는 유리. 굴절·반사 대신 옅은 흰 막과 가장자리 빛, 하얀 하이라이트 줄,
-// 서리처럼 새긴 흰 무늬 띠(에칭)로 그리고, 윤곽은 검은 먹선(테두리 고리·받침 고리·양옆 실루엣 선)으로 두른다.
+// 서리처럼 새긴 흰 무늬 띠(에칭)로 그리고, 윤곽은 연보랏빛 흰 선(테두리 고리·받침 고리·양옆 실루엣 선)으로 두른다.
+// v8: 밤빛 배경에서 잔이 빛나 보이게 윤곽선을 밝게 바꿨다(그 바깥을 후처리가 가는 먹선으로 다시 두른다).
 // 카메라는 늘 잔 정면에서 보므로, 회전체 잔의 실루엣은 정면 평면(z=0)의 좌우 윤곽선과 같다.
 
 import * as THREE from 'three';
 import type { GlassId } from '../data';
-import { inkMaterial } from './materials';
+import { glassLineMaterial } from './materials';
 import { GLASS_SHAPES, type GlassShape, rimY } from './models';
 import { etchTexture } from './textures';
 
@@ -169,7 +170,7 @@ export function glassMaterial(id: GlassId): THREE.ShaderMaterial {
 // ── 잔 모델 ───────────────────────────────────────────
 
 function inkRing(radius: number, y: number, tube: number) {
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 6, 80), inkMaterial);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 6, 80), glassLineMaterial);
   ring.rotation.x = Math.PI / 2;
   ring.position.y = y;
   return ring;
@@ -179,7 +180,7 @@ function inkRing(radius: number, y: number, tube: number) {
 function silhouette(pts: THREE.Vector2[], outer: number[], side: 1 | -1, tube: number) {
   const line = pts.filter((_, i) => outer[i] === 1).map((p) => new THREE.Vector3(p.x * side, p.y, 0));
   const curve = new THREE.CatmullRomCurve3(line, false, 'centripetal');
-  return new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(24, line.length * 2), tube, 5, false), inkMaterial);
+  return new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(24, line.length * 2), tube, 5, false), glassLineMaterial);
 }
 
 /**

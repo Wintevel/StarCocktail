@@ -1,7 +1,8 @@
 import './style.css';
 import './mix-panel.css';
 // 글꼴: 역할마다 다른 무료 한글 글꼴(한글은 유니코드 구간별로 나뉘어 쓰는 글자만 받는다)
-import '@fontsource/anton/400.css'; // 로마자·숫자 제목
+import '@fontsource/limelight/400.css'; // 로고(StarCocktail)
+import '@fontsource/cinzel/700.css'; // 로마자·숫자 제목(DAY 표시)
 import '@fontsource/black-han-sans/400.css'; // 오려 붙인 굵은 글자·신문 큰 표제
 import '@fontsource/do-hyeon/400.css'; // 카드 제목·버튼
 import '@fontsource/hahmlet/700.css'; // 신문 제호·기사 제목(명조)
@@ -104,6 +105,7 @@ import {
 } from './shift';
 import { canOrderGood, goodCost, GOODS_MAX, goodsLeft, type GoodsStock, isFestival, isRainy, receiveGoods, START_GOODS, takeGood, wantsOf } from './goods';
 import { type Mood, rigFor } from './shop/art';
+import { ensureDefs, mixBackdropSvg } from './shop/backdrop';
 import { ShopScene } from './shop/scene';
 import {
   alleyGossip,
@@ -149,6 +151,7 @@ import { type Frame, type GlassAnchor, Stage3D } from './three/stage';
 import { icons } from './ui/icons2d';
 import { renderPanel, resetPanel } from './ui/mixPanel';
 import { ransom } from './ui/ransom';
+import { startScreenHtml } from './ui/startScreen';
 import { GOOD_BY_ID, type GoodId, GOODS, LORE } from './world';
 
 /** 가게 안(손님이 스툴에 앉는 2D 화면) / 제조대(3D) */
@@ -369,16 +372,15 @@ const state: State = {
 };
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
+// 가게·제조 배경·시작 화면이 함께 쓰는 SVG 칠·빛 정의를 먼저 넣는다.
+ensureDefs();
 app.innerHTML = `
   <div class="shop-view" id="shop" aria-label="가게 안: 스툴 네 개에 손님이 앉는다"></div>
   <section class="mix-view" id="mixView" aria-label="제조대: 가운데 잔, 오른쪽 단계별 카드">
     <div class="mix-bg" aria-hidden="true">
-      <div class="mb-paper"></div>
-      <div class="mb-slab"></div>
-      <div class="mb-dots"></div>
-      <div class="mb-shard s1"></div>
-      <div class="mb-shard s2"></div>
-      <div class="mb-shard s3"></div>
+      <div class="mb-back">${mixBackdropSvg()}</div>
+      <div class="mb-glow"></div>
+      <div class="mb-vignette"></div>
     </div>
     <div class="stage3d" id="stage"></div>
   </section>
@@ -685,7 +687,7 @@ function renderTopbar() {
       ? `<div class="clock" aria-label="영업 시계"><span class="c-day">DAY<b>${state.day}</b>${infinite ? '<small class="inf">∞</small>' : ''}</span><span class="c-time ${over ? 'over' : ''}" id="clockTime">${clockLabel(minute())}</span></div>`
       : `<div class="clock free" aria-label="자유 제조 중"><span class="c-day">자유 제조</span></div>`;
   $('topbar').innerHTML = `
-    <div class="brand">${ransom('★', { seed: 5, cls: 'brand-rn' })}<span class="brand-en">STARCOCKTAIL</span></div>
+    <div class="brand"><span class="brand-star" aria-hidden="true">✦</span><span class="brand-en">StarCocktail</span></div>
     ${clock}
     <div class="top-actions">
       ${closeButton()}
@@ -1568,6 +1570,39 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// 시작 화면의 규칙 설명 판: 열고 닫을 때 초점을 판 ↔ 「규칙 설명」 버튼으로 옮긴다
+let rulesOpen = false;
+document.addEventListener('click', (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-act="rules"], [data-act="rules-close"]');
+  if (!btn) return;
+  e.stopImmediatePropagation();
+  rulesOpen = btn.dataset.act === 'rules';
+  renderOverlay();
+  if (!rulesOpen) $('overlay').querySelector<HTMLElement>('[data-act="rules"]')?.focus();
+});
+
+// 시작 화면: Esc로 규칙 설명 판을 닫고, ↑/↓로 메뉴를 오간다
+document.addEventListener('keydown', (e) => {
+  if (state.overlay !== 'title') return;
+  const el = $('overlay');
+  if (e.key === 'Escape' && rulesOpen) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    el.querySelector<HTMLButtonElement>('[data-act="rules-close"]')?.click();
+    return;
+  }
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !rulesOpen) {
+    const items = [...el.querySelectorAll<HTMLButtonElement>('.start-menu button')];
+    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    const n = items.length;
+    const next = at < 0 ? items[e.key === 'ArrowDown' ? 0 : n - 1] : items[(at + (e.key === 'ArrowDown' ? 1 : n - 1)) % n];
+    if (next) {
+      e.preventDefault();
+      next.focus();
+    }
+  }
+});
+
 /** 하루 시작 화면의 카운터 메모: 축제 준비·맡은 것·수첩의 소문 */
 function memoHtml() {
   const memo = alleyGossip(state.story);
@@ -1619,6 +1654,10 @@ function guestTally(visits: Visit[]) {
 
 function renderOverlay() {
   const el = $('overlay');
+  if (state.overlay !== 'title') {
+    delete el.dataset.key;
+    rulesOpen = false;
+  }
   if (!state.overlay) {
     el.hidden = true;
     el.innerHTML = '';
@@ -1628,34 +1667,17 @@ function renderOverlay() {
   el.dataset.kind = state.overlay;
   const save = loadSave();
   switch (state.overlay) {
-    case 'title':
-      el.innerHTML = `
-        <div class="card title-card paper">
-          ${masthead('NOCTURNE 7')}
-          <h1 class="title-logo">${ransom('별빛 바', { seed: 11, cls: 'xl' })}</h1>
-          <p class="title-en">STARCOCKTAIL</p>
-          <p class="lede">정거장 도시 녹턴, 막차가 끊긴 뒤에만 불을 켜는 바. 사라진 전 주인 대신 카운터에 선 당신은 술을 팔고, 단골들의 이야기를 서로 이어 줍니다.</p>
-          <ol class="howto">
-            <li>가게는 <b>18:00~04:00</b>. 손님은 띄엄띄엄 들어와 빈 <b>스툴(4개)</b>에 앉아요. 01:00부터 조기 마감할 수 있어요.</li>
-            <li>앉은 손님을 <b>누르면</b> 그 손님의 잔을 만드는 제조대로 넘어가요. 다른 손님은 자리에서 기다려요(너무 오래 두면 화가 나서 나가요).</li>
-            <li>오른쪽 카드에서 <b>잔 → 얼음 → 재료 → 젓기 → 장식</b>을 한 단계씩 골라요. 재료 카드를 누를 때마다 한 번 부어 <b>단맛·도수·바디</b>(Day 4부터 <b>경향</b>)를 맞춰요.</li>
-            <li>마지막 단계에서 <b>내기</b>를 누르면 손님이 반응하고 잔을 들고 나가요.</li>
-            <li>머리 위에 <b>「…」</b>가 뜬 손님은 할 말이 있어요. 눌러서 듣고, 맡은 말·물건·소문을 다른 손님에게 <b>이어 주세요</b>. 고쳐 전할 때는 그 잔의 <b>경향</b>이 말투가 돼요.</li>
-            <li>병은 한 번 부을 때마다 10%씩 줄어요(한 병에 열 번, 재료 카드에 남은 양이 보여요). 가게 화면 오른쪽 아래 <b>서랍</b>에서 리필과 <b>진열장 물건</b>을 주문하면 다음 날 아침 도착해요. 물건은 찾는 손님(<b>✦</b>)에게 권해 팔아요.</li>
-            <li>왼쪽 아래 <b>수첩</b>에 맡은 것과 소문이, 레시피북의 <b>단골 수첩·약속 장부</b>에 알게 된 이야기가 쌓여요. 7일째 <b>꿈의 축제</b>에서 결말이 갈려요.</li>
-          </ol>
-          <div class="row center">
-            ${
-              save && save.day > 1
-                ? `<button class="primary" data-act="continue">Day ${save.day}${save.day > LAST_DAY ? ' (무한 영업)' : ''}부터 이어하기</button>
-                   <button class="secondary" data-act="new-campaign">처음부터</button>`
-                : `<button class="primary" data-act="new-campaign">영업 시작</button>`
-            }
-            <button class="secondary" data-act="start-free">자유 제조</button>
-          </div>
-          ${state.started ? '<div class="row center"><button class="ghost" data-act="close">닫기</button></div>' : ''}
-        </div>`;
+    case 'title': {
+      // 시작 화면은 같은 내용이면 다시 그리지 않는다(반짝이 움직임·초점이 끊기지 않게)
+      const key = `title|${save?.day ?? 0}|${state.started}|${rulesOpen}`;
+      if (el.dataset.key === key) break;
+      const opened = !el.dataset.key;
+      el.dataset.key = key;
+      el.innerHTML = startScreenHtml({ save: save ? { day: save.day, infinite: save.day > LAST_DAY } : null, started: state.started, rules: rulesOpen });
+      if (rulesOpen) el.querySelector<HTMLElement>('[data-act="rules-close"]')?.focus();
+      else if (opened) el.querySelector<HTMLElement>('.start-menu button')?.focus();
       break;
+    }
     case 'book': {
       const tab = shift() ? state.bookTab : 'recipes';
       el.innerHTML = `
@@ -1682,7 +1704,7 @@ function renderOverlay() {
     case 'dayStart': {
       const plan = state.plan;
       el.innerHTML = `
-        <div class="card day-card paper">
+        <div class="card day-card">
           ${masthead(state.day > LAST_DAY ? '무한 영업' : `${state.day} / ${LAST_DAY}`)}
           <div class="day-head">
             <div class="day-no">${ransom(`DAY ${state.day}`, { seed: state.day * 13 })}</div>
@@ -1708,7 +1730,7 @@ function renderOverlay() {
       const plan = state.plan;
       const missed = plan.visits.filter((_, i) => !state.outcomes[i]).length;
       el.innerHTML = `
-        <div class="card end paper">
+        <div class="card end">
           ${masthead(`${clockLabel(minute())} 마감`)}
           <div class="day-head">
             <div class="day-no">${ransom(`DAY ${state.day}`, { seed: state.day * 13 })}</div>
@@ -1742,7 +1764,7 @@ function renderOverlay() {
     case 'shop': {
       const next = state.day + 1;
       el.innerHTML = `
-        <div class="card shop paper">
+        <div class="card shop">
           ${masthead(`Day ${next} 전날 밤`)}
           <h2>${ransom('내일 장보기', { seed: 21 })}</h2>
           <p class="total">가진 돈 <strong class="${state.money < 0 ? 'debt' : ''}">${coin(state.money)}</strong></p>
@@ -1757,7 +1779,7 @@ function renderOverlay() {
       const promises = promisesOf(state.story);
       const settled = Object.keys(state.story.endings).length > 0;
       el.innerHTML = `
-        <div class="card end final paper">
+        <div class="card end final">
           ${masthead('LAST NIGHT')}
           <h2 class="headline big">${ransom(rank, { seed: 31 })}</h2>
           <ul class="facts">
