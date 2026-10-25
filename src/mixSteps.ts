@@ -1,22 +1,22 @@
-// 제조대의 단계: ① 잔 → ② 얼음 → ③ 재료 → ④ 젓기 → ⑤ 장식 → 내기.
-// 한 번에 한 단계의 조작만 보여 준다. 화면과 무관한 순수 규칙(넘어가기·되돌아가기·잔 바꾸기)만 둔다.
+// 제조대의 단계: ① 잔 → ② 얼음 → ③ 재료 → ④ 장식 → 내기.
+// 젓기는 단계가 아니라 잔 오른쪽 동그라미 버튼이다(재료를 한 번 이상 부은 뒤 한 번만, 되돌리려면 잔 왼쪽 초기화).
+// 한 번에 한 단계의 조작만 보여 준다. 화면과 무관한 순수 규칙(넘어가기·되돌아가기·잔 바꾸기·젓기 버튼 상태)만 둔다.
 
 import type { GlassId, IceId } from './data';
-import { type Drink, emptyDrink } from './mix';
+import { canStir, type Drink, emptyDrink } from './mix';
 
-export type MixStep = 'glass' | 'ice' | 'pour' | 'stir' | 'garnish';
+export type MixStep = 'glass' | 'ice' | 'pour' | 'garnish';
 
 export const STEPS: { id: MixStep; label: string; title: string }[] = [
   { id: 'glass', label: '잔', title: '잔 고르기' },
   { id: 'ice', label: '얼음', title: '얼음 넣기' },
   { id: 'pour', label: '재료', title: '재료 선택' },
-  { id: 'stir', label: '젓기', title: '젓기' },
   { id: 'garnish', label: '장식', title: '장식 올리기' },
 ];
 
 export const stepIndex = (s: MixStep) => STEPS.findIndex((x) => x.id === s);
 
-/** 이 단계를 마치고 다음으로 넘어갈 수 있는가. 젓기는 건너뛰어도 되고, 장식은 「장식 없음」도 고를 수 있다. */
+/** 이 단계를 마치고 다음으로 넘어갈 수 있는가. 장식은 「장식 없음」도 고를 수 있다. */
 export function canLeave(step: MixStep, d: Drink): boolean {
   switch (step) {
     case 'glass':
@@ -47,14 +47,16 @@ export function reachable(step: MixStep, d: Drink): boolean {
 
 /** 이 단계가 끝난 상태인가(단계 표시의 ✓) */
 export function stepDone(step: MixStep, d: Drink): boolean {
-  switch (step) {
-    case 'stir':
-      return d.stirAt !== null;
-    case 'garnish':
-      return d.garnish !== null;
-    default:
-      return canLeave(step, d);
-  }
+  return step === 'garnish' ? d.garnish !== null : canLeave(step, d);
+}
+
+/**
+ * 잔 오른쪽 젓기 버튼: 부은 재료가 없으면 꺼짐(off), 부었으면 저을 수 있음(ready), 저었으면 끝(done).
+ * 어느 단계에서든 같은 규칙이다. 저은 뒤에 부은 재료는 위에 층으로 쌓이고, 젓기를 물리려면 초기화한다.
+ */
+export function stirButton(d: Drink): 'off' | 'ready' | 'done' {
+  if (d.stirAt !== null) return 'done';
+  return canStir(d) ? 'ready' : 'off';
 }
 
 /**

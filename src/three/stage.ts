@@ -1,8 +1,9 @@
 // 3D 제조대: 카운터 가운데 잔 하나를 크게 놓고, 게임 상태(Drink)가 바뀔 때마다 붓기·젓기·얼음·장식 연출을 재생한다.
 // 재료·잔 고르기는 화면 오른쪽 카드(DOM)에서 하고, 붓기는 화면 위에서 잔으로 떨어지는 술 줄기로 보여 준다.
 // 잔은 화면 배치가 알려 준 영역(setFrame) 가운데에 오도록 카메라 거리와 렌즈 이동(setViewOffset)을 맞춘다.
-// 2D 가게와 화풍을 맞추려고 셀 셰이딩 재질에 먹선·하프톤 후처리(post.ts)를 쓰고, 배경은 투명하게 두어
-// 캔버스 뒤 DOM 신문지 콜라주 배경이 비치게 한다. 손님은 2D 가게 화면(src/shop)에만 나온다.
+// 2D 가게와 화풍을 맞추려고 셀 셰이딩 재질에 가는 먹선 후처리(post.ts)를 쓰고, 배경은 투명하게 두어
+// 캔버스 뒤 DOM 배경(흐린 뒤 선반)이 비치게 한다. v8: 첫 버전처럼 금빛·분홍·보라 빛으로 비춘다.
+// 손님은 2D 가게 화면(src/shop)에만 나온다.
 // 제조 화면이 아닐 때는 그리기를 멈춘다(setActive).
 
 import * as THREE from 'three';
@@ -14,7 +15,7 @@ import { fxTime, inkMaterial, neonCyanMaterial, neonPinkMaterial, redMaterial, s
 import { fillDepth, GLASS_SHAPES, type GlassShape, iceMaterial, makeGarnish, makeIce, rimY } from './models';
 import { InkRenderer } from './post';
 import { quality, setQuality } from './quality';
-import { counterTexture, shadowTexture } from './textures';
+import { counterTexture, lightPoolTexture, shadowTexture } from './textures';
 
 const POUR_MS = 1000;
 /** 잔 모양 치수(models.ts)는 잔 기준 단위라서 카운터 위에서는 줄여 둔다. */
@@ -34,19 +35,19 @@ const STREAM_Z = 0.05;
 const BOX_H = 2.1;
 const BOX_HALF = 0.62;
 const BOX_MID = 0.8;
-/** 잔 받침 반지름(잔 아래 버튼은 받침 앞 가장자리 밑에 단다) */
+/** 잔 받침 반지름(받침 앞 가장자리를 화면 배치에 알려 준다) */
 const COASTER_R = 0.64 * GLASS_SCALE * 1.05;
 /** 카메라가 내려다보는 기울기(앞 1에 대한 높이) */
 const PITCH = 0.34;
 
-/** 화면 위 DOM(횟수 바·초기화 버튼)을 잔 둘레에 붙이기 위한 잔의 화면 좌표(px) */
+/** 화면 위 DOM(횟수 바·젓기·초기화 버튼)을 잔 둘레에 붙이기 위한 잔의 화면 좌표(px) */
 export interface GlassAnchor {
   x: number;
   top: number;
   bottom: number;
   /** 잔 받침 앞 가장자리 */
   foot: number;
-  /** 잔 반쪽 너비 */
+  /** 잔 반쪽 너비(가장 넓은 곳) */
   half: number;
 }
 
@@ -234,7 +235,8 @@ export class Stage3D {
     const s = this.shape;
     const pos = this.glassRoot.position;
     const top = (s ? rimY(s) : 1.0) * GLASS_SCALE;
-    const r = (s ? s.r(1) + s.wall : 0.5) * GLASS_SCALE;
+    // 잔 양옆 버튼·횟수 바가 잔에 닿지 않게 가장 넓은 곳의 반지름을 쓴다(와인 잔은 입구보다 몸통이 넓다).
+    const r = (s ? Math.max(...Array.from({ length: 11 }, (_, i) => s.r(i / 10))) + s.wall : 0.5) * GLASS_SCALE;
     const a = this.project(new THREE.Vector3(pos.x, top, pos.z));
     const b = this.project(new THREE.Vector3(pos.x, 0, pos.z));
     const side = this.project(new THREE.Vector3(pos.x + Math.max(r, 0.3), top * 0.5, pos.z));
@@ -264,12 +266,19 @@ export class Stage3D {
     return this.pourAnim !== null || this.stirAnim !== null;
   }
 
-  /** 셀 셰이딩은 빛이 단순할수록 2D답다: 고른 바탕빛 + 왼쪽 위 열쇠빛 하나 */
+  /**
+   * 밤의 바 조명: 연보라 하늘빛·자줏빛 바닥빛을 바탕으로, 왼쪽 위 금빛 등(열쇠빛), 오른쪽 분홍 채움빛,
+   * 뒤쪽 보라 테두리빛. 셀 셰이딩이라 빛의 색이 그늘 단계마다 그대로 묻어난다.
+   */
   private addLights() {
-    this.scene.add(new THREE.AmbientLight(0xffffff, 1.1));
-    const key = new THREE.DirectionalLight(0xffffff, 2.2);
+    this.scene.add(new THREE.HemisphereLight(0xe4d8ff, 0x4a1d52, 0.95));
+    const key = new THREE.DirectionalLight(0xffdca6, 1.7);
     key.position.set(-2.5, 4.5, 3.5);
-    this.scene.add(key);
+    const fill = new THREE.DirectionalLight(0xff8fc8, 0.85);
+    fill.position.set(3.4, 1.4, 2.4);
+    const rim = new THREE.DirectionalLight(0x9d7dff, 1.3);
+    rim.position.set(0.6, 2.6, -4);
+    this.scene.add(key, fill, rim);
   }
 
   private resize(container: HTMLElement) {
@@ -743,12 +752,12 @@ export class Stage3D {
   }
 }
 
-/** 잔 받침: 검은 원판에 빨간 테 (2D 가게의 스툴 방석과 같은 색) */
+/** 잔 받침: 보랏빛 벨벳 원판에 금빛 테 (2D 가게의 스툴 방석과 같은 색) */
 function makeCoaster() {
   const g = new THREE.Group();
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.66, 0.02, 64), inkMaterial);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.66, 0.02, 64), toonMaterial(0x2c1446, { emissive: 0x1a0a2c, glow: 0.35 }));
   base.position.y = 0.001;
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.022, 8, 96), neonPinkMaterial);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.022, 8, 96), neonCyanMaterial);
   ring.rotation.x = Math.PI / 2;
   ring.position.y = 0.014;
   g.add(base, ring);
@@ -756,7 +765,7 @@ function makeCoaster() {
   return g;
 }
 
-/** 카운터: 회색 윗면(하프톤 점이 앉는다)에 종이색 앞 가장자리, 검은 앞면에 빨간 띠 */
+/** 카운터: 나무 윗면에 금빛 앞 가장자리, 자줏빛 앞면에 분홍 빛 띠 */
 function makeCounter() {
   const g = new THREE.Group();
   const grid = counterTexture();
@@ -765,14 +774,23 @@ function makeCounter() {
   topMat.map = grid;
   const top = new THREE.Mesh(new THREE.BoxGeometry(16, 0.12, 4.2), topMat);
   top.position.set(0.5, -0.06, -0.6);
-  const lip = new THREE.Mesh(new THREE.BoxGeometry(16, 0.13, 0.12), neonCyanMaterial);
+  // 앞 가장자리: 놋쇠 띠(빛을 받는 금빛이라 아래쪽이 조금 어둡다)
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(16, 0.13, 0.12), toonMaterial(0xd9a040, { emissive: 0x5a3608, glow: 0.6 }));
   lip.position.set(0.5, -0.06, 1.44);
   g.add(lip);
-  const front = new THREE.Mesh(new THREE.BoxGeometry(16, 1.6, 0.1), toonMaterial(0x232221));
+  const front = new THREE.Mesh(new THREE.BoxGeometry(16, 1.6, 0.1), toonMaterial(0x2e1236, { emissive: 0x14061c, glow: 0.5 }));
   front.position.set(0.5, -0.92, 1.5);
-  const band = new THREE.Mesh(new THREE.BoxGeometry(16, 0.08, 0.03), redMaterial);
+  const band = new THREE.Mesh(new THREE.BoxGeometry(16, 0.06, 0.03), neonPinkMaterial);
   band.position.set(0.5, -0.32, 1.57);
-  g.add(top, front, band);
+  // 잔 위 등에서 내려온 금빛 빛 웅덩이
+  const pool = new THREE.Mesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({ map: lightPoolTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+  );
+  pool.rotation.x = -Math.PI / 2;
+  pool.scale.set(5.2, 3.4, 1);
+  pool.position.set(0, 0.002, 0.15);
+  g.add(top, front, band, pool);
   return g;
 }
 

@@ -42,20 +42,21 @@ export function lemonTexture() {
   });
 }
 
-/** 병 라벨: 신문지 같은 종이에 검은 테두리와 빨간 별 (2D 세계와 같은 흑백+빨강) */
+/** 병 라벨: 크림색 종이에 남보라 테두리와 색 별 (2D 가게 선반의 병 라벨과 같은 색) */
 export function labelTexture(accent: string) {
   // 병 둘레를 한 바퀴 감는 띠라서 위아래 줄만 긋고(이음매가 보이지 않게), 가운데에 별 하나와 글줄 두 개.
   return canvasTexture(256, 128, (ctx) => {
-    ctx.fillStyle = '#f2ece0';
+    ctx.fillStyle = '#f6e7c8';
     ctx.fillRect(0, 0, 256, 128);
-    ctx.fillStyle = 'rgba(0,0,0,0.14)';
-    for (let y = 4; y < 128; y += 8) for (let x = (y / 8) % 2 ? 4 : 0; x < 256; x += 8) ctx.fillRect(x, y, 2, 2);
-    ctx.fillStyle = '#151313';
+    ctx.fillStyle = '#2a1850';
     ctx.fillRect(0, 0, 256, 9);
     ctx.fillRect(0, 119, 256, 9);
+    ctx.fillStyle = '#d99a2b';
+    ctx.fillRect(0, 10, 256, 3);
+    ctx.fillRect(0, 115, 256, 3);
     ctx.fillStyle = accent;
-    ctx.fillRect(0, 106, 256, 8);
-    ctx.fillStyle = '#151313';
+    ctx.fillRect(0, 104, 256, 8);
+    ctx.fillStyle = '#2a1850';
     ctx.fillRect(150, 40, 70, 7);
     ctx.fillRect(150, 58, 48, 7);
     ctx.fillStyle = accent;
@@ -82,6 +83,18 @@ export function shadowTexture() {
   }, false);
 }
 
+/** 등 아래 카운터에 고이는 따뜻한 빛 웅덩이(더하기 섞기로 얹는다) */
+export function lightPoolTexture() {
+  return canvasTexture(256, 256, (ctx) => {
+    const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+    g.addColorStop(0, 'rgba(255,206,140,0.55)');
+    g.addColorStop(0.45, 'rgba(255,170,150,0.22)');
+    g.addColorStop(1, 'rgba(255,150,200,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 256, 256);
+  });
+}
+
 /** 별빛 입자 스프라이트 */
 export function sparkleTexture() {
   return canvasTexture(64, 64, (ctx) => {
@@ -98,15 +111,18 @@ export function sparkleTexture() {
 }
 
 /**
- * 카운터 윗면: 회색 판에 아주 옅은 나뭇결 줄(후처리가 그 위에 하프톤 점을 앉힌다).
+ * 카운터 윗면: 따뜻한 밤색 나무 판에 아주 옅은 나뭇결 줄(2D 가게 카운터와 같은 나무).
  * 줄과 바탕의 밝기 차이를 작게 둬서 후처리가 결을 외곽선으로 오해하지 않게 한다.
  */
 export function counterTexture() {
   const tex = canvasTexture(256, 256, (ctx) => {
-    ctx.fillStyle = '#8f8a83';
+    ctx.fillStyle = '#583224';
     ctx.fillRect(0, 0, 256, 256);
-    ctx.fillStyle = '#86817a';
-    ctx.fillRect(0, 0, 256, 3);
+    // 결: 바탕과 밝기가 거의 같은 줄 몇 개
+    ctx.fillStyle = '#512e21';
+    for (const [y, h] of [[0, 3], [38, 2], [97, 4], [128, 2], [171, 3], [214, 2]]) ctx.fillRect(0, y, 256, h);
+    ctx.fillStyle = '#603828';
+    for (const [y, h] of [[60, 2], [150, 3], [236, 2]]) ctx.fillRect(0, y, 256, h);
   });
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   return tex;

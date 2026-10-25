@@ -1,14 +1,17 @@
 // 화면(DOM)에 쓰는 작은 2D 아이콘: 재료 병·잔·얼음·장식·진열장 물건.
-// 가게 그림과 같은 화풍으로 굵은 먹선 + 종이색 바탕 + 빨간 포인트로 그린다. 외부 이미지 없이 SVG 문자열만 만든다.
+// 가게 그림과 같은 화풍으로 굵은 먹선(남보라)에 색을 입혀 그린다: 크림 라벨, 연보랏빛 유리, 얼음빛 각얼음, 장미빛 포인트.
+// 외부 이미지 없이 SVG 문자열만 만든다.
 // 열쇠: `ing:<재료>`, `glass:<잔>`, `ice:<얼음>`, `garnish:<장식>`, `good:<물건>`
 
 import { GARNISHES, GLASSES, ICES, INGREDIENTS, type IngredientId } from '../data';
 import { BOTTLE_KIND } from '../three/models';
 import { GOODS } from '../world';
 
-const INK = '#151313';
-const PAPER = '#f7f2e8';
-const RED = '#d8202a';
+const INK = '#1a1030';
+const PAPER = '#fbf3e6';
+const RED = '#e0306e';
+/** 유리(잔 아이콘의 몸통) */
+const GLASS = '#e8e0ff';
 
 const svg = (body: string, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 64 64" aria-hidden="true" focusable="false">${body}</svg>`;
 const p = (d: string, fill: string, stroke = INK, sw = 3, extra = '') =>
@@ -91,23 +94,23 @@ const GLASS_PATHS: Record<string, { body: string; extra?: string }> = {
 function glassIcon(id: string) {
   const g = GLASS_PATHS[id] ?? GLASS_PATHS.rocks;
   return svg(
-    p(g.body, PAPER, INK, 3) +
+    p(g.body, GLASS, INK, 3) +
       (g.extra ? p(g.extra, 'none', INK, 3) : '') +
       // 하이라이트 줄
-      `<path d="M${id === 'coupe' ? '16,22 Q20,28 24,30' : id === 'wine' ? '22,12 Q20,26 24,32' : id === 'highball' ? '24,10 L25,52' : '19,28 L21,52'}" fill="none" stroke="${RED}" stroke-width="3" stroke-linecap="round"/>`,
+      `<path d="M${id === 'coupe' ? '16,22 Q20,28 24,30' : id === 'wine' ? '22,12 Q20,26 24,32' : id === 'highball' ? '24,10 L25,52' : '19,28 L21,52'}" fill="none" stroke="#ff8fc8" stroke-width="3" stroke-linecap="round"/>`,
     'ic-glass',
   );
 }
 
 /** 각얼음 하나(위·왼쪽·오른쪽 면) */
 const cube = (x: number, y: number, s = 10) =>
-  p(`M${x},${y} l${s},-${s / 2} l${s},${s / 2} l-${s},${s / 2} Z`, PAPER, INK, 2.2) +
-  p(`M${x},${y} v${s} l${s},${s / 2} v-${s} Z`, '#cfc9be', INK, 2.2) +
-  p(`M${x + s},${y + s / 2} v${s} l${s},-${s / 2} v-${s} Z`, '#8e8a84', INK, 2.2);
+  p(`M${x},${y} l${s},-${s / 2} l${s},${s / 2} l-${s},${s / 2} Z`, '#f2f8ff', INK, 2.2) +
+  p(`M${x},${y} v${s} l${s},${s / 2} v-${s} Z`, '#bfd8f4', INK, 2.2) +
+  p(`M${x + s},${y + s / 2} v${s} l${s},-${s / 2} v-${s} Z`, '#86a8d6', INK, 2.2);
 
 function iceIcon(id: string) {
   if (id === 'none') {
-    return svg(p('M13,22 L16,58 H48 L51,22', PAPER, INK, 3) + `<path d="M10,58 L54,18" stroke="${RED}" stroke-width="5" stroke-linecap="round"/>`, 'ic-ice');
+    return svg(p('M13,22 L16,58 H48 L51,22', GLASS, INK, 3) + `<path d="M10,58 L54,18" stroke="${RED}" stroke-width="5" stroke-linecap="round"/>`, 'ic-ice');
   }
   const cubes = id === 'less' ? cube(12, 34) + cube(32, 36) : cube(8, 40) + cube(28, 42) + cube(18, 24) + cube(36, 22);
   return svg(cubes, 'ic-ice');
@@ -174,7 +177,7 @@ function goodIcon(id: string) {
       );
     case 'umbrella':
       return svg(
-        p('M8,30 Q32,2 56,30 Q50,26 44,30 Q38,26 32,30 Q26,26 20,30 Q14,26 8,30 Z', INK, INK, 3) +
+        p('M8,30 Q32,2 56,30 Q50,26 44,30 Q38,26 32,30 Q26,26 20,30 Q14,26 8,30 Z', '#5a3fc0', INK, 3) +
           `<path d="M32,8 V30 M20,28 Q26,14 32,9 M44,28 Q38,14 32,9" fill="none" stroke="${PAPER}" stroke-width="1.6"/>` +
           `<path d="M32,30 V52 Q32,58 26,58 Q21,58 21,53" fill="none" stroke="${INK}" stroke-width="4" stroke-linecap="round"/>` +
           `<path d="M32,4 V9" stroke="${RED}" stroke-width="4" stroke-linecap="round"/>`,

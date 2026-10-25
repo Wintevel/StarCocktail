@@ -1,9 +1,10 @@
-// 제조대 오른쪽 단계 판: 위에 ①~⑤ 단계 표시, 가운데 지금 단계의 카드(잔·얼음·재료·젓기·장식), 아래 「이전」·「다음 단계」.
-// 한 번에 한 단계의 조작만 보여 준다. 판은 HTML 문자열로 그리고, 바뀐 때만 다시 써서 초점과 움직임을 지킨다.
+// 제조대 오른쪽 단계 판: 위에 ①~④ 단계 표시, 가운데 지금 단계의 카드(잔·얼음·재료·장식), 아래 「이전」·「다음 단계」.
+// 한 번에 한 단계의 조작만 보여 준다. 젓기·초기화는 판이 아니라 잔 양옆의 동그라미 버튼이다(main.ts의 renderHud).
+// 판은 HTML 문자열로 그리고, 바뀐 때만 다시 써서 초점과 움직임을 지킨다.
 
 import { GARNISH_DAY, GLASS_DAY, INGREDIENT_DAY, STOCK_MAX, type Unlocks } from '../campaign';
 import { ATTR_KEYS, ATTR_LABEL, GARNISHES, type GarnishId, GLASSES, ICES, INGREDIENT_BY_ID, INGREDIENTS, type IngredientId } from '../data';
-import { canPour, canStir, capacityOf, countOf, type Drink, isLayered, visibleLayers } from '../mix';
+import { canPour, capacityOf, countOf, type Drink } from '../mix';
 import { canLeave, type MixStep, nextStep, reachable, stepDone, stepIndex, STEPS } from '../mixSteps';
 
 export interface PanelCtx {
@@ -20,7 +21,7 @@ export interface PanelCtx {
   garnishCost: (id: GarnishId) => number;
   /** 맛 변화 칩에 경향을 보여 줄지 */
   toneShown: boolean;
-  /** 붓기·젓기 연출 중(단계를 넘기거나 저을 수 없다) */
+  /** 붓기·젓기 연출 중(단계를 넘길 수 없다) */
   busy: boolean;
   icon: (key: string) => string;
   coin: (n: number) => string;
@@ -86,10 +87,9 @@ function head(c: PanelCtx) {
     case 'pour':
       sub = !canPour(d)
         ? `잔이 가득 찼어요 <b class="num">${d.pours.length}/${cap}</b> · 「다음 단계」로`
-        : `카드를 누를 때마다 한 번씩 부어요 <b class="num">${d.pours.length}/${cap}</b>${d.stirAt !== null ? ' · 저은 뒤에 부은 재료는 위에 층으로 쌓여요' : ''}`;
-      break;
-    case 'stir':
-      sub = d.stirAt !== null ? '저었어요 · 젓기는 한 번뿐이에요' : '저으면 층이 하나로 섞이고 바디 -1 · 젓지 않으면 층이 남아요';
+        : `카드를 누를 때마다 한 번씩 부어요 <b class="num">${d.pours.length}/${cap}</b>${
+            d.stirAt !== null ? ' · 저은 뒤에 부은 재료는 위에 층으로 쌓여요' : d.pours.length ? ' · 젓기는 잔 오른쪽 ↻' : ''
+          }`;
       break;
     case 'garnish':
       sub = '하나 골라 올린 뒤 내요 · ←/→ 키로도 골라요';
@@ -149,27 +149,6 @@ function ingredientCards(c: PanelCtx) {
     .join('');
 }
 
-function stirCards(c: PanelCtx) {
-  const d = c.drink;
-  const layers = visibleLayers(d).length;
-  if (d.stirAt !== null) {
-    return `<div class="mp-opt mp-stir on" role="status">
-      <span class="mp-big" aria-hidden="true">✓</span><strong>저었어요</strong>
-      <small>바디 -1 · 층이 하나로 섞였어요${d.pours.length > d.stirAt ? ` · 그 뒤에 부은 재료 ${d.pours.length - d.stirAt}번은 위에 층으로` : ''}</small>
-    </div>`;
-  }
-  return `
-    <button class="mp-opt mp-stir" data-act="stir" ${canStir(d) && !c.busy ? '' : 'disabled'}>
-      <span class="mp-big" aria-hidden="true">↻</span><strong>젓기</strong>
-      <span class="deltas"><span class="delta body down">바디 -1</span></span>
-      <small>층이 하나로 섞여요</small>
-    </button>
-    <button class="mp-opt mp-stir" data-act="no-stir" ${c.busy ? 'aria-disabled="true"' : ''}>
-      <span class="mp-big" aria-hidden="true">≡</span><strong>젓지 않기</strong>
-      <small>${isLayered(d) ? `층 ${layers}개를 살려요` : layers > 1 ? '같은 재료라 층은 보이지 않아요' : '그대로 내요'}</small>
-    </button>`;
-}
-
 function garnishCards(c: PanelCtx) {
   return GARNISHES.map((g) => {
     const open = c.unlocked.garnishes.has(g.id);
@@ -190,8 +169,6 @@ function body(c: PanelCtx) {
       return iceCards(c);
     case 'pour':
       return ingredientCards(c);
-    case 'stir':
-      return stirCards(c);
     case 'garnish':
       return garnishCards(c);
   }
@@ -201,16 +178,15 @@ function foot(c: PanelCtx) {
   const d = c.drink;
   const first = c.step === 'glass';
   const wait = c.busy ? 'aria-disabled="true"' : '';
-  const restart = `<button class="ghost mp-restart" data-act="restart" ${d.glass ? '' : 'disabled'} ${wait} aria-label="초기화: 잔부터 다시${!c.free && d.pours.length ? ' (부은 재료는 버려져요)' : ''}">↺</button>`;
   const prev = `<button class="ghost mp-prev" data-act="mp-prev" ${first ? 'disabled' : ''} ${wait}>← 이전</button>`;
   if (c.step === 'garnish') {
     const cost = d.garnish ? c.garnishCost(d.garnish) : 0;
-    return `<div class="mp-foot">${restart}${prev}<button class="primary mp-next" data-act="serve" ${wait}>${c.free ? '완성' : '내기'}${cost ? ` <small>${c.coin(cost)}</small>` : ''}</button></div>`;
+    return `<div class="mp-foot">${prev}<button class="primary mp-next" data-act="serve" ${wait}>${c.free ? '완성' : '내기'}${cost ? ` <small>${c.coin(cost)}</small>` : ''}</button></div>`;
   }
   const ok = canLeave(c.step, d);
   const to = nextStep(c.step);
   const label = to ? STEPS[stepIndex(to)].label : '';
-  return `<div class="mp-foot">${restart}${prev}<button class="primary mp-next" data-act="mp-next" ${ok ? '' : 'disabled'} ${wait}
+  return `<div class="mp-foot">${prev}<button class="primary mp-next" data-act="mp-next" ${ok ? '' : 'disabled'} ${wait}
     title="${ok ? '' : c.step === 'pour' ? '재료를 한 번 이상 부어야 해요' : '먼저 골라 주세요'}">다음 단계 <small>${label} →</small></button></div>`;
 }
 

@@ -1,27 +1,33 @@
-// 2D 가게 화면: 정적인 배경(backdrop.ts) 위에서 손님(art.ts)이 문으로 들어와 빈 스툴에 앉고,
-// 기다리다가(인내 막대), 잔을 받으면 반응한 뒤 잔을 들고 나간다. 손님 머리 위 이름표·말풍선은 DOM으로 띄운다.
+// 2D 가게 화면: 정적인 배경(backdrop.ts) 위에서 손님(art.ts)이 화면 왼쪽 가장자리에서 걸어 들어와 빈 스툴에 앉고,
+// 기다리다가(인내 막대), 잔을 받으면 반응한 뒤 잔을 들고 왼쪽으로 걸어 나간다. 손님 머리 위 이름표·말풍선은 DOM으로 띄운다.
 // 가게는 손님 등 뒤에서 카운터를 보는 구도다: 걸을 때는 앞모습, 스툴에 올라앉는 순간 몸을 돌려 뒷모습이 된다.
+// v8: 카운터 쪽을 확대해 보여 준다(위 선반은 잘리고 스툴 넷이 화면 폭을 채운다). 문은 화면 밖 왼쪽에 있다.
 // 할 말이 있는 손님은 이름표가 「…」로 바뀌고, 잔을 받은 뒤에도 잔을 든 채 스툴에 남아 이야기를 기다린다.
 //
 // 움직임은 모두 performance.now() 기준 시간으로 계산한다(느린 기기·테스트 시계에서도 같은 자리에 있다).
 // 숨쉬기·눈 깜빡임·걸음의 다리 흔들기 같은 장식 움직임만 CSS 애니메이션이다.
 
 import type { Customer } from '../data';
-import { artDefs, type Mood, miniGlass, rigFor, type Rig } from './art';
-import { backdropSvg, DOOR_X, FLOOR_Y, foregroundSvg, SEAT_X, SEAT_Y } from './backdrop';
+import { type Mood, miniGlass, rigFor, type Rig } from './art';
+import { backdropSvg, ensureDefs, FLOOR_Y, foregroundSvg, SEAT_X, SEAT_Y } from './backdrop';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-/** 걷는 속도(세계 단위/초) */
-const SPEED = 560;
+/** 걷는 속도(세계 단위/초): 확대한 화면이라 v7보다 느리게 */
+const SPEED = 320;
+/** 화면 왼쪽 가장자리 밖으로 얼마나 더 걸어가 사라지는가(세계 단위) */
+const OFF_EDGE = 170;
 const HOP_MS = 380;
 /** 반응을 보여 준 뒤 일어나기까지 */
 const REACT_MS = 2300;
 const SAY_MS = 3200;
 
-/** 화면에 꼭 보여야 하는 영역: 가로 화면은 문·창·스툴 전부, 세로 화면은 스툴 넷과 카운터 */
-const ESSENTIAL = {
-  wide: { x: -150, y: 40, w: 1800, h: 940 },
-  tall: { x: 566, y: 330, w: 908, h: 660 },
+/**
+ * 구도: 가로 화면은 스툴 넷이 화면 폭을 채우고(가운데 cx, 너비 w), 맨 아래 선반 판이 위에서 shelfAt 높이에 온다.
+ * 너무 납작한 화면은 높이 minH를 지켜 폭을 넓힌다. 세로 화면(휴대폰)은 스툴 넷이 다 보이게 폭을 맞추고 방석을 seatAt 높이에 둔다.
+ */
+const FRAME = {
+  wide: { cx: 1020, w: 896, minH: 430, shelfY: 430, shelfAt: 0.13 },
+  tall: { cx: 1020, w: 870, seatAt: 0.62 },
 };
 
 type ModeName = 'enter' | 'hop' | 'sit' | 'hopdown' | 'leave';
@@ -96,8 +102,8 @@ export class ShopScene {
 
   constructor(container: HTMLElement) {
     this.root = container;
-    // 손님 그림의 셀 그늘·무늬 정의는 문서에 한 번만 둔다(주문 카드 얼굴 그림도 함께 쓴다).
-    if (!document.querySelector('.art-defs')) document.body.insertAdjacentHTML('afterbegin', artDefs());
+    // 손님 그림의 셀 그늘·무늬, 가게 그림의 칠·빛 정의는 문서에 한 번만 둔다(주문 카드 얼굴·키 아트도 함께 쓴다).
+    ensureDefs();
     const make = (cls: string, html: string) => {
       const svg = el('svg', { class: `shop-layer ${cls}`, preserveAspectRatio: 'xMidYMid slice', 'aria-hidden': cls === 'actors' ? 'false' : 'true' });
       svg.innerHTML = html;
@@ -124,21 +130,37 @@ export class ShopScene {
     const w = Math.max(1, this.root.clientWidth);
     const h = Math.max(1, this.root.clientHeight);
     const a = w / h;
-    const ess = a < 1 ? ESSENTIAL.tall : ESSENTIAL.wide;
-    let vw = ess.w;
-    let vh = vw / a;
-    if (vh < ess.h) {
-      vh = ess.h;
-      vw = vh * a;
+    let vw: number;
+    let vh: number;
+    let y: number;
+    if (a < 1) {
+      const f = FRAME.tall;
+      vw = f.w;
+      vh = vw / a;
+      y = SEAT_Y - f.seatAt * vh;
+    } else {
+      const f = FRAME.wide;
+      vw = f.w;
+      vh = vw / a;
+      if (vh < f.minH) {
+        vh = f.minH;
+        vw = vh * a;
+      }
+      // 맨 아래 선반이 화면 위쪽에 걸리게 두되, 바닥 아래(그림이 없는 곳)까지 내려가지는 않게
+      y = Math.min(f.shelfY - f.shelfAt * vh, FLOOR_Y + 110 - vh);
     }
-    // 바닥이 너무 많이 보이지 않게 위쪽으로 조금 치우쳐 둔다.
-    const x = ess.x + ess.w / 2 - vw / 2;
-    const y = ess.y + ess.h / 2 - vh * (a < 1 ? 0.56 : 0.52);
+    const x = (a < 1 ? FRAME.tall.cx : FRAME.wide.cx) - vw / 2;
     this.vb = { x, y, w: vw, h: vh };
     this.k = w / vw;
     const box = `${x.toFixed(1)} ${y.toFixed(1)} ${vw.toFixed(1)} ${vh.toFixed(1)}`;
     for (const s of this.layers) s.setAttribute('viewBox', box);
     for (const v of this.vis.values()) v.lastTag = '';
+  }
+
+  /** 화면 위를 덮는 윗줄 높이(px, style.css의 --topbar) */
+  private topInset() {
+    const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--topbar'));
+    return Number.isFinite(v) ? v : 64;
   }
 
   /** 세계 좌표 → 가게 화면 안 좌표(px) */
@@ -157,11 +179,16 @@ export class ShopScene {
 
   // ── 손님 ───────────────────────────────────────
 
+  /** 손님이 들어오고 나가는 곳: 지금 보이는 화면의 왼쪽 가장자리 밖 */
+  private edgeX() {
+    return this.vb.x - OFF_EDGE;
+  }
+
   private standHip(v: Vis) {
     return FLOOR_Y - v.rig.leg * v.rig.scale;
   }
 
-  /** 손님이 문으로 들어와 seat번 스툴로 걸어가 앉는다. 앉으면 line을 말한다. */
+  /** 손님이 화면 왼쪽에서 걸어 들어와 seat번 스툴로 가서 앉는다. 앉으면 line을 말한다. */
   enter(key: string, c: Customer, seat: number, line: string) {
     if (this.vis.has(key)) return;
     const rig = rigFor(c.id);
@@ -185,6 +212,7 @@ export class ShopScene {
 
     const now = performance.now();
     const to = SEAT_X[seat];
+    const from = this.edgeX();
     const v: Vis = {
       key,
       c,
@@ -195,10 +223,10 @@ export class ShopScene {
       say,
       mode: 'enter',
       t0: now,
-      from: DOOR_X,
+      from,
       to,
-      dur: (Math.abs(to - DOOR_X) / SPEED) * 1000,
-      x: DOOR_X,
+      dur: (Math.abs(to - from) / SPEED) * 1000,
+      x: from,
       hipY: 0,
       dir: 1,
       walk: 0,
@@ -223,6 +251,9 @@ export class ShopScene {
       const can = on && ready();
       g.classList.toggle('hot', can);
       tag.classList.toggle('hot', can);
+      // 눌러 보라는 안내가 펼쳐져 이름표가 넓어진다: 다음 프레임을 기다리지 않고 바로 화면 안쪽으로 다시 민다
+      v.lastTag = '';
+      if (this.vis.get(key) === v) this.placeUi(v, performance.now());
     };
     g.addEventListener('click', pick);
     g.addEventListener('pointerenter', () => hot(true));
@@ -258,6 +289,7 @@ export class ShopScene {
     v.tag.querySelector('.p-mark')!.textContent = TAG_MARK[mode];
     v.tag.querySelector('.p-hint')!.textContent = `${v.c.title} · ${TAG_HINT[mode]}`;
     v.tag.setAttribute('aria-label', `${v.c.name}, ${v.c.title}: ${TAG_HINT[mode]}`);
+    v.lastTag = '';
   }
 
   setPatience(key: string, frac: number, impatient: boolean) {
@@ -405,12 +437,12 @@ export class ShopScene {
         const k = clamp01(t / (HOP_MS * 0.85));
         v.hipY = seatHip + (stand - seatHip) * easeInOut(k) - Math.sin(Math.PI * k) * 30;
         v.el.classList.toggle('seated', k < 0.5);
-        // 뒷모습에서 몸을 돌려 앞모습이 된 뒤에 문 쪽(왼쪽)을 본다.
+        // 뒷모습에서 몸을 돌려 앞모습이 된 뒤에 나가는 쪽(왼쪽)을 본다.
         v.dir = k < 0.5 ? 1 : -1;
         if (k >= 1) {
           v.from = v.x;
-          v.to = DOOR_X;
-          v.dur = (Math.abs(v.x - DOOR_X) / SPEED) * 1000;
+          v.to = this.edgeX();
+          v.dur = (Math.abs(v.x - v.to) / SPEED) * 1000;
           this.setMode(v, 'leave', now);
         }
         break;
@@ -429,7 +461,7 @@ export class ShopScene {
       }
     }
     const walking = v.mode === 'enter' || v.mode === 'leave';
-    if (walking) v.walk = Math.abs(v.x - DOOR_X) * 0.026;
+    if (walking) v.walk = Math.abs(v.x - v.from) * 0.026;
     const bob = walking ? Math.abs(Math.sin(v.walk)) * 9 : 0;
     const lean = walking ? v.dir * 3 : 0;
     const s = v.rig.scale;
@@ -452,13 +484,20 @@ export class ShopScene {
     const key = `${Math.round(head.x)},${Math.round(head.y)},${v.tag.hidden},${sayOn}`;
     if (key === v.lastTag) return;
     v.lastTag = key;
-    v.tag.style.transform = `translate(${Math.round(head.x)}px, ${Math.round(head.y - 8)}px) translate(-50%, -100%)`;
+    // 이름표는 화면 가장자리 밖으로 나가지 않게 안쪽으로 민다(휴대폰에서 맨 끝 스툴)
+    const tw = v.tag.hidden ? 0 : v.tag.offsetWidth;
+    const tx = tw ? Math.min(Math.max(head.x, 6 + tw / 2), this.root.clientWidth - 6 - tw / 2) : head.x;
+    v.tag.style.transform = `translate(${Math.round(tx)}px, ${Math.round(head.y - 8)}px) translate(-50%, -100%)`;
     // 말풍선은 머리 오른쪽에 띄우되, 화면 밖으로 나가면 왼쪽으로 뒤집는다.
     const gap = 24 * this.k * 2;
     const w = sayOn ? v.say.offsetWidth : 0;
     const flip = sayOn && head.x + gap + w > this.root.clientWidth - 8;
     v.say.classList.toggle('flip', flip);
     const sx = flip ? Math.max(8, head.x - gap - w) : head.x + gap;
-    v.say.style.transform = `translate(${Math.round(sx)}px, ${Math.round(head.y - (v.tag.hidden ? 0 : 54))}px) translate(0, -100%)`;
+    // 말풍선 윗변이 윗줄(시계·버튼) 밑으로 숨지 않게 내린다
+    // 이름표 위에 띄운다(안내가 펼쳐져 이름표가 커져도 가리지 않게 실제 높이를 잰다)
+    let sy = head.y - (v.tag.hidden ? 0 : 14 + v.tag.offsetHeight);
+    if (sayOn) sy = Math.max(sy, this.topInset() + 8 + v.say.offsetHeight);
+    v.say.style.transform = `translate(${Math.round(sx)}px, ${Math.round(sy)}px) translate(0, -100%)`;
   }
 }

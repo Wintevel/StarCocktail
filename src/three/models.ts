@@ -313,7 +313,7 @@ export function makeGarnish(id: GarnishId): THREE.Group {
       const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.0, 8), stickMat);
       stick.position.set(-0.12, 0.05, 0);
       stick.rotation.z = -0.38;
-      const star = makeStar(0.11, 0.03, toonMaterial(0xd8202a, { emissive: 0xd8202a, glow: 0.3 }));
+      const star = makeStar(0.11, 0.03, toonMaterial(0xffd36b, { emissive: 0xffb43a, glow: 0.45 }));
       star.position.set(0.07, 0.52, 0);
       g.add(stick, star);
       g.userData.spin = star;

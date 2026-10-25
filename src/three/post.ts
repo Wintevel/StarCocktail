@@ -1,9 +1,8 @@
-// 제조 화면의 마지막 후처리: 3D를 2D 가게 그림과 같은 화풍으로 바꾼다.
-//  1. 먹선: 깊이(물체의 윤곽)와 밝기(층 경계·장식 무늬)의 급한 변화를 검은 선으로 긋는다.
-//  2. 스티커 테두리: 물체 바깥쪽 둘레를 종이색으로 한 겹 두른다(2D 손님의 흰 테두리와 같은 느낌).
-//  3. 색 정리: 술은 제 색(색상)을 지키되 채도를 낮춰 흑백+빨강 팔레트 쪽으로 당기고, 빨간색은 그대로 살린다.
-//  4. 하프톤: 어두운 곳일수록 큰 검은 점을 45° 격자로 찍는다. 밝은 곳은 종이색으로 날린다.
-// 배경은 투명하게 남겨, 캔버스 뒤 DOM 콜라주 배경이 비친다(색은 미리 곱한 알파로 내보낸다).
+// 제조 화면의 마지막 후처리: 3D를 2D 가게 그림과 어울리게 다듬는다.
+//  1. 먹선: 깊이(물체의 윤곽)와 밝기(층 경계·장식 무늬)의 급한 변화를 가는 남보라 먹선으로 긋는다.
+//  2. 색 정리: 밤의 바 조명 아래에서 술 색이 바래지 않게 밝은 곳을 부드럽게 눌러 담고(필름 곡선), 채도를 조금 올린다.
+// v8: v7의 흑백 망점·채도 낮추기·종이색 테두리는 걷어 내고, 첫 버전처럼 선명한 색으로 돌아간다.
+// 배경은 투명하게 남겨, 캔버스 뒤 DOM 배경(흐린 뒤 선반)이 비친다(색은 미리 곱한 알파로 내보낸다).
 
 import * as THREE from 'three';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
@@ -15,11 +14,9 @@ uniform sampler2D tColor;
 uniform sampler2D tDepth;
 uniform vec2 uTexel;
 uniform float uLine;
-uniform float uHalo;
-uniform float uDot;
 uniform float uNear;
 uniform float uFar;
-uniform vec3 uPaper;
+uniform float uExposure;
 uniform vec3 uInk;
 varying vec2 vUv;
 
@@ -28,10 +25,15 @@ float viewZ(vec2 uv) {
   return d >= 0.9999 ? uFar : -perspectiveDepthToViewZ(d, uNear, uFar);
 }
 float lum(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+// 필름 곡선(ACES 근사): 밝은 금빛 조명에 술 색이 하얗게 날아가지 않게
+vec3 film(vec3 x) {
+  x *= uExposure;
+  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
+}
 vec3 toSrgb(vec3 c) { return pow(max(c, 0.0), vec3(1.0 / 2.2)); }
 vec3 colorAt(vec2 uv) {
   vec4 s = texture2D(tColor, uv);
-  return s.a > 0.001 ? toSrgb(s.rgb / s.a) : vec3(0.0);
+  return s.a > 0.001 ? toSrgb(film(s.rgb / s.a)) : vec3(0.0);
 }
 
 void main() {
@@ -39,53 +41,35 @@ void main() {
   float z = viewZ(vUv);
   bool solid = z < uFar * 0.999;
 
-  // 1. 먹선: 깊이 차(상대값)와 밝기 차
+  // 1. 먹선: 깊이 차(상대값)와 밝기 차(밝기 차는 옅게)
   float edge = 0.0;
   vec2 o = uTexel * uLine;
   vec2 dirs[8];
   dirs[0] = vec2(1.0, 0.0); dirs[1] = vec2(-1.0, 0.0); dirs[2] = vec2(0.0, 1.0); dirs[3] = vec2(0.0, -1.0);
   dirs[4] = vec2(0.7, 0.7); dirs[5] = vec2(-0.7, 0.7); dirs[6] = vec2(0.7, -0.7); dirs[7] = vec2(-0.7, -0.7);
   float l0 = lum(colorAt(vUv));
-  bool near = false;
   for (int i = 0; i < 8; i++) {
     vec2 uv = vUv + dirs[i] * o;
     float zi = viewZ(uv);
     float dz = abs(zi - z) / min(zi, z);
-    edge = max(edge, smoothstep(0.035, 0.07, dz));
+    edge = max(edge, smoothstep(0.035, 0.07, dz) * 0.92);
     if (solid && zi < uFar * 0.999) {
       float li = lum(colorAt(uv));
-      edge = max(edge, smoothstep(0.16, 0.3, abs(li - l0)) * 0.85);
+      edge = max(edge, smoothstep(0.2, 0.36, abs(li - l0)) * 0.55);
     }
-    // 2. 스티커 테두리: 빈 곳인데 조금 떨어진 곳에 물체가 있다
-    if (!solid && viewZ(vUv + dirs[i] * uTexel * uHalo) < uFar * 0.999) near = true;
   }
 
   vec3 c = vec3(0.0);
   float a = src.a;
   if (solid) {
     c = colorAt(vUv);
-    // 3. 색 정리: 빨강은 살리고 나머지는 채도를 낮춘다.
+    // 2. 채도를 조금 올린다(술 색을 또렷하게)
     float L = lum(c);
-    float red = smoothstep(0.18, 0.4, c.r - max(c.g, c.b));
-    c = mix(vec3(L), c, mix(0.72, 1.0, red));
-    // 4. 하프톤: 어두울수록 큰 점
-    vec2 p = gl_FragCoord.xy / uDot;
-    p = vec2(p.x + p.y, p.x - p.y) * 0.7071;
-    float d = length(fract(p) - 0.5);
-    float dark = 1.0 - smoothstep(0.18, 0.62, L);
-    float r = 0.52 * sqrt(dark);
-    float dotMask = 1.0 - smoothstep(r - 0.06, r + 0.06, d);
-    c = mix(c, c * 0.32, dotMask * step(0.02, dark));
-    // 밝은 곳은 종이색으로
-    c = mix(c, uPaper, smoothstep(0.8, 0.95, L));
+    c = clamp(mix(vec3(L), c, 1.06), 0.0, 1.0);
     a = 1.0;
   } else if (a > 0.001) {
-    // 반투명한 유리만 있는 곳: 색만 sRGB로
-    c = toSrgb(src.rgb / a);
-  }
-  if (!solid && a < 0.02 && near) {
-    c = uPaper;
-    a = 1.0;
+    // 반투명한 유리만 있는 곳
+    c = toSrgb(film(src.rgb / a));
   }
   if (edge > 0.01) {
     c = mix(c, uInk, edge);
@@ -110,13 +94,12 @@ export class InkRenderer {
         tColor: { value: this.target.texture },
         tDepth: { value: this.target.depthTexture },
         uTexel: { value: new THREE.Vector2(1, 1) },
-        uLine: { value: 1.4 },
-        uHalo: { value: 4 },
-        uDot: { value: 6 },
+        uLine: { value: 1 },
         uNear: { value: 0.05 },
         uFar: { value: 60 },
-        uPaper: { value: new THREE.Color(0.97, 0.95, 0.91) },
-        uInk: { value: new THREE.Color(0.082, 0.075, 0.075) },
+        uExposure: { value: 1.05 },
+        // 남보라 먹(2D 손님 그림의 먹선과 같은 색)
+        uInk: { value: new THREE.Color(0.09, 0.06, 0.14) },
       },
       vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
       fragmentShader: INK_FRAGMENT,
@@ -127,14 +110,12 @@ export class InkRenderer {
     this.quad = new FullScreenQuad(this.material);
   }
 
-  /** 그리기 버퍼 크기(px)와 화소 밀도. 선 굵기·점 크기는 화소 밀도에 맞춰 키운다. */
+  /** 그리기 버퍼 크기(px)와 화소 밀도. 선 굵기는 화소 밀도에 맞춰 키운다. */
   setSize(width: number, height: number, ratio: number) {
     this.target.setSize(width, height);
     const u = this.material.uniforms;
     u.uTexel.value.set(1 / width, 1 / height);
-    u.uLine.value = 1.3 * ratio;
-    u.uHalo.value = 4 * ratio;
-    u.uDot.value = 5.5 * ratio;
+    u.uLine.value = 1.0 * ratio;
   }
 
   render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera) {

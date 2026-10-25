@@ -1,7 +1,8 @@
 // 2D 손님 그림. 외부 이미지 없이 SVG 도형으로 그린다.
-// 화풍(v7 극화체): 신문 만화 원고처럼 먹·종이·빨강 세 가지만 쓴다. 굵고 단단한 먹선(그늘 쪽 윤곽은 더 굵게),
-// 빗금(해칭)과 망점(스크린톤)으로 그늘과 중간색을 내고, 각진 얼굴·깊은 눈두덩·짙은 눈썹·8~9등신 비율에
-// 손을 허리에 짚거나 턱에 대는 과장된 자세를 준다. 특정 작품의 인물을 본뜨지 않고 화풍만 빌렸다.
+// 화풍(극화체): 굵고 단단한 먹선(그늘 쪽 윤곽은 더 굵게), 빗금(해칭)으로 그늘을 내고, 각진 얼굴·깊은 눈두덩·
+// 짙은 눈썹·8~9등신 비율에 손을 허리에 짚거나 턱에 대는 과장된 자세를 준다. 특정 작품의 인물을 본뜨지 않고 화풍만 빌렸다.
+// v8: 먹선은 지키되 피부·머리·옷에 색을 입힌다. 색 칠은 같은 색을 남보라 쪽으로 어둡게 한 셀 그늘 위에
+// 옅은 빗금을 얹고, 어두운 옷에는 왼쪽 가장자리에 옅은 반사광을 둔다(밤의 바 조명).
 //
 // 한 사람은 두 벌로 그린다.
 //  - 앞모습(.v-front): 걸어 들어오고 나갈 때, 주문 카드·대화 카드·스툴 목록의 얼굴 그림. 표정 다섯 벌.
@@ -12,7 +13,7 @@
 //    머리 모양·모자·소품으로 뒤에서도 누군지 알아보게 했다. 표정 대신 머리 위 감정 표시(.emote)로 반응한다.
 //
 // 단골 여덟 명과 지나가는 손님은 같은 부품(머리 모양·모자·윗옷·자세·얼굴 특징)으로 조립한다.
-// 지나가는 손님은 손님 id로 부품을 고르므로 같은 손님은 늘 같은 모습이고, 빨강은 한 사람에 한 군데만 쓴다.
+// 지나가는 손님은 손님 id로 부품을 고르므로 같은 손님은 늘 같은 모습이고, 눈에 띄는 강조색은 한 사람에 한 군데만 쓴다.
 //
 // 좌표: 엉덩이(고관절) 가운데가 (0,0), 위가 -y. 정수리 ≈ -220, 턱 ≈ -165, 어깨 ≈ -148, 선 다리 끝 = leg(190).
 // 앉으면 엉덩이 아래(seat)가 방석 윗면에 닿고, 팔꿈치는 카운터 윗판(COUNTER_RISE)에, 발은 스툴 발판(FOOTREST_DROP)에 놓인다.
@@ -23,10 +24,12 @@ import { guestRandom } from '../guests';
 
 export type Mood = 'idle' | 'perfect' | 'good' | 'fail' | 'angry';
 
-// ── 팔레트: 먹·종이·빨강 ─────────────────────────────
-export const INK = '#151313';
-export const PAPER = '#f7f2e8';
-export const RED = '#d8202a';
+// ── 팔레트: 먹선(남보라빛 먹)·흰 종이·빨강·금빛 ─────────────
+export const INK = '#170f22';
+export const PAPER = '#fbf6ee';
+export const RED = '#e0304e';
+/** 금빛 장식(단추·별 배지·모자 테·별 지휘봉) */
+export const GOLD = '#e8b54d';
 
 /** 스툴 방석 윗면에서 방석 아랫단·발판까지(세계 좌표). 앉은 종아리를 그릴 때 쓴다(backdrop.ts의 스툴과 맞춘다). */
 export const CUSHION_DROP = 30;
@@ -109,15 +112,41 @@ const g = (cls: string, body: string, extra = '') => `<g class="${cls}"${extra}>
 const HATCH = 'url(#gk-hatch)';
 const HATCH_X = 'url(#gk-hatch-x)';
 
+/** 색 칠: '#rrggbb' */
+type Hex = `#${string}`;
 /**
- * 칠: 먹(ink)·종이(paper)·옅은 망점(tone)·짙은 망점(dark)·빨강(red), 그리고 무늬 둘(할리퀸 마름모·줄무늬).
- * 망점은 종이 위에 먹 점을 덮어 회색을 낸다(인쇄 스크린톤처럼).
+ * 칠: 먹(ink)·종이(paper)·옅은 망점(tone)·짙은 망점(dark)·빨강(red), 무늬 둘(할리퀸 마름모·줄무늬), 그리고 색('#rrggbb').
+ * 망점은 종이 위에 먹 점을 덮어 회색을 낸다(인쇄 스크린톤처럼). v8의 손님은 거의 색으로 칠한다.
  */
-type Fill = 'ink' | 'paper' | 'tone' | 'dark' | 'red' | 'harl' | 'stripe';
+type Fill = 'ink' | 'paper' | 'tone' | 'dark' | 'red' | 'harl' | 'stripe' | Hex;
 
-const BASE: Record<Fill, string> = { ink: INK, paper: PAPER, tone: PAPER, dark: PAPER, red: RED, harl: 'url(#gk-harl)', stripe: 'url(#gk-stripe)' };
-/** 칠 위에 그리는 선의 색: 먹 바탕에는 종이색 선, 나머지는 먹 선 */
-const over = (f: Fill) => (f === 'ink' ? PAPER : INK);
+const BASE: Record<Exclude<Fill, Hex>, string> = { ink: INK, paper: PAPER, tone: PAPER, dark: PAPER, red: RED, harl: 'url(#gk-harl)', stripe: 'url(#gk-stripe)' };
+const isHex = (f: Fill): f is Hex => f.startsWith('#');
+const base = (f: Fill) => (isHex(f) ? f : BASE[f]);
+
+const rgbOf = (c: string) => {
+  const n = parseInt(c.slice(1, 7), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+/** 색 a를 b 쪽으로 t만큼 섞는다 */
+function mixHex(a: string, b: string, t: number): Hex {
+  const x = rgbOf(a);
+  const y = rgbOf(b);
+  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('')}`;
+}
+/** 밝기(0~1) */
+const lum = (c: string) => {
+  const [r, g, b] = rgbOf(c);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+};
+/** 셀 그늘: 남보라 쪽으로 어둡게(밤의 바 조명) */
+const shadeOf = (c: string) => mixHex(c, '#1c1033', 0.4);
+/** 반사광·결: 분홍빛 흰색 쪽으로 밝게 */
+const tintOf = (c: string) => mixHex(c, '#fff3fa', 0.55);
+/** 어두운 색인가(그 위의 선은 밝게 긋는다) */
+const isDark = (f: Fill) => f === 'ink' || (isHex(f) && lum(f) < 0.3);
+/** 칠 위에 그리는 선의 색: 먹·어두운 색 바탕에는 밝은 선, 나머지는 먹 선 */
+const over = (f: Fill) => (isHex(f) ? (lum(f) < 0.3 ? tintOf(f) : INK) : f === 'ink' ? PAPER : INK);
 
 interface PaintOpts {
   /** 윤곽 굵기 */
@@ -128,14 +157,23 @@ interface PaintOpts {
   edge?: boolean;
 }
 
-/** 한 덩어리 칠하기: 바탕 → 망점 → 빗금 그늘(먹 바탕이면 왼쪽 윤곽 안쪽의 종이색 반사광) → 굵은 그늘 윤곽 */
+/**
+ * 한 덩어리 칠하기: 바탕 → 망점 → 그늘 → 굵은 그늘 윤곽.
+ * 그늘은 먹 바탕이면 왼쪽 윤곽 안쪽의 종이색 반사광, 색 바탕이면 셀 그늘(어둡게 한 같은 색)에 옅은 빗금
+ * (어두운 색은 반사광도), 나머지는 빗금.
+ */
 function paint(d: string, f: Fill, o: PaintOpts = {}): string {
   const sw = o.sw ?? 3;
   const shade = o.shade === undefined ? 'r' : o.shade;
-  let s = P(d, BASE[f], INK, sw);
+  let s = P(d, base(f), INK, sw);
   if (f === 'tone') s += P(d, 'url(#gk-tone)');
   if (f === 'dark') s += P(d, 'url(#gk-tone-d)');
-  if (shade) s += f === 'ink' ? L(d, PAPER, 1.4, ' mask="url(#gk-ml)" transform="translate(2.6 1.4)" opacity="0.85"') : P(d, HATCH, 'none', 0, ` mask="url(#gk-m${shade})"`);
+  if (shade) {
+    if (isHex(f)) {
+      s += P(d, shadeOf(f), 'none', 0, ` mask="url(#gk-m${shade})"`) + P(d, HATCH, 'none', 0, ` mask="url(#gk-m${shade})" opacity="0.3"`);
+      if (lum(f) < 0.3) s += L(d, tintOf(f), 1.4, ' mask="url(#gk-ml)" transform="translate(2.6 1.4)" opacity="0.7"');
+    } else s += f === 'ink' ? L(d, PAPER, 1.4, ' mask="url(#gk-ml)" transform="translate(2.6 1.4)" opacity="0.85"') : P(d, HATCH, 'none', 0, ` mask="url(#gk-m${shade})"`);
+  }
   if (o.edge !== false) s += L(d, INK, sw + 2.4, ' mask="url(#gk-me)"');
   return s;
 }
@@ -179,7 +217,7 @@ function handAt(from: Pt, to: Pt, s: number, kind: 'open' | 'fist', k: number, s
       : [[-1, -4.8], [6, -5.6], [10, -3.2], [10.5, 2.4], [6.5, 5.4], [-1, 4.8]];
   const thumb: [number, number][] = kind === 'open' ? [[2, 4.6], [8, 8.6], [10.5, 6.6], [7, 4.4]] : [[1, 4.4], [6.5, 7.2], [8.5, 5]];
   const knuckle = kind === 'open' ? L(line([at(8, -4.8), at(10, -1), at(8.5, 3)]), INK, 1.1) : L(line([at(6.5, -4), at(7.5, 0), at(6.5, 3.6)]), INK, 1.1);
-  return P(poly(shape.map(([t, q]) => at(t, q))), BASE[skin], INK, 2.4) + (skin === 'tone' ? P(poly(shape.map(([t, q]) => at(t, q))), 'url(#gk-tone)') : '') + P(poly(thumb.map(([t, q]) => at(t, q))), BASE[skin], INK, 2) + knuckle;
+  return P(poly(shape.map(([t, q]) => at(t, q))), base(skin), INK, 2.4) + (skin === 'tone' ? P(poly(shape.map(([t, q]) => at(t, q))), 'url(#gk-tone)') : '') + P(poly(thumb.map(([t, q]) => at(t, q))), base(skin), INK, 2) + knuckle;
 }
 
 /** 뾰족한 별 */
@@ -209,7 +247,8 @@ interface Look {
   scale: number;
   /** 아이: 머리가 크고 다리가 짧다 */
   child?: boolean;
-  skin: 'paper' | 'tone';
+  /** 피부: 색('#rrggbb'). v7 식 'paper'·'tone'도 받는다 */
+  skin: Fill;
   jaw: 'square' | 'narrow' | 'round';
   eye: 'sharp' | 'heavy' | 'wide';
   brow: 'thick' | 'thin';
@@ -406,7 +445,7 @@ function faces(l: Look) {
   };
   const overs: Record<Mood, string> = {
     idle: brows(l, 'calm'),
-    perfect: brows(l, 'happy') + P(starPath(-25, -214, 5.5, 0.4, 4), RED, INK, 1),
+    perfect: brows(l, 'happy') + P(starPath(-25, -214, 5.5, 0.4, 4), GOLD, INK, 1),
     good: brows(l, 'calm'),
     fail: brows(l, 'worry') + gloom + sweat,
     angry: brows(l, 'angry') + L(vein, INK, 5) + L(vein, RED, 2.6),
@@ -419,7 +458,10 @@ function faces(l: Look) {
 
 /** 얼굴 고정 부분: 그늘·코·광대 주름·턱 */
 function faceStatic(l: Look): string {
-  const cheek = P('M14,-203 L19,-206 L20,-190 L18,-178 L11,-168 L13.5,-177 L15.5,-189 Z', HATCH);
+  const cheekD = 'M14,-203 L19,-206 L20,-190 L18,-178 L11,-168 L13.5,-177 L15.5,-189 Z';
+  // 색 피부: 같은 색을 어둡게 한 셀 그늘 위에 옅은 빗금, 여자·아이는 볼에 엷은 홍조
+  const blush = l.sex === 'f' || l.child ? '<ellipse cx="-11" cy="-181.5" rx="4.2" ry="2.4" fill="#ff8fa8" opacity="0.45"/><ellipse cx="11" cy="-181.5" rx="4.2" ry="2.4" fill="#ff8fa8" opacity="0.4"/>' : '';
+  const cheek = isHex(l.skin) ? P(cheekD, shadeOf(l.skin), 'none', 0, ' opacity="0.7"') + P(cheekD, HATCH, 'none', 0, ' opacity="0.35"') + blush : P(cheekD, HATCH);
   const nose =
     l.sex === 'm' && !l.child
       ? P(poly([[1.6, -193], [4.8, -183], [2.6, -182]]), HATCH) + L('M1.2,-194 L2.8,-182.6 Q1,-180.4 -2.2,-181.4', INK, 1.5)
@@ -474,7 +516,7 @@ interface HairArt {
 }
 
 /** 머리 결: 먹 머리에는 종이색, 밝은 머리에는 먹 선 */
-const strands = (d: string, f: Fill, sw = 1.2) => L(d, over(f), sw, f === 'ink' ? ' opacity="0.9"' : '');
+const strands = (d: string, f: Fill, sw = 1.2) => L(d, isHex(f) ? (lum(f) < 0.3 ? tintOf(f) : mixHex(f, INK, 0.55)) : over(f), sw, f === 'ink' ? ' opacity="0.9"' : '');
 
 function hairArt(l: Look): HairArt {
   const f = l.hairFill;
@@ -590,7 +632,7 @@ function hairBack(l: Look): HairBack {
   const f = l.hairFill;
   // 머리 덩어리는 빗금 대신 결을 따라 가늘어지는 먹 다발로 그늘을 낸다(빗금은 상자처럼 보인다). 먹 머리는 종이색 반사광과 결만.
   const hp = (d: string, o: PaintOpts = {}) => paint(d, f, { sw: 2.8, shade: f === 'ink' ? 'r' : null, ...o });
-  const dark = (...ls: Lock[]) => (f === 'ink' ? '' : P(ls.map(([a, b, bend, w]) => lock(a, b, bend, w)).join(' '), INK));
+  const dark = (...ls: Lock[]) => (f === 'ink' ? '' : P(ls.map(([a, b, bend, w]) => lock(a, b, bend, w)).join(' '), isHex(f) ? shadeOf(f) : INK));
   /** 머리통 윗부분: 귀 높이(-195)의 왼쪽에서 정수리를 넘어 오른쪽까지. 이어서 목덜미 끝을 붙인다 */
   const dome = (top = -230, w = 24) => `M-${w},-197 C-${w + 3},${top + 12} -${w * 0.62},${top} 0,${top} C${w * 0.62},${top} ${w + 3},${top + 12} ${w},-197`;
   /** 가마에서 사방으로 흐르는 결과 가마 소용돌이 */
@@ -611,7 +653,7 @@ function hairBack(l: Look): HairBack {
   const round = (y = -172, w = 16) => ` Q23.5,-180 ${w},${y - 2} Q0,${y + 4} -${w},${y - 2} Q-23.5,-180 -24,-197 Z`;
   /** 윤기: 머리 덩어리를 가로지르는 짧은 반사광 획들(흰 머리에는 넣지 않는다) */
   const sheen = (y = -204, w = 23) => {
-    if (f === 'paper') return '';
+    if (f === 'paper' || (isHex(f) && lum(f) > 0.72)) return '';
     const ls: string[] = [];
     // 길이·간격을 들쭉날쭉하게(고르면 이빨처럼 보인다), 머리통 곡면을 따라 양끝이 처진다
     const xs = [-0.86, -0.62, -0.45, -0.2, 0.06, 0.24, 0.5, 0.68, 0.88];
@@ -621,7 +663,7 @@ function hairBack(l: Look): HairBack {
       const yy = y + t * t * 10 + (i % 3 === 1 ? -1.5 : 0);
       ls.push(lock([x, yy - 3], [x * 1.08, yy - 3 + lens[i]], 0.7 * Math.sign(x || 1), 2));
     });
-    return P(ls.join(' '), PAPER, 'none', 0, f === 'ink' ? ' opacity="0.9"' : '');
+    return P(ls.join(' '), isHex(f) ? tintOf(f) : PAPER, 'none', 0, f === 'ink' ? ' opacity="0.9"' : isHex(f) ? ' opacity="0.8"' : '');
   };
   // 모자 속에 든 솟은 머리(뾰족·올림)는 모자 밖으로 삐져나오지 않게 짧은 머리로 그린다
   const style: HairStyle = l.hat && (l.hair === 'spiky' || l.hair === 'pomp') ? 'crop' : l.hair;
@@ -664,7 +706,7 @@ function hairBack(l: Look): HairBack {
         rear:
           hp(mirror([0, -234], [[23, -234, 25, -208], [28.5, -193, 26, -180], [24.5, -170.5, 18, -168.5], [14, -163.5, 9, -166.5], [4.5, -162.5, 0, -165.5]])) +
           // 안쪽으로 말린 끝은 목덜미 그늘에 잠겨 어둡다(먹 끝단 위로 머리끝이 삐죽)
-          P('M-25,-178 L-21,-184 L-18,-179 L-14,-185.5 L-10,-179.5 L-6,-186 L-2,-180 L2,-186.5 L6,-180 L10,-186 L14,-179.5 L18,-185 L21,-179 L25,-178 Q24.5,-170.5 18,-168.5 Q14,-163.5 9,-166.5 Q4.5,-162.5 0,-165.5 Q-4.5,-162.5 -9,-166.5 Q-14,-163.5 -18,-168.5 Q-24.5,-170.5 -25,-178 Z', f === 'ink' ? 'url(#gk-tone-d)' : INK) +
+          P('M-25,-178 L-21,-184 L-18,-179 L-14,-185.5 L-10,-179.5 L-6,-186 L-2,-180 L2,-186.5 L6,-180 L10,-186 L14,-179.5 L18,-185 L21,-179 L25,-178 Q24.5,-170.5 18,-168.5 Q14,-163.5 9,-166.5 Q4.5,-162.5 0,-165.5 Q-4.5,-162.5 -9,-166.5 Q-14,-163.5 -18,-168.5 Q-24.5,-170.5 -25,-178 Z', f === 'ink' ? 'url(#gk-tone-d)' : isHex(f) ? shadeOf(f) : INK) +
           dark([[23, -212], [21, -182], 3, 4.4]) +
           sheen(-206, 24) +
           strands('M-6,-232 Q-20,-212 -17,-186 M2,-233 Q-4,-210 -4,-187 M10,-231 Q14,-210 10,-186', f),
@@ -743,7 +785,7 @@ const oval = (cx: number, cy: number, rx: number, ry: number) => `M${cx - rx},${
 function hatArt(l: Look): HatArt | null {
   if (!l.hat) return null;
   const f = l.hatFill ?? 'ink';
-  const band = l.band ?? (f === 'ink' ? 'paper' : 'ink');
+  const band: Fill = l.band ?? (isHex(f) ? (lum(f) < 0.3 ? mixHex(f, '#fff3fa', 0.3) : shadeOf(f)) : f === 'ink' ? 'paper' : 'ink');
   const hp = (d: string, o: PaintOpts = {}) => paint(d, f, { sw: 2.8, ...o });
   switch (l.hat) {
     case 'fedora': {
@@ -777,13 +819,13 @@ function hatArt(l: Look): HatArt | null {
     }
     case 'kidcap': {
       const crown = hp('M-22,-207 Q-24,-233 0,-235 Q24,-233 22,-207 Z');
-      const goggles = C(-8, -224, 5.6, PAPER, INK, 2.2) + C(8, -224, 5.6, PAPER, INK, 2.2) + L('M-2.4,-224 L2.4,-224', INK, 2) + L('M-6,-226 L-9,-222 M10,-226 L7,-222', INK, 1.2);
+      const goggles = C(-8, -224, 5.6, '#cfe8ff', INK, 2.2) + C(8, -224, 5.6, '#cfe8ff', INK, 2.2) + L('M-2.4,-224 L2.4,-224', INK, 2) + L('M-6,-226 L-9,-222 M10,-226 L7,-222', INK, 1.2);
       const bill = paint('M-6,-209 L30,-212 L29,-205 L-6,-205 Z', f, { sw: 2.4, shade: null });
       // 뒤에서: 둥근 모자 몸통을 두른 고글 끈, 양옆으로 비죽 나온 고글 테, 꼭대기 단추
       const crownB = hp('M-22,-207.5 Q-24,-234 0,-235.5 Q24,-234 22,-207.5 Q0,-203.5 -22,-207.5 Z');
       const strap = paint('M-22.8,-221 Q0,-215.5 22.8,-221 L22.5,-215 Q0,-209.5 -22.5,-215 Z', band, { sw: 2, shade: null, edge: false });
-      const rims = C(-24, -219, 4.6, PAPER, INK, 2.2) + C(24, -219, 4.6, PAPER, INK, 2.2);
-      return { front: crown + bill + goggles, rear: rims + crownB + strap + C(0, -235, 2.6, BASE[f], INK, 1.6), top: -235 };
+      const rims = C(-24, -219, 4.6, '#cfe8ff', INK, 2.2) + C(24, -219, 4.6, '#cfe8ff', INK, 2.2);
+      return { front: crown + bill + goggles, rear: rims + crownB + strap + C(0, -235, 2.6, base(f), INK, 1.6), top: -235 };
     }
     case 'beret': {
       const d = 'M-24,-212 Q-30,-232 -4,-237 Q24,-240 29,-222 Q28,-213 18,-211 Q0,-208 -24,-212 Z';
@@ -791,7 +833,7 @@ function hatArt(l: Look): HatArt | null {
     }
     case 'tricorn': {
       const d = 'M-36,-213 L-21,-239 L0,-231 L21,-239 L36,-213 Q0,-205 -36,-213 Z';
-      const trim = L('M-33,-214 L-21,-235 L0,-227.5 L21,-235 L33,-214', PAPER, 2);
+      const trim = L('M-33,-214 L-21,-235 L0,-227.5 L21,-235 L33,-214', isHex(f) ? GOLD : PAPER, 2);
       return { front: hp(d) + trim + P(starPath(0, -220, 6.5), RED, INK, 1.4), rear: brimShade(-208, 24) + hp(d) + trim, top: -239 };
     }
     case 'tophat': {
@@ -832,8 +874,9 @@ function topFront(l: Look, b: Body): string {
   const ink = over(F);
   const vneck = (depth: number, fill: Fill = inner) => paint(poly([[-(nk + 3), -158], [0, depth], [nk + 3, -158]]), fill, { sw: 2, shade: null, edge: false });
   const tie = l.tie ? paint('M-3.5,-157 L3.5,-157 L2.5,-150 L-2.5,-150 Z M-2.5,-150 L2.5,-150 L4.5,-120 L0,-113 L-4.5,-120 Z', l.tie, { sw: 1.6, shade: null, edge: false }) : '';
-  const bow = (fill: Fill) => paint('M0,-155 L-10,-161 L-10,-149 Z M0,-155 L10,-161 L10,-149 Z', fill, { sw: 1.6, shade: null, edge: false }) + C(0, -155, 2.6, BASE[fill], INK, 1.4);
-  const buttons = (ys: number[], x = -5) => ys.map((y) => C(x, y, 2.1, ink === PAPER ? PAPER : INK)).join('');
+  const bow = (fill: Fill) => paint('M0,-155 L-10,-161 L-10,-149 Z M0,-155 L10,-161 L10,-149 Z', fill, { sw: 1.6, shade: null, edge: false }) + C(0, -155, 2.6, base(fill), INK, 1.4);
+  // 색 옷의 단추는 금빛
+  const buttons = (ys: number[], x = -5) => ys.map((y) => C(x, y, 2.1, isHex(F) ? GOLD : ink === PAPER ? PAPER : INK, isHex(F) ? INK : 'none', 0.8)).join('');
   switch (l.top) {
     case 'suit':
       return (
@@ -916,7 +959,7 @@ function topFront(l: Look, b: Body): string {
       );
     case 'dress': {
       const skirt = paint(`M${-(ww + 2)},-74 L${-(hw + 19)},94 Q0,103 ${hw + 19},94 L${ww + 2},-74 Z`, F) + L(`M-8,-60 L-14,96 M8,-60 L14,96 M-${hw},-10 L-${hw + 12},92`, ink, 1.2);
-      const sparkle = F === 'ink' ? [[-18, -100], [12, -120], [-6, -20], [20, 30], [-22, 60], [6, 80], [16, -40]].map(([x, y]) => P(starPath(x, y, 3.4, 0.3, 4), PAPER)).join('') : '';
+      const sparkle = isDark(F) ? [[-18, -100], [12, -120], [-6, -20], [20, 30], [-22, 60], [6, 80], [16, -40]].map(([x, y]) => P(starPath(x, y, 3.4, 0.3, 4), isHex(F) ? '#ffe7a8' : PAPER)).join('') : '';
       if (l.bare) {
         const chest = paint(torso(b, -120), skinFill(l), { sw: 3 });
         const bodice = paint(`M${-(sw - 2)},-140 Q0,-130 ${sw - 2},-140 L${ww + 2},-74 L${-(ww + 2)},-74 Z`, F);
@@ -1031,7 +1074,8 @@ function sitTorso(b: Body, hem: number, flare: number, top = -148): string {
 }
 
 /** 등판 칠: 오른쪽 빗금 그늘에 더해, 앞으로 숙인 등의 아래쪽(허리·엉덩이)에 옅은 빗금 */
-const sitPaint = (d: string, f: Fill) => paint(d, f) + (f === 'ink' ? '' : P(d, HATCH, 'none', 0, ' mask="url(#gk-mb)" opacity="0.42"'));
+const sitPaint = (d: string, f: Fill) =>
+  paint(d, f) + (f === 'ink' ? '' : isHex(f) ? P(d, shadeOf(f), 'none', 0, ' mask="url(#gk-mb)" opacity="0.45"') + P(d, HATCH, 'none', 0, ' mask="url(#gk-mb)" opacity="0.2"') : P(d, HATCH, 'none', 0, ' mask="url(#gk-mb)" opacity="0.42"'));
 
 /** 등판 주름: 팔을 앞으로 뻗어 어깨뼈 사이가 당겨진 주름, 앉아서 허리에 접힌 주름 */
 function sitFolds(b: Body, ink: string, waist = true): string {
@@ -1073,19 +1117,19 @@ function topSit(l: Look, b: Body): string {
   const { sw, ww, hw, nk } = b;
   const ink = over(F);
   const spine = (to = -68) => L(`M0,-144 Q-1.5,-106 0,${to}`, ink, 1.5);
-  const shirtCollar = paint(collarPath(nk, -152, -143, 3, 5), inner === 'ink' ? 'ink' : 'paper', { sw: 2, shade: null, edge: false });
+  const shirtCollar = paint(collarPath(nk, -152, -143, 3, 5), inner === 'ink' || isHex(inner) ? inner : 'paper', { sw: 2, shade: null, edge: false });
   switch (l.top) {
     case 'coat': {
       // 긴 외투: 자락이 방석 뒤 가장자리를 덮어 흘러내린다. 허리 뒤 반 벨트, 가운데 트임, 세운 깃
-      const yoke = F === 'paper' || F === 'tone' ? paint(mirror([0, -141], [[sw - 6, -140], [sw - 9, -110], [sw * 0.5, -102, 0, -104]]), F, { sw: 2.2, shade: 'r', edge: false }) : '';
+      const yoke = F === 'paper' || F === 'tone' || (isHex(F) && lum(F) > 0.45) ? paint(mirror([0, -141], [[sw - 6, -140], [sw - 9, -110], [sw * 0.5, -102, 0, -104]]), F, { sw: 2.2, shade: 'r', edge: false }) : '';
       return (
         sitPaint(sitTorso(b, 40, 18), F) +
         yoke +
         spine(-72) +
         sitFolds(b, ink, false) +
         paint(mirror([0, -72], [[ww + 2, -72], [ww + 2, -62], [0, -62]]), F, { sw: 2, shade: null, edge: false }) +
-        C(-(ww - 4), -67, 2.1, ink === PAPER ? PAPER : INK) +
-        C(ww - 4, -67, 2.1, ink === PAPER ? PAPER : INK) +
+        C(-(ww - 4), -67, 2.1, isHex(F) ? GOLD : ink === PAPER ? PAPER : INK) +
+        C(ww - 4, -67, 2.1, isHex(F) ? GOLD : ink === PAPER ? PAPER : INK) +
         L(`M0,-62 L0,10 L-3,40 M0,10 L4,41 M-${n1(hw - 3)},-12 Q-${n1(hw + 3)},12 -${n1(hw + 13)},34 M${n1(hw - 3)},-12 Q${n1(hw + 3)},12 ${n1(hw + 13)},34 M-12,0 Q-14,20 -17,40 M12,0 Q14,20 17,40`, ink, 1.3) +
         paint(collarPath(nk, -158, -138, 9, 18), F, { sw: 2.4, shade: 'r' }) +
         L(`M-${n1(nk + 13)},-147 Q0,-141 ${n1(nk + 13)},-147`, ink, 1.2)
@@ -1095,7 +1139,7 @@ function topSit(l: Look, b: Body): string {
       // 셔츠 등판 위에 조끼 뒤판(망점)과 허리 조임 끈
       return (
         sitPaint(sitTorso(b, 6, 4), inner) +
-        paint(mirror([0, -142], [[sw - 12, -141], [ww + 9, -92, ww + 3, -66], [ww + 1, -38, hw + 1, -6], [hw * 0.5, 2, 0, 0]]), 'tone', { sw: 2.4 }) +
+        paint(mirror([0, -142], [[sw - 12, -141], [ww + 9, -92, ww + 3, -66], [ww + 1, -38, hw + 1, -6], [hw * 0.5, 2, 0, 0]]), isHex(F) ? F : 'tone', { sw: 2.4 }) +
         sitFolds(b, INK) +
         L(`M-${n1(ww + 1)},-54 L${n1(ww + 1)},-54`, INK, 3) +
         P('M-4,-58 L4,-58 L4,-50 L-4,-50 Z', PAPER, INK, 1.4) +
@@ -1117,7 +1161,7 @@ function topSit(l: Look, b: Body): string {
         paint(`M-${hw + 1},-30 Q-${hw + 9},-4 -${hw + 7},14 L-${hw - 3},16 Q-${hw - 1},-6 -${hw - 4},-30 Z M${hw + 1},-30 Q${hw + 9},-4 ${hw + 7},14 L${hw - 3},16 Q${hw - 1},-6 ${hw - 4},-30 Z`, F, { sw: 2.4, shade: null }) +
         L(`M-${n1(sw - 10)},-138 Q-6,-104 ${n1(ww - 2)},-66 M${n1(sw - 10)},-138 Q6,-104 -${n1(ww - 2)},-66`, INK, 3.4) +
         L(`M-${n1(ww + 4)},-62 L${n1(ww + 4)},-62`, INK, 3) +
-        P('M0,-62 L-13,-73 L-13,-52 Z M0,-62 L13,-73 L13,-52 Z M-3,-61 L-7,-40 L-1,-42 Z M3,-61 L8,-41 L2,-42 Z', BASE[F], INK, 1.6) +
+        P('M0,-62 L-13,-73 L-13,-52 Z M0,-62 L13,-73 L13,-52 Z M-3,-61 L-7,-40 L-1,-42 Z M3,-61 L8,-41 L2,-42 Z', base(F), INK, 1.6) +
         sitFolds(b, INK, false) +
         shirtCollar
       );
@@ -1235,7 +1279,7 @@ function shoeBack(l: Look, ank: Pt, u: Pt, wa: number, kind: 'flat' | 'heel' | '
   const q: Pt = [-u[1], u[0]];
   const at = (t: number, c: number): Pt => [ank[0] + u[0] * t + q[0] * c, ank[1] + u[1] * t + q[1] * c];
   const shape = (pts: [number, number][]) => poly(pts.map(([t, c]) => at(t, c)));
-  const sole = l.shoe === 'ink' ? 'ink' : 'dark';
+  const sole: Fill = isHex(l.shoe) ? shadeOf(l.shoe) : l.shoe === 'ink' ? 'ink' : 'dark';
   if (kind === 'heel') {
     const h = wa / 2 + 1.2;
     return L(line([at(7, 0), at(17, 0)]), INK, 2.6) + paint(shape([[-2, -h], [5, -h - 0.6], [9, -h * 0.5], [9.5, 0], [9, h * 0.5], [5, h + 0.6], [-2, h]]), l.shoe, { sw: 2.2, shade: null, edge: false });
@@ -1295,10 +1339,12 @@ function emote(x: number, y: number): string {
     const r = i % 2 ? 9 : 19;
     burst.push([Math.cos(a) * r, Math.sin(a) * r]);
   }
-  const bang = (bx: number) => P(poly([[bx - 1.8, -9], [bx + 1.8, -9], [bx + 1.1, 2], [bx - 1.1, 2]]), PAPER) + C(bx, 5.6, 1.9, PAPER);
-  const perfect = g('emo emo-perfect', P(poly(burst), RED, INK, 2.6) + bang(-3.5) + bang(3.5));
-  const good = g('emo emo-good', P('M-4,8 a6,4.6 -20 1,1 0.1,0 Z', INK) + L('M1.6,6 L1.6,-14 L12,-10 L12,-4 L1.6,-8', INK, 3.2) + P('M10,-24 L12,-18 L18,-18 L13,-14 L15,-8 L10,-12 L5,-8 L7,-14 L2,-18 L8,-18 Z', RED, INK, 1));
-  const fail = g('emo emo-fail', P('M-6,-12 Q2,2 -4,8 Q-11,2 -6,-12 Z', PAPER, INK, 2.2) + P('M8,-4 Q13,5 9,9 Q4,5 8,-4 Z', PAPER, INK, 2) + L('M-14,-22 L-14,-6 M-8,-24 L-8,-14 M14,-22 L14,-12', INK, 2.2));
+  const bang = (bx: number) => P(poly([[bx - 1.8, -9], [bx + 1.8, -9], [bx + 1.1, 2], [bx - 1.1, 2]]), INK) + C(bx, 5.6, 1.9, INK);
+  const perfect = g('emo emo-perfect', P(poly(burst), GOLD, INK, 2.6) + bang(-3.5) + bang(3.5));
+  const flag = 'M1.6,6 L1.6,-14 L12,-10 L12,-4 L1.6,-8';
+  const good = g('emo emo-good', P('M-4,8 a6,4.6 -20 1,1 0.1,0 Z', '#ff8fc8', INK, 1.8) + L(flag, INK, 5.4) + L(flag, '#ff8fc8', 2.6) + P('M10,-24 L12,-18 L18,-18 L13,-14 L15,-8 L10,-12 L5,-8 L7,-14 L2,-18 L8,-18 Z', GOLD, INK, 1));
+  const gloom = 'M-14,-22 L-14,-6 M-8,-24 L-8,-14 M14,-22 L14,-12';
+  const fail = g('emo emo-fail', P('M-6,-12 Q2,2 -4,8 Q-11,2 -6,-12 Z', '#cfe8ff', INK, 2.2) + P('M8,-4 Q13,5 9,9 Q4,5 8,-4 Z', '#cfe8ff', INK, 2) + L(gloom, INK, 4.4) + L(gloom, '#c9bdf0', 2.2));
   const vein = 'M-8,-10 q4,7 0,14 M8,-10 q-4,7 0,14 M-11,-6 q11,5 22,0 M-11,6 q11,-5 22,0';
   const angry = g('emo emo-angry', L(vein, INK, 8) + L(vein, RED, 4.4));
   return `<g class="emote" transform="translate(${x} ${y}) scale(1.35)">${perfect + good + fail + angry}</g>`;
@@ -1389,86 +1435,86 @@ function assemble(l: Look): Rig {
 
 // ── 단골 여덟 명 ───────────────────────────────────
 
-/** 미오 · 졸린 막차 차장: 망점 단발과 삐친 머리, 먹색 차장 모자(빨간 띠·별 배지), 두 줄 단추 긴 외투, 사슬 달린 검표 펀치 */
+/** 미오 · 졸린 막차 차장: 푸른 단발과 삐친 머리, 남색 차장 모자(빨간 띠·금빛 별 배지), 두 줄 단추 남색 긴 외투, 사슬 달린 놋쇠 검표 펀치 */
 const MIO: Look = {
   sex: 'f',
   build: 0.98,
   scale: 0.91,
-  skin: 'paper',
+  skin: '#ffe3d1',
   jaw: 'narrow',
   eye: 'heavy',
   brow: 'thin',
   hair: 'bob',
-  hairFill: 'tone',
+  hairFill: '#7d8be0',
   hat: 'cap',
-  hatFill: 'ink',
+  hatFill: '#26306a',
   band: 'red',
   top: 'coat',
-  topFill: 'ink',
-  pants: 'ink',
-  shoe: 'ink',
+  topFill: '#2b3470',
+  pants: '#1e2450',
+  shoe: '#1a1424',
   pose: ['pocket', 'hang'],
   front: {
-    head: P(starPath(0, -226, 4.6), PAPER, INK, 1) + paint('M12,-238 C9,-256 28,-262 31,-248 C26,-253 19,-251 17,-237 Z', 'tone', { sw: 2.2, shade: null, edge: false }),
-    over: L('M14,-70 C26,-56 36,-30 38,-10', INK, 1.6, ' stroke-dasharray="3 2.4"') + paint('M30,-12 L46,-14 L48,2 L32,4 Z', 'paper', { sw: 2.2, shade: null }) + C(39, -5, 2.6, INK),
+    head: P(starPath(0, -226, 4.6), GOLD, INK, 1) + paint('M12,-238 C9,-256 28,-262 31,-248 C26,-253 19,-251 17,-237 Z', '#7d8be0', { sw: 2.2, shade: null, edge: false }),
+    over: L('M14,-70 C26,-56 36,-30 38,-10', INK, 1.6, ' stroke-dasharray="3 2.4"') + paint('M30,-12 L46,-14 L48,2 L32,4 Z', '#d9a441', { sw: 2.2, shade: null }) + C(39, -5, 2.6, INK),
   },
   sit: 'ring',
   back: {
-    head: paint('M12,-238 C9,-256 28,-262 31,-248 C26,-253 19,-251 17,-237 Z', 'tone', { sw: 2.2, shade: null, edge: false }),
+    head: paint('M12,-238 C9,-256 28,-262 31,-248 C26,-253 19,-251 17,-237 Z', '#7d8be0', { sw: 2.2, shade: null, edge: false }),
     // 외투 허리에서 사슬로 늘어진 검표 펀치가 방석 옆으로 흔들린다
-    over: L('M30,-66 C46,-52 54,-30 54,-12', INK, 1.6, ' stroke-dasharray="3 2.4"') + paint('M47,-14 L61,-16 L63,0 L49,2 Z', 'paper', { sw: 2.2, shade: null }) + C(55.5, -7, 2.4, INK),
+    over: L('M30,-66 C46,-52 54,-30 54,-12', INK, 1.6, ' stroke-dasharray="3 2.4"') + paint('M47,-14 L61,-16 L63,0 L49,2 Z', '#d9a441', { sw: 2.2, shade: null }) + C(55.5, -7, 2.4, INK),
   },
 };
 
-/** 그레이 · 비 오는 날의 탐정: 잿빛 넘긴 머리, 중절모(빨간 띠), 깃 세운 종이색 트렌치코트, 접은 우산, 거뭇한 수염 */
-const umbrellaFront = paint('M-56,-14 L-48,-16 L-44,170 L-50,178 L-58,172 Z', 'ink', { sw: 2.4 }) + L('M-52,-14 L-52,-30 Q-52,-42 -42,-42 Q-34,-42 -34,-34', INK, 4) + L('M-50,176 L-49,188', INK, 3);
+/** 그레이 · 비 오는 날의 탐정: 잿빛 넘긴 머리, 갈색 중절모(빨간 띠), 깃 세운 낙타색 트렌치코트, 접은 남색 우산, 거뭇한 수염 */
+const umbrellaFront = paint('M-56,-14 L-48,-16 L-44,170 L-50,178 L-58,172 Z', '#2c3156', { sw: 2.4 }) + L('M-52,-14 L-52,-30 Q-52,-42 -42,-42 Q-34,-42 -34,-34', INK, 4) + L('M-50,176 L-49,188', INK, 3);
 const GREY: Look = {
   sex: 'm',
   build: 1.04,
   scale: 0.99,
-  skin: 'paper',
+  skin: '#f3c9a8',
   jaw: 'square',
   eye: 'sharp',
   brow: 'thick',
   hair: 'slick',
-  hairFill: 'paper',
+  hairFill: '#c4c8d4',
   hat: 'fedora',
-  hatFill: 'tone',
+  hatFill: '#7d6b5c',
   band: 'red',
   top: 'coat',
-  topFill: 'paper',
-  inner: 'paper',
-  tie: 'ink',
-  pants: 'dark',
-  shoe: 'ink',
+  topFill: '#c9a574',
+  inner: '#f3eee4',
+  tie: '#2b2440',
+  pants: '#3b3747',
+  shoe: '#2b1c16',
   pose: ['hang', 'pocket'],
   beard: 'stubble',
   wrinkles: true,
   front: { under: '', over: umbrellaFront },
   sit: 'hook',
   // 접은 우산을 스툴 방석에 기대 세웠다
-  back: { behind: paint('M-66,30 L-58,32 L-76,174 L-83,178 L-87,171 Z', 'ink', { sw: 2.4 }) + L('M-62,31 Q-60,12 -48,14 Q-39,17 -42,27', INK, 4) + L('M-84,176 L-86,186', INK, 3) },
+  back: { behind: paint('M-66,30 L-58,32 L-76,174 L-83,178 L-87,171 Z', '#2c3156', { sw: 2.4 }) + L('M-62,31 Q-60,12 -48,14 Q-39,17 -42,27', INK, 4) + L('M-84,176 L-86,186', INK, 3) },
 };
 
-/** 세레나 · 무대 뒤의 가수: 허리까지 물결치는 먹색 머리에 빨간 장미, 어깨 드러낸 반짝이 먹색 드레스, 긴 장갑, 붉은 입술, 눈가 점 */
+/** 세레나 · 무대 뒤의 가수: 허리까지 물결치는 짙은 자줏빛 머리에 빨간 장미, 어깨 드러낸 금빛 반짝이 보라 드레스, 긴 장갑, 붉은 입술, 눈가 점 */
 const rose = (x: number, y: number) => P(`M${x - 9},${y} a9,8 0 1,1 18,0 a9,8 0 1,1 -18,0 Z`, RED, INK, 2) + L(`M${x - 4},${y - 2} q4,-5 8,0 q-4,6 -8,1 M${x - 1},${y - 6} q6,1 6,6`, INK, 1.3);
 const SERENA: Look = {
   sex: 'f',
   build: 0.95,
   scale: 0.95,
-  skin: 'paper',
+  skin: '#ffe0cf',
   jaw: 'narrow',
   eye: 'heavy',
   brow: 'thin',
   hair: 'long',
-  hairFill: 'ink',
+  hairFill: '#2b1236',
   top: 'dress',
-  topFill: 'ink',
+  topFill: '#4a1d78',
   bare: true,
   sleeve: 'skin',
-  glove: 'ink',
-  pants: 'ink',
-  shoe: 'ink',
+  glove: '#1d0f2a',
+  pants: '#2a1534',
+  shoe: '#1d0f2a',
   pose: ['hang', 'chin'],
   lips: true,
   mole: true,
@@ -1476,138 +1522,138 @@ const SERENA: Look = {
   back: { head: rose(17, -214) },
 };
 
-/** 에반 · 떠돌이 시인: 곱슬한 망점 머리, 빨간 베레모, 동그란 안경, 귀에 꽂은 깃펜, 줄무늬 긴 목도리, 해진 긴 외투, 수첩 */
+/** 에반 · 떠돌이 시인: 곱슬한 밤색 머리, 자줏빛 베레모, 동그란 안경, 귀에 꽂은 깃펜, 분홍 줄무늬 긴 목도리, 해진 올리브색 긴 외투, 수첩 */
 const quill = (x: number) => P(`M${x},-200 Q${x + 10},-226 ${x + 22},-236 Q${x + 14},-220 ${x + 4},-198 Z`, PAPER, INK, 1.6) + L(`M${x + 2},-200 L${x + 16},-226`, INK, 1);
 const EVAN: Look = {
   sex: 'm',
   build: 0.9,
   scale: 0.95,
-  skin: 'paper',
+  skin: '#f1c7a5',
   jaw: 'narrow',
   eye: 'heavy',
   brow: 'thin',
   hair: 'wave',
-  hairFill: 'tone',
+  hairFill: '#8b5530',
   hat: 'beret',
-  hatFill: 'red',
+  hatFill: '#93264a',
   top: 'coat',
-  topFill: 'dark',
+  topFill: '#5c6a3c',
   scarf: 'stripe',
-  pants: 'ink',
-  shoe: 'ink',
+  pants: '#2b2633',
+  shoe: '#3a241a',
   pose: ['hold', 'hang'],
   glasses: 'round',
-  front: { head: quill(18), over: `<g transform="rotate(-8 -8 -86)">${paint('M-26,-104 L4,-104 L4,-66 L-26,-66 Z', 'paper', { sw: 2.4 })}${L('M-21,-96 L-1,-96 M-21,-89 L-3,-89 M-21,-82 L-1,-82 M-21,-75 L-8,-75', INK, 1.2)}</g>` },
+  front: { head: quill(18), over: `<g transform="rotate(-8 -8 -86)">${paint('M-26,-104 L4,-104 L4,-66 L-26,-66 Z', '#f4ead6', { sw: 2.4 })}${L('M-21,-96 L-1,-96 M-21,-89 L-3,-89 M-21,-82 L-1,-82 M-21,-75 L-8,-75', INK, 1.2)}</g>` },
   back: { head: quill(18) },
 };
 
-/** 볼트 선장 · 은퇴한 우주 해적: 흰 머리와 풍성한 흰 수염, 삼각모(빨간 별), 안대, 빨간 선장 외투, 볼트 박힌 기계 팔 */
-const mechArm = (pts: Pt[]) => pts.map(([x, y]) => C(x, y, 2.2, PAPER, INK, 1.2)).join('');
+/** 볼트 선장 · 은퇴한 우주 해적: 흰 머리와 풍성한 흰 수염, 금테 남색 삼각모(빨간 별), 안대, 빨간 선장 외투, 볼트 박힌 기계 팔 */
+const mechArm = (pts: Pt[]) => pts.map(([x, y]) => C(x, y, 2.2, '#c9ced8', INK, 1.2)).join('');
 const BOLT: Look = {
   sex: 'm',
   build: 1.2,
   scale: 1.02,
-  skin: 'paper',
+  skin: '#e8b48f',
   jaw: 'square',
   eye: 'sharp',
   brow: 'thick',
   hair: 'crop',
-  hairFill: 'paper',
+  hairFill: '#eef0f6',
   hat: 'tricorn',
-  hatFill: 'ink',
+  hatFill: '#1f2858',
   top: 'coat',
-  topFill: 'red',
-  inner: 'paper',
-  pants: 'ink',
-  shoe: 'ink',
+  topFill: '#b3263f',
+  inner: '#f3eee4',
+  pants: '#1d1c36',
+  shoe: '#1a1424',
   pose: ['hip', 'hang'],
   beard: 'full',
-  beardFill: 'paper',
+  beardFill: '#eef0f6',
   patch: true,
   scar: true,
   wrinkles: true,
-  sleeve: 'red',
+  sleeve: '#b3263f',
   front: { over: mechArm([[54, -60], [55, -40], [53, -26]]) + L('M48,-54 L60,-54 M48,-34 L60,-34', INK, 1.6) },
   sit: 'ring',
   // 기계 팔: 위팔에 볼트 줄과 이음매
   back: { armR: L('M-6,-16 L-6,18 M6,-16 L6,18', INK, 1.4) + mechArm([[0, -12], [0, 0], [0, 12]]) },
 };
 
-/** 노르마 · 꿈 관리국 감독관: 먹색 올림머리와 일자 앞머리, 네모 안경, 높은 깃의 종이색 제복, 빨간 마름모 완장, 클립보드 */
+/** 노르마 · 꿈 관리국 감독관: 짙은 남색 올림머리와 일자 앞머리, 네모 안경, 높은 깃의 연보라 제복, 빨간 마름모 완장, 클립보드 */
 const NORMA: Look = {
   sex: 'f',
   build: 0.96,
   scale: 0.96,
-  skin: 'paper',
+  skin: '#fde2d0',
   jaw: 'narrow',
   eye: 'sharp',
   brow: 'thin',
   hair: 'bun',
   bangs: true,
-  hairFill: 'ink',
+  hairFill: '#1c2244',
   top: 'uniform',
-  topFill: 'paper',
-  pants: 'ink',
-  shoe: 'ink',
+  topFill: '#e4dcf3',
+  pants: '#2b2648',
+  shoe: '#1a1424',
   pose: ['hang', 'hold'],
   glasses: 'square',
   front: {
     under: P('M-42,-124 L-28,-124 L-30,-108 L-44,-108 Z', RED, INK, 1.6) + P('M-36,-121 L-32,-116 L-36,-111 L-40,-116 Z', PAPER),
-    over: paint('M-2,-112 L28,-110 L26,-62 L-4,-64 Z', 'tone', { sw: 2.4 }) + paint('M6,-114 L20,-113 L19,-106 L5,-107 Z', 'ink', { sw: 1.6, shade: null, edge: false }) + L('M2,-98 L22,-97 M2,-90 L20,-89 M2,-82 L22,-81 M2,-74 L14,-73', INK, 1.2),
+    over: paint('M-2,-112 L28,-110 L26,-62 L-4,-64 Z', '#b98b58', { sw: 2.4 }) + paint('M6,-114 L20,-113 L19,-106 L5,-107 Z', '#3a2f4f', { sw: 1.6, shade: null, edge: false }) + P('M2,-104 L24,-103 L23,-66 L1,-67 Z', '#fbf6ee', INK, 1.2) + L('M4,-98 L21,-97 M4,-90 L19,-89 M4,-82 L21,-81 M4,-74 L13,-73', '#6b5f86', 1.2),
   },
   sit: 'cross',
   back: { armL: P('M-8.5,-6 L8.5,-6 L8.5,6 L-8.5,6 Z', RED, INK, 1.6) + P('M0,-4 L3.4,0 L0,4 L-3.4,0 Z', PAPER) },
 };
 
-/** 피피 · 꼬마 배달부: 별 핀 꽂은 양갈래, 고글 얹은 먹색 배달 모자, 빨간 점퍼, 몸만 한 가방, 볼에 반창고 */
+/** 피피 · 꼬마 배달부: 별 핀 꽂은 주황 양갈래, 고글 얹은 남색 배달 모자, 빨간 점퍼, 몸만 한 가죽 가방, 볼에 반창고 */
 const PIPI: Look = {
   sex: 'f',
   build: 1,
   scale: 0.66,
   child: true,
-  skin: 'paper',
+  skin: '#ffd9c2',
   jaw: 'round',
   eye: 'wide',
   brow: 'thin',
   hair: 'twin',
-  hairFill: 'tone',
+  hairFill: '#e47a3c',
   hat: 'kidcap',
-  hatFill: 'ink',
+  hatFill: '#27326a',
   top: 'jumper',
-  topFill: 'red',
-  pants: 'tone',
-  shoe: 'ink',
+  topFill: '#ff6a5a',
+  pants: '#3e6f93',
+  shoe: '#2a1d2e',
   pose: ['hang', 'hang'],
   bandage: true,
-  front: { over: L('M-22,-148 L24,-30', INK, 4) + paint('M14,-46 L46,-46 L46,-6 L14,-6 Z', 'paper', { sw: 2.6 }) + paint('M14,-46 L46,-46 L44,-32 L16,-32 Z', 'tone', { sw: 2.2, shade: null, edge: false }) },
-  back: { over: paint('M-30,-128 L30,-128 L32,-50 L-32,-50 Z', 'paper', { sw: 2.8 }) + paint('M-30,-128 L30,-128 L28,-102 L-28,-102 Z', 'tone', { sw: 2.4, shade: null, edge: false }) + L('M-30,-128 L-22,-150 M30,-128 L22,-150', INK, 3.4) },
+  front: { over: L('M-22,-148 L24,-30', INK, 4) + paint('M14,-46 L46,-46 L46,-6 L14,-6 Z', '#c99a62', { sw: 2.6 }) + paint('M14,-46 L46,-46 L44,-32 L16,-32 Z', '#a8774a', { sw: 2.2, shade: null, edge: false }) },
+  back: { over: paint('M-30,-128 L30,-128 L32,-50 L-32,-50 Z', '#c99a62', { sw: 2.8 }) + paint('M-30,-128 L30,-128 L28,-102 L-28,-102 Z', '#a8774a', { sw: 2.4, shade: null, edge: false }) + L('M-30,-128 L-22,-150 M30,-128 L22,-150', INK, 3.4) },
 };
 
-/** 레일라 · 축제의 주인공: 먹색 높은 포니테일, 비스듬한 작은 실크햇, 할리퀸 마름모 재킷, 별 지휘봉을 치켜든다 */
+/** 레일라 · 축제의 주인공: 자줏빛 높은 포니테일, 금띠 두른 비스듬한 작은 실크햇, 할리퀸 마름모 재킷, 금빛 별 지휘봉을 치켜든다 */
 const LEILA: Look = {
   sex: 'f',
   build: 0.98,
   scale: 0.96,
-  skin: 'paper',
+  skin: '#f6cfb4',
   jaw: 'narrow',
   eye: 'wide',
   brow: 'thin',
   hair: 'pony',
-  hairFill: 'ink',
+  hairFill: '#3b1342',
   hat: 'tophat',
-  hatFill: 'ink',
-  band: 'paper',
+  hatFill: '#1b1026',
+  band: '#e8b54d',
   top: 'jacket',
   topFill: 'harl',
-  inner: 'ink',
-  sleeve: 'ink',
-  pants: 'ink',
-  shoe: 'ink',
+  inner: '#1b1026',
+  sleeve: '#4a2380',
+  pants: '#1b1026',
+  shoe: '#1b1026',
   pose: ['hip', 'raise'],
-  front: { over: L('M56,-238 L60,-292', INK, 3.4) + P(starPath(60, -298, 11), PAPER, INK, 2.2) },
+  front: { over: L('M56,-238 L60,-292', INK, 3.4) + P(starPath(60, -298, 11), GOLD, INK, 2.2) },
   sit: 'hook',
   // 카운터 위 손에 쥔 별 지휘봉이 오른 어깨 너머로 솟는다(손은 몸 앞에 가린다)
-  back: { behind: L('M22,-96 L66,-196', INK, 3.4) + P(starPath(68, -203, 10), PAPER, INK, 2) },
+  back: { behind: L('M22,-96 L66,-196', INK, 3.4) + P(starPath(68, -203, 10), GOLD, INK, 2) },
 };
 
 const NAMED: Record<string, Look> = { mio: MIO, grey: GREY, serena: SERENA, evan: EVAN, bolt: BOLT, norma: NORMA, pipi: PIPI, leila: LEILA };
@@ -1687,7 +1733,42 @@ function guestLook(id: string): Look {
   if (look.top === 'vest' && !look.tie) look.tie = 'ink';
   // 앉은 다리: 맨 끝에 골라 앞의 부품 고르기(같은 id면 같은 모습)에 영향을 주지 않는다
   look.sit = look.top === 'dress' ? (r() < 0.75 ? 'cross' : 'hook') : pickW<SitLegs>(r, [['ring', 5], ['hook', 3], ['cross', 1]]);
+  // v8 색: 먹·망점·종이로 고른 칠을 같은 밝기의 색으로 바꾼다(이것도 맨 끝에 골라 앞의 부품에 영향을 주지 않는다)
+  colorize(look, r);
   return look;
+}
+
+// 지나가는 손님 색 팔레트: 밤의 바 조명에 어울리게 남색·청록·자주·밤색·올리브 쪽으로(보라 벽에 묻히지 않게 보라는 적게),
+// 너무 튀는 원색은 강조 한 군데에만
+const CLOTH_DARK: Hex[] = ['#252c5e', '#3a2356', '#1f3b3d', '#4a1e33', '#3b2a22', '#2f3a1e', '#402030', '#2a2a3c'];
+const CLOTH_DEEP: Hex[] = ['#2f5f8a', '#2a6a62', '#7e2f45', '#6e4c2c', '#56662a', '#3b4a8c'];
+const CLOTH_MID: Hex[] = ['#3f8f5a', '#2f8a7e', '#a8405a', '#9a6a3a', '#b85a8a', '#6f8a3e', '#c0703a', '#4f63b0', '#c79a3a'];
+const CLOTH_LIGHT: Hex[] = ['#e9dcc2', '#d8cdef', '#cfe4df', '#f2d3dc', '#efe0b2', '#dfe3ea'];
+const HAIR_DARK: Hex[] = ['#1c1828', '#2a1a14', '#182038', '#33182c'];
+const HAIR_DEEP: Hex[] = ['#4a3426', '#3b2f4f', '#4f2a24'];
+const HAIR_MID: Hex[] = ['#7a4a2c', '#5a3f7a', '#c48a3e', '#a8452e', '#4a5c94', '#2e5e5a'];
+const HAIR_LIGHT: Hex[] = ['#e9e5de', '#d6cfc6', '#efd9a0', '#f0c8d8'];
+const SKIN_LIGHT: Hex[] = ['#ffe3d1', '#f8d2b8', '#f3c6a5', '#eebd98'];
+const SKIN_DEEP: Hex[] = ['#d9a079', '#c08259', '#a56c48', '#8a573a'];
+/** 강조 한 군데('red'로 고른 곳): 빨강이 가장 흔하고 금빛·분홍·청록·보라도 섞는다 */
+const ACCENTS: Hex[] = [RED as Hex, RED as Hex, GOLD as Hex, '#ff7eb6', '#2fb3a0', '#8b6bff'];
+const SHOES: Hex[] = ['#1d1620', '#2b1c16', '#3a2418'];
+
+/** 먹·망점·종이 칠을 손님 id에서 이어 뽑은 색으로 바꾼다(같은 id면 늘 같은 색) */
+function colorize(l: Look, r: () => number) {
+  const pick = (xs: Hex[]) => xs[Math.floor(r() * xs.length)];
+  const cloth = (f: Fill): Fill => (f === 'ink' ? pick(CLOTH_DARK) : f === 'dark' ? pick(CLOTH_DEEP) : f === 'tone' ? pick(CLOTH_MID) : f === 'paper' ? pick(CLOTH_LIGHT) : f === 'red' ? pick(ACCENTS) : f);
+  l.skin = l.skin === 'tone' ? pick(SKIN_DEEP) : pick(SKIN_LIGHT);
+  const h = l.hairFill;
+  l.hairFill = h === 'ink' ? pick(HAIR_DARK) : h === 'dark' ? pick(HAIR_DEEP) : h === 'tone' ? pick(HAIR_MID) : h === 'paper' ? pick(HAIR_LIGHT) : h;
+  l.beardFill = l.hairFill;
+  l.topFill = cloth(l.topFill);
+  l.pants = cloth(l.pants);
+  l.shoe = l.shoe === 'ink' ? pick(SHOES) : cloth(l.shoe);
+  if (l.hatFill) l.hatFill = cloth(l.hatFill);
+  if (l.band) l.band = cloth(l.band);
+  if (l.tie) l.tie = cloth(l.tie);
+  if (l.scarf) l.scarf = cloth(l.scarf);
 }
 
 const cache = new Map<string, Rig>();
@@ -1710,11 +1791,11 @@ const DEFS = `
   <pattern id="gk-fine" width="2.6" height="2.6" patternUnits="userSpaceOnUse" patternTransform="rotate(30)"><circle cx="1.3" cy="1.3" r="0.55" fill="${INK}"/></pattern>
   <pattern id="gk-tone-d" width="4.2" height="4.2" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><circle cx="2.1" cy="2.1" r="1.55" fill="${INK}"/></pattern>
   <pattern id="gk-harl" width="22" height="32" patternUnits="userSpaceOnUse">
-    <rect width="22" height="32" fill="${PAPER}"/><path d="M11,0 L22,16 L11,32 L0,16 Z" fill="${RED}"/>
-    <path d="M0,0 L5.5,8 L0,16 Z M22,0 L16.5,8 L22,16 Z M0,16 L5.5,24 L0,32 Z M22,16 L16.5,24 L22,32 Z" fill="${INK}"/>
+    <rect width="22" height="32" fill="#fff3e0"/><path d="M11,0 L22,16 L11,32 L0,16 Z" fill="#ff6fae"/>
+    <path d="M0,0 L5.5,8 L0,16 Z M22,0 L16.5,8 L22,16 Z M0,16 L5.5,24 L0,32 Z M22,16 L16.5,24 L22,32 Z" fill="#5b3fc4"/>
     <path d="M11,0 L22,16 L11,32 L0,16 Z" fill="none" stroke="${INK}" stroke-width="1"/>
   </pattern>
-  <pattern id="gk-stripe" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(-12)"><rect width="12" height="12" fill="${PAPER}"/><rect y="6" width="12" height="6" fill="${INK}"/></pattern>
+  <pattern id="gk-stripe" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(-12)"><rect width="12" height="12" fill="#fbe7ef"/><rect y="6" width="12" height="6" fill="#d94d7f"/></pattern>
   <mask id="gk-mr" maskUnits="objectBoundingBox" maskContentUnits="objectBoundingBox" x="-0.3" y="-0.3" width="1.6" height="1.6"><path d="M0.6,-0.3 L1.3,-0.3 L1.3,1.3 L0.42,1.3 Z" fill="#fff"/></mask>
   <mask id="gk-mb" maskUnits="objectBoundingBox" maskContentUnits="objectBoundingBox" x="-0.3" y="-0.3" width="1.6" height="1.6"><path d="M-0.3,0.62 L1.3,0.5 L1.3,1.3 L-0.3,1.3 Z" fill="#fff"/></mask>
   <mask id="gk-ml" maskUnits="objectBoundingBox" maskContentUnits="objectBoundingBox" x="-0.3" y="-0.3" width="1.6" height="1.6"><path d="M-0.3,-0.3 L0.34,-0.3 L0.22,1.3 L-0.3,1.3 Z" fill="#fff"/></mask>
