@@ -116,12 +116,12 @@ export function sparkleTexture() {
  */
 export function counterTexture() {
   const tex = canvasTexture(256, 256, (ctx) => {
-    ctx.fillStyle = '#583224';
+    ctx.fillStyle = '#3c2030';
     ctx.fillRect(0, 0, 256, 256);
     // 결: 바탕과 밝기가 거의 같은 줄 몇 개
-    ctx.fillStyle = '#512e21';
+    ctx.fillStyle = '#361c2b';
     for (const [y, h] of [[0, 3], [38, 2], [97, 4], [128, 2], [171, 3], [214, 2]]) ctx.fillRect(0, y, 256, h);
-    ctx.fillStyle = '#603828';
+    ctx.fillStyle = '#442436';
     for (const [y, h] of [[60, 2], [150, 3], [236, 2]]) ctx.fillRect(0, y, 256, h);
   });
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;

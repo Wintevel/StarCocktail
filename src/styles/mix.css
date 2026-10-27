@@ -1,0 +1,1127 @@
+/* 제조 화면: 흐린 바 배경 위 가운데 3D 잔, 왼쪽 위 주문 카드, 왼쪽 맛 게이지, 아래 카드 줄. */
+
+.mix-screen {
+  background: #15142c;
+}
+
+.mix-bg {
+  position: absolute;
+  inset: -20px;
+  filter: blur(9px) brightness(0.55) saturate(1.1);
+  will-change: transform;
+}
+
+.mix-bg svg {
+  width: 100%;
+  height: 100%;
+}
+
+.mix-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 40% 50% at 50% 46%, rgba(255, 200, 130, 0.16), transparent 70%),
+    radial-gradient(ellipse at center, transparent 30%, rgba(8, 6, 20, 0.75) 100%);
+}
+
+.mix-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.mix-stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.mix-ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.mix-ui > * {
+  pointer-events: auto;
+}
+
+.mix-screen.intro .mix-ui > *:not(.stamp-layer) {
+  opacity: 0.25;
+  filter: blur(2px);
+  transition:
+    opacity 0.3s,
+    filter 0.3s;
+  pointer-events: none;
+}
+
+.mix-ui > * {
+  transition:
+    opacity 0.45s var(--ease-out),
+    filter 0.45s;
+}
+
+/* ── 위쪽 줄 ─────────────────────────── */
+.mix-top {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  pointer-events: none;
+}
+
+.mix-top > * {
+  pointer-events: auto;
+}
+
+.mix-screen.no-back .mix-back-slot {
+  visibility: hidden;
+}
+
+.steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+  padding: 6px 10px;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.steps li.sep {
+  width: 26px;
+  height: 1px;
+  background: var(--line);
+}
+
+.steps button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 15px;
+  transition: color 0.2s;
+}
+
+.steps button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.steps i {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  font-style: normal;
+  font-family: var(--f-logo);
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid currentColor;
+  transform: rotate(45deg);
+  transition:
+    background 0.25s,
+    color 0.25s,
+    transform 0.4s var(--ease-back);
+}
+
+.steps i > b {
+  transform: rotate(-45deg);
+  transition: transform 0.4s var(--ease-back);
+}
+
+.steps li.cur i > b {
+  transform: rotate(-225deg);
+}
+
+.steps li.done button {
+  color: var(--gold);
+}
+
+.steps li.done i {
+  background: rgba(227, 192, 122, 0.18);
+}
+
+.steps li.cur button {
+  color: var(--gold-hi);
+}
+
+.steps li.cur i {
+  background: var(--gold);
+  color: var(--ink);
+  border-color: var(--gold-hi);
+  transform: rotate(225deg) scale(1.08);
+  box-shadow: 0 0 14px rgba(227, 192, 122, 0.7);
+}
+
+
+.peers {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.peer-clock {
+  font-family: var(--f-logo);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--gold-hi);
+  margin-right: 6px;
+}
+
+.peer {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+
+.peer-face {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #2a2552;
+}
+
+.peer-face svg {
+  width: 180%;
+  height: 180%;
+  margin: -14% 0 0 -40%;
+}
+
+.peer svg[viewBox='0 0 36 36'] {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.peer circle {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.peer.hurry circle {
+  stroke: var(--danger);
+}
+
+.peer.hurry {
+  animation: shake 0.5s ease-in-out infinite;
+}
+
+.peer.current .peer-face {
+  box-shadow: 0 0 0 2px var(--teal);
+}
+
+.peer.special .peer-face {
+  box-shadow: 0 0 0 2px var(--gold-hi);
+}
+
+/* ── 주문 카드 ─────────────────────────── */
+.order-card {
+  position: absolute;
+  left: 20px;
+  top: 84px;
+  width: min(340px, 30vw);
+  padding: 16px 18px 14px;
+  transform-origin: 0 0;
+}
+
+.oc-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.oc-face {
+  flex: none;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle, #3a3270, #1d1a3e);
+  box-shadow:
+    0 0 0 2px var(--c),
+    0 0 12px color-mix(in srgb, var(--c) 50%, transparent);
+}
+
+.oc-face svg {
+  width: 190%;
+  height: 190%;
+  margin: -10% 0 0 -45%;
+}
+
+.oc-name {
+  display: block;
+  font-family: var(--f-title);
+  font-size: 18px;
+}
+
+.oc-head small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.oc-title {
+  margin: 4px 0 6px;
+  font-family: var(--f-title);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--gold-hi);
+}
+
+.oc-line {
+  margin: 0 0 10px;
+  font-family: var(--f-line);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--cream);
+}
+
+.oc-conds {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 0 0;
+  list-style: none;
+  border-top: 1px dashed var(--line);
+}
+
+.oc-conds li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--muted);
+  transition: color 0.25s;
+}
+
+.oc-conds i {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition:
+    background 0.25s,
+    transform 0.35s var(--ease-back);
+}
+
+.oc-conds li.ok {
+  color: var(--ok);
+}
+
+.oc-conds li.ok i {
+  background: var(--ok);
+  transform: rotate(225deg) scale(1.1);
+}
+
+.oc-match {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.oc-match .eyebrow {
+  width: 100%;
+}
+
+.chip {
+  display: inline-block;
+  padding: 2px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.chip.gold {
+  color: var(--ink);
+  background: var(--gold);
+  border-color: var(--gold-hi);
+}
+
+/* ── 맛 게이지 ─────────────────────────── */
+.gauges {
+  position: absolute;
+  left: 20px;
+  bottom: 240px;
+  width: min(300px, 26vw);
+  padding: 12px 16px 14px;
+}
+
+.gauge {
+  margin-top: 10px;
+}
+
+.g-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 14px;
+}
+
+.g-head b {
+  color: var(--c);
+}
+
+.g-val {
+  font-family: var(--f-logo);
+  font-weight: 700;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.g-track {
+  position: relative;
+  height: 12px;
+  margin-top: 4px;
+  background: rgba(13, 11, 28, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.g-track .tick {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.g-track .tick.mid {
+  top: -3px;
+  bottom: -3px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.g-zone {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  background: repeating-linear-gradient(-45deg, rgba(227, 192, 122, 0.35) 0 4px, rgba(227, 192, 122, 0.15) 4px 8px);
+  border: 1px solid var(--gold);
+  transition:
+    left 0.3s,
+    width 0.3s;
+}
+
+.g-fill {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  background: var(--c);
+  opacity: 0.85;
+  transition:
+    left 0.45s var(--ease-back),
+    width 0.45s var(--ease-back);
+}
+
+.g-mark {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  background: #fff;
+  border: 2px solid var(--ink);
+  transform: rotate(45deg);
+  transition: left 0.45s var(--ease-back);
+  box-shadow: 0 0 8px var(--c);
+}
+
+.gauge.in-zone .g-mark {
+  background: var(--gold-hi);
+  box-shadow: 0 0 12px var(--gold);
+}
+
+.g-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.g-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  min-height: 4px;
+}
+
+/* ── 잔 양옆 버튼과 붓기 칸 ─────────────── */
+.glass-ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.glass-ui.show {
+  opacity: 1;
+}
+
+.glass-ui > * {
+  pointer-events: auto;
+}
+
+.round-btn {
+  position: absolute;
+  top: var(--gy, 50%);
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-top: -32px;
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+  background: radial-gradient(circle at 35% 30%, #3a3270, #1a1736);
+  color: var(--gold-hi);
+  cursor: pointer;
+  box-shadow:
+    0 0 0 4px rgba(13, 11, 28, 0.6),
+    0 8px 20px rgba(0, 0, 0, 0.5);
+  transition:
+    transform 0.2s var(--ease-back),
+    box-shadow 0.2s,
+    opacity 0.2s;
+}
+
+.round-btn span {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.round-btn small {
+  position: absolute;
+  bottom: -22px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cream);
+  white-space: nowrap;
+}
+
+.round-btn:hover:not(:disabled) {
+  transform: scale(1.1) rotate(-12deg);
+  box-shadow:
+    0 0 0 4px rgba(13, 11, 28, 0.6),
+    0 0 20px rgba(227, 192, 122, 0.6);
+}
+
+.round-btn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.round-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.round-btn.reset {
+  left: calc(var(--gx, 50%) - var(--gh, 120px) - 64px);
+}
+
+.round-btn.stir {
+  left: calc(var(--gx, 50%) + var(--gh, 120px));
+}
+
+.round-btn.stir.done {
+  background: radial-gradient(circle at 35% 30%, #f6dc9c, #c99a4a);
+  color: var(--ink);
+  opacity: 1;
+}
+
+.pips {
+  position: absolute;
+  left: var(--gx, 50%);
+  top: var(--gfoot, 70%);
+  display: flex;
+  gap: 6px;
+  transform: translateX(-50%);
+}
+
+.pips i {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--gold);
+  transform: rotate(45deg);
+  background: rgba(13, 11, 28, 0.6);
+  transition:
+    background 0.3s,
+    transform 0.35s var(--ease-back);
+}
+
+.pips i.on {
+  background: var(--c);
+  transform: rotate(225deg) scale(1.1);
+  box-shadow: 0 0 10px var(--c);
+}
+
+/* ── 아래: 단계 이름, 카드 줄, 다음 버튼 ── */
+.mix-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  gap: 16px;
+  padding: 0 20px 18px;
+  background: linear-gradient(0deg, rgba(8, 6, 20, 0.85) 30%, transparent);
+  pointer-events: none;
+}
+
+.mix-bottom > * {
+  pointer-events: auto;
+}
+
+.step-title {
+  align-self: end;
+  padding-bottom: 8px;
+}
+
+.step-title b {
+  display: block;
+  font-family: var(--f-title);
+  font-weight: 700;
+  font-size: 26px;
+  color: var(--cream);
+}
+
+.tray {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding-top: 24px;
+}
+
+.card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 4px;
+  width: 112px;
+  min-height: 150px;
+  padding: 12px 8px 10px;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 40%),
+    linear-gradient(180deg, #2a2552, #17142f);
+  cursor: pointer;
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
+  transition:
+    transform 0.25s var(--ease-back),
+    border-color 0.2s,
+    box-shadow 0.2s,
+    filter 0.2s;
+}
+
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid transparent;
+  pointer-events: none;
+  background: linear-gradient(120deg, transparent 30%, rgba(255, 244, 214, 0.18) 50%, transparent 70%) -200% 0 / 200% 100% no-repeat;
+  transition: background-position 0.6s;
+}
+
+.card:hover:not(:disabled)::after {
+  background-position: 200% 0;
+}
+
+.card:hover:not(:disabled) {
+  transform: translateY(-10px);
+  border-color: var(--gold);
+  filter: brightness(1.15);
+}
+
+.card:active:not(:disabled) {
+  transform: translateY(-4px) scale(0.96);
+}
+
+.card.on {
+  border-color: var(--gold-hi);
+  background:
+    linear-gradient(180deg, rgba(248, 227, 173, 0.25), transparent 50%),
+    linear-gradient(180deg, #3a3270, #1d1a3e);
+  box-shadow: inset 0 0 0 2px var(--gold);
+  transform: translateY(-6px);
+}
+
+.card:disabled {
+  cursor: default;
+  filter: grayscale(0.6) brightness(0.6);
+}
+
+.card-num {
+  position: absolute;
+  left: 8px;
+  top: 6px;
+  font-family: var(--f-logo);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.card-count {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  padding: 0 6px;
+  font-family: var(--f-logo);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--gold);
+  animation: pop 0.35s var(--ease-back);
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.3);
+  }
+}
+
+.card-icon {
+  width: 64px;
+  height: 64px;
+}
+
+.card-icon .ic {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.4));
+}
+
+.card-name {
+  font-size: 14px;
+  line-height: 1.25;
+  text-align: center;
+  word-break: keep-all;
+}
+
+.card-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.card-deltas {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.card-deltas .d {
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 3px;
+}
+
+.card-deltas .d.up {
+  color: var(--ink);
+  background: var(--c);
+}
+
+.card-deltas .d.down {
+  color: var(--c);
+  box-shadow: inset 0 0 0 1px var(--c);
+}
+
+.card-deltas .d.zero {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+/* 단계가 바뀌면 카드가 부채꼴로 펼쳐진다 */
+.tray.fan .card {
+  opacity: 0;
+  transform: translateY(60px) rotate(calc((var(--i) - 2) * 6deg)) scale(0.8);
+}
+
+.tray.fan.fan-go .card {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.35s calc(var(--i) * 50ms),
+    transform 0.55s calc(var(--i) * 50ms) var(--ease-back);
+}
+
+.mix-next {
+  justify-self: end;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-bottom: 8px;
+}
+
+.btn.serve {
+  min-height: 56px;
+  padding: 10px 34px;
+  font-size: 19px;
+}
+
+.btn.serve:not(:disabled) {
+  animation: glow 2s ease-in-out infinite;
+}
+
+@keyframes glow {
+  50% {
+    filter: brightness(1.1) drop-shadow(0 0 14px rgba(248, 227, 173, 0.7));
+  }
+}
+
+/* ── 판정 도장 ─────────────────────────── */
+.stamp-layer {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.stamp {
+  display: grid;
+  justify-items: center;
+  padding: 18px 44px;
+  border: 5px solid currentColor;
+  transform: rotate(-8deg);
+  font-family: var(--f-sfx);
+  background: rgba(13, 11, 28, 0.6);
+  animation: stamp 0.5s var(--ease-back);
+  text-shadow: 0 0 20px currentColor;
+}
+
+.stamp b {
+  font-size: 72px;
+  line-height: 1;
+}
+
+.stamp small {
+  font-family: var(--f-logo);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.5em;
+}
+
+.stamp.perfect {
+  color: var(--gold-hi);
+}
+
+.stamp.good {
+  color: var(--teal);
+}
+
+.stamp.fail {
+  color: var(--rose);
+}
+
+@keyframes stamp {
+  from {
+    opacity: 0;
+    transform: rotate(-20deg) scale(2.4);
+  }
+  60% {
+    opacity: 1;
+    transform: rotate(-6deg) scale(0.92);
+  }
+}
+
+/* ── 손님 말풍선(들어올 때) ─────────────── */
+.mix-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  cursor: pointer;
+}
+
+.intro-guest {
+  position: absolute;
+  left: 50%;
+  bottom: -4%;
+  width: min(44vh, 420px);
+  aspect-ratio: 240 / 300;
+  transform: translateX(-108%) translateY(30px);
+  opacity: 0;
+  transition:
+    transform 0.6s var(--ease-out),
+    opacity 0.5s;
+}
+
+.intro-guest svg {
+  width: 100%;
+  height: 100%;
+}
+
+.intro-bubble {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  width: min(460px, 44vw);
+  padding: 20px 24px 22px;
+  color: var(--ink);
+  background: #fffaf0;
+  border: 3px solid var(--ink);
+  box-shadow:
+    6px 6px 0 var(--ink),
+    0 0 0 6px color-mix(in srgb, var(--c) 40%, transparent);
+  transform: translateX(-10%) scale(0.6);
+  opacity: 0;
+  transform-origin: 0 100%;
+  transition:
+    transform 0.45s var(--ease-back),
+    opacity 0.3s;
+}
+
+.intro-bubble::after {
+  content: '';
+  position: absolute;
+  left: -22px;
+  bottom: 18px;
+  width: 30px;
+  height: 24px;
+  background: #fffaf0;
+  border-left: 3px solid var(--ink);
+  border-bottom: 3px solid var(--ink);
+  transform: skewY(-30deg);
+}
+
+.intro-bubble .who {
+  font-family: var(--f-title);
+  font-weight: 700;
+  font-size: 15px;
+  color: #5a4a7a;
+}
+
+.intro-bubble .who small {
+  font-weight: 500;
+  color: #8a7a9a;
+}
+
+.intro-bubble .say {
+  margin: 6px 0 0;
+  font-family: var(--f-line);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1.5;
+  min-height: 1.5em;
+}
+
+.intro-bubble .tap {
+  position: absolute;
+  right: 12px;
+  bottom: 6px;
+  font-size: 14px;
+  animation: bob 1s ease-in-out infinite;
+}
+
+.mix-intro.in .intro-guest {
+  transform: translateX(-108%);
+  opacity: 1;
+}
+
+.mix-intro.in .intro-bubble {
+  transform: translateX(-10%) scale(1);
+  opacity: 1;
+}
+
+.mix-intro.out .intro-guest {
+  transform: translateX(-140%) translateY(20px);
+  opacity: 0;
+}
+
+.mix-intro.out .intro-bubble {
+  transition: none;
+}
+
+@media (max-width: 820px) {
+  .mix-top {
+    grid-template-columns: auto 1fr;
+    padding: 10px;
+  }
+  .mix-top .steps {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: center;
+  }
+  .steps button span {
+    display: none;
+  }
+  .steps li.sep {
+    width: 12px;
+  }
+  .order-card {
+    top: 112px;
+    left: 10px;
+    width: calc(50% - 16px);
+    padding: 10px 12px;
+  }
+  .oc-line {
+    font-size: 13px;
+  }
+  .oc-face {
+    width: 40px;
+    height: 40px;
+  }
+  .gauges {
+    left: auto;
+    right: 10px;
+    top: 112px;
+    bottom: auto;
+    width: calc(50% - 16px);
+    padding: 8px 12px;
+  }
+  .mix-bottom {
+    grid-template-columns: 1fr;
+    padding: 0 8px 10px;
+  }
+  .step-title {
+    display: none;
+  }
+  .tray {
+    overflow-x: auto;
+    justify-content: flex-start;
+    padding: 18px 4px 4px;
+  }
+  .card {
+    flex: none;
+    width: 92px;
+    min-height: 128px;
+  }
+  .card-icon {
+    width: 48px;
+    height: 48px;
+  }
+  .mix-next {
+    justify-self: stretch;
+    justify-content: flex-end;
+  }
+  .round-btn {
+    width: 52px;
+    height: 52px;
+    margin-top: -26px;
+  }
+  .round-btn.reset {
+    left: calc(var(--gx, 50%) - var(--gh, 100px) - 52px);
+  }
+  .intro-bubble {
+    width: 80vw;
+    left: 10vw;
+    transform: none;
+  }
+  .mix-intro.in .intro-bubble {
+    transform: none;
+  }
+  .intro-guest {
+    transform: translateX(-50%) translateY(30px);
+  }
+  .mix-intro.in .intro-guest {
+    transform: translateX(-50%);
+  }
+}
+
+/* 가로 휴대폰처럼 낮은 화면: 위아래를 줄이고 설명 글을 접는다 */
+@media (max-height: 520px) {
+  .mix-top {
+    padding: 6px 10px;
+  }
+  .steps button span {
+    display: none;
+  }
+  .order-card {
+    top: 54px;
+    left: 8px;
+    width: min(240px, 30vw);
+    padding: 8px 10px;
+  }
+  .oc-head small,
+  .oc-line {
+    display: none;
+  }
+  .oc-face {
+    width: 30px;
+    height: 30px;
+  }
+  .oc-title {
+    margin: 4px 0;
+    font-size: 15px;
+  }
+  .gauges {
+    top: 54px;
+    left: auto;
+    right: 8px;
+    bottom: auto;
+    width: min(220px, 28vw);
+    padding: 6px 10px;
+  }
+  .gauges .eyebrow,
+  .g-ends,
+  .g-keywords {
+    display: none;
+  }
+  .gauge + .gauge {
+    margin-top: 2px;
+  }
+  .step-title {
+    display: none;
+  }
+  .mix-bottom {
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    padding: 0 8px 6px;
+  }
+  .tray {
+    overflow-x: auto;
+    justify-content: flex-start;
+    padding: 10px 4px 2px;
+  }
+  .card {
+    flex: none;
+    width: 78px;
+    min-height: 0;
+    padding: 6px 4px;
+  }
+  .card-icon {
+    width: 34px;
+    height: 34px;
+  }
+  .card-sub {
+    display: none;
+  }
+  .round-btn {
+    width: 46px;
+    height: 46px;
+    margin-top: -23px;
+  }
+  .round-btn small {
+    display: none;
+  }
+}
+
+/* 자유 제조에는 다른 손님·시계가 없다 */
+.mix-screen.free .peers {
+  display: none;
+}
