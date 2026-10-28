@@ -755,9 +755,9 @@ export class Stage3D {
 /** 잔 받침: 보랏빛 벨벳 원판에 금빛 테 (2D 가게의 스툴 방석과 같은 색) */
 function makeCoaster() {
   const g = new THREE.Group();
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.66, 0.02, 64), toonMaterial(0x2c1446, { emissive: 0x1a0a2c, glow: 0.35 }));
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.66, 0.02, 64), toonMaterial(0x1c1838, { emissive: 0x0e0b20, glow: 0.3 }));
   base.position.y = 0.001;
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.022, 8, 96), neonCyanMaterial);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.012, 8, 96), neonCyanMaterial);
   ring.rotation.x = Math.PI / 2;
   ring.position.y = 0.014;
   g.add(base, ring);
@@ -775,7 +775,7 @@ function makeCounter() {
   const top = new THREE.Mesh(new THREE.BoxGeometry(16, 0.12, 4.2), topMat);
   top.position.set(0.5, -0.06, -0.6);
   // 앞 가장자리: 놋쇠 띠(빛을 받는 금빛이라 아래쪽이 조금 어둡다)
-  const lip = new THREE.Mesh(new THREE.BoxGeometry(16, 0.13, 0.12), toonMaterial(0xd9a040, { emissive: 0x5a3608, glow: 0.6 }));
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(16, 0.13, 0.12), toonMaterial(0xa07a3c, { emissive: 0x2a1a06, glow: 0.3 }));
   lip.position.set(0.5, -0.06, 1.44);
   g.add(lip);
   const front = new THREE.Mesh(new THREE.BoxGeometry(16, 1.6, 0.1), toonMaterial(0x2e1236, { emissive: 0x14061c, glow: 0.5 }));
@@ -788,7 +788,7 @@ function makeCounter() {
     new THREE.MeshBasicMaterial({ map: lightPoolTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
   );
   pool.rotation.x = -Math.PI / 2;
-  pool.scale.set(5.2, 3.4, 1);
+  pool.scale.set(4, 2.6, 1);
   pool.position.set(0, 0.002, 0.15);
   g.add(top, front, band, pool);
   return g;

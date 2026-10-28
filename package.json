@@ -1,7 +1,7 @@
 {
   "name": "starcocktail",
   "version": "0.1.0",
-  "description": "별빛 바에서 칵테일을 시각적으로 제조하는 웹 게임",
+  "description": "리플 오브 데이드림: 바텐더가 되어 칵테일을 만들고 손님들의 이야기를 잇는 웹 게임",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -28,13 +28,9 @@
   "dependencies": {
     "@fontsource/black-han-sans": "^5.3.0",
     "@fontsource/cinzel": "^5.3.0",
-    "@fontsource/do-hyeon": "^5.3.0",
-    "@fontsource/gaegu": "^5.3.0",
     "@fontsource/gowun-batang": "^5.3.0",
     "@fontsource/hahmlet": "^5.3.0",
     "@fontsource/ibm-plex-sans-kr": "^5.3.0",
-    "@fontsource/jetbrains-mono": "^5.3.0",
-    "@fontsource/limelight": "^5.3.0",
     "three": "^0.186.1"
   }
 }

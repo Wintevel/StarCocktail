@@ -53,13 +53,12 @@ export function stir(drink: Drink): Drink {
 }
 
 export function computeAttrs(drink: Drink): Attrs {
-  const a: Attrs = { sweet: 0, strength: 0, body: 0, tone: 0 };
+  const a: Attrs = { sweet: 0, strength: 0, body: 0 };
   for (const id of drink.pours) {
     const d = INGREDIENT_BY_ID[id].delta;
     a.sweet += d.sweet;
     a.strength += d.strength;
     a.body += d.body;
-    a.tone += d.tone;
   }
   if (drink.ice) a.strength += ICE_BY_ID[drink.ice].strength;
   if (drink.stirAt !== null) a.body += STIR_BODY;
@@ -100,11 +99,6 @@ export function keywordsOf(attrs: Attrs, keys: readonly AttrKey[]): string[] {
     const side = keywordSide(attrs[k]);
     return side ? [keywordLabel(k, side)] : [];
   });
-}
-
-/** 주문에 경향 조건이 들어 있으면, 그 주문의 게이지에는 도수 대신 경향이 나온다. */
-export function usesTone(order: readonly Constraint[]): boolean {
-  return order.some((c) => (c.kind === 'attr' || c.kind === 'keyword') && c.attr === 'tone');
 }
 
 export function check(c: Constraint, drink: Drink, attrs = computeAttrs(drink)): boolean {
@@ -168,16 +162,15 @@ export type Grade = 'perfect' | 'good' | 'fail';
 export interface Judgement {
   checks: { label: string; pass: boolean }[];
   grade: Grade;
-  tip: number;
 }
 
+/** 모두 맞으면 완벽, 하나 틀리면 좋음, 둘 이상 틀리면 실패 */
 export function judge(order: Constraint[], drink: Drink): Judgement {
   const attrs = computeAttrs(drink);
   const checks = order.map((c) => ({ label: describe(c, true), pass: check(c, drink, attrs) }));
   const misses = checks.filter((c) => !c.pass).length;
   const grade: Grade = misses === 0 ? 'perfect' : misses === 1 ? 'good' : 'fail';
-  const tip = grade === 'perfect' ? 30 : grade === 'good' ? 10 : 0;
-  return { checks, grade, tip };
+  return { checks, grade };
 }
 
 export function matchRecipes(recipes: Recipe[], drink: Drink): Recipe[] {

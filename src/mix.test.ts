@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { DAYS } from './campaign';
 import { type Constraint, type IngredientId, RECIPES } from './data';
 import {
   check,
@@ -15,7 +14,6 @@ import {
   pour,
   stir,
   targetRanges,
-  usesTone,
   visibleLayers,
 } from './mix';
 import { solve } from './solver';
@@ -27,7 +25,7 @@ function make(glass: Drink['glass'], ice: Drink['ice'], pours: IngredientId[], s
 describe('속성 계산', () => {
   it('재료 합에 얼음과 젓기 보정이 더해진다', () => {
     const d = make('rocks', 'more', ['gin', 'syrup', 'bitters'], 3);
-    expect(computeAttrs(d)).toEqual({ sweet: 0, strength: 2, body: 0, tone: 1 });
+    expect(computeAttrs(d)).toEqual({ sweet: 0, strength: 2, body: 0 });
   });
 
   it('잔 용량을 넘겨 부을 수 없고 젓기는 한 번뿐이다', () => {
@@ -55,9 +53,8 @@ describe('맛 키워드', () => {
     expect(keywordSide(-4)).toBe('low');
     expect(keywordSide(-7)).toBe('low');
     const attrs = computeAttrs(make('highball', 'none', ['syrup', 'syrup', 'cream']));
-    expect(attrs).toEqual({ sweet: 5, strength: 0, body: 4, tone: -6 });
+    expect(attrs).toEqual({ sweet: 5, strength: 0, body: 4 });
     expect(keywordsOf(attrs, ['sweet', 'strength', 'body'])).toEqual(['달콤함', '묵직함']);
-    expect(keywordsOf(attrs, ['tone'])).toEqual(['완곡함']);
   });
 
   it('키워드를 주문 조건으로 쓸 수 있다', () => {
@@ -70,18 +67,12 @@ describe('맛 키워드', () => {
     expect(check(light, make('highball', 'none', ['soda', 'soda', 'citrus'], 3))).toBe(true);
     expect(describeCond(bitter)).toBe('「씁쓸함」');
     expect(describeCond(bitter, true)).toBe('「씁쓸함」 단맛 -4 이하');
-    expect(targetRanges([bitter, { kind: 'keyword', attr: 'tone', side: 'high' }])).toEqual({ sweet: [-Infinity, -4], tone: [4, Infinity] });
-  });
-
-  it('경향 조건이 있는 주문을 알아본다', () => {
-    expect(usesTone([{ kind: 'attr', attr: 'tone', op: '>=', value: 2 }])).toBe(true);
-    expect(usesTone([{ kind: 'keyword', attr: 'tone', side: 'low' }])).toBe(true);
-    expect(usesTone([{ kind: 'attr', attr: 'strength', op: '>=', value: 2 }])).toBe(false);
+    expect(targetRanges([bitter, { kind: 'keyword', attr: 'strength', side: 'high' }])).toEqual({ sweet: [-Infinity, -4], strength: [4, Infinity] });
   });
 
   it('키워드 조건이 든 주문도 해를 찾는다', () => {
     const order: Constraint[] = [
-      { kind: 'keyword', attr: 'tone', side: 'low' },
+      { kind: 'keyword', attr: 'sweet', side: 'high' },
       { kind: 'keyword', attr: 'body', side: 'high' },
     ];
     const d = solve(order);
@@ -92,7 +83,11 @@ describe('맛 키워드', () => {
 
 describe('판정', () => {
   it('하나 틀리면 아쉬움, 둘 이상 틀리면 실패', () => {
-    const order = DAYS[1].visits.find((v) => v.customer === 'grey')!.order; // 그레이: 쓴맛·강하게·얼음 가득
+    const order: Constraint[] = [
+      { kind: 'attr', attr: 'sweet', op: '<=', value: -3 },
+      { kind: 'attr', attr: 'strength', op: '>=', value: 2 },
+      { kind: 'ice', ice: 'more' },
+    ];
     expect(judge(order, make('rocks', 'more', ['whisky', 'bitters'])).grade).toBe('perfect');
     expect(judge(order, make('rocks', 'none', ['whisky', 'bitters'])).grade).toBe('good');
     expect(judge(order, make('rocks', 'none', ['syrup'])).grade).toBe('fail');
