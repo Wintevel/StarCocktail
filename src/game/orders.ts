@@ -57,6 +57,8 @@ export interface OrderContext {
   tier: number;
   have: ReadonlySet<IngredientId>;
   garnishes: ReadonlySet<GarnishId>;
+  /** 해독한 낮꿈 레시피 */
+  decoded?: readonly string[];
 }
 
 function recipeOrder(rng: Rng, r: Recipe): Order {
@@ -88,13 +90,13 @@ function tasteOrder(rng: Rng, ctx: OrderContext): Order | null {
 }
 
 export function makeOrder(rng: Rng, ctx: OrderContext): Order {
-  const recipes = orderableRecipes(ctx.tier, ctx.have, ctx.garnishes);
+  const recipes = orderableRecipes(ctx.tier, ctx.have, ctx.garnishes, ctx.decoded);
   if (rng() < 0.3) {
     const t = tasteOrder(rng, ctx);
     if (t) return t;
   }
-  // 등급이 높을수록 새로 열린(높은 등급) 레시피가 조금 더 자주 나온다.
-  const weighted = recipes.flatMap((r) => Array.from({ length: 1 + r.tier }, () => r));
+  // 등급이 높을수록 새로 열린(높은 등급) 레시피가 조금 더 자주 나온다. 해독한 낮꿈 레시피는 소문이 나서 더 자주 찾는다.
+  const weighted = recipes.flatMap((r) => Array.from({ length: r.dream ? 4 : 1 + r.tier }, () => r));
   return recipeOrder(rng, pick(rng, weighted));
 }
 

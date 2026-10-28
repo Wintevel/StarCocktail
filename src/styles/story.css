@@ -586,3 +586,236 @@
 .comic.choosing .comic-viewport {
   filter: brightness(0.5);
 }
+
+/* ── 엔딩 ───────────────────────────────── */
+.ending-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 85;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  cursor: pointer;
+  background: #07060f;
+  opacity: 0;
+  transition: opacity 0.8s;
+}
+
+.ending-screen.in {
+  opacity: 1;
+}
+
+.ending-screen.out {
+  opacity: 0;
+}
+
+.end-bg {
+  position: absolute;
+  inset: 0;
+  opacity: 0.45;
+  filter: saturate(0.8);
+  animation: end-drift 30s linear infinite alternate;
+}
+
+.end-bg svg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.end-dark .end-bg,
+.end-silence .end-bg {
+  filter: grayscale(0.7) brightness(0.7);
+}
+
+@keyframes end-drift {
+  from {
+    transform: scale(1.05) translateX(-1%);
+  }
+  to {
+    transform: scale(1.12) translateX(1%);
+  }
+}
+
+.end-veil {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(7, 6, 15, 0.35), rgba(7, 6, 15, 0.92) 75%);
+}
+
+.end-stage {
+  position: relative;
+  width: min(760px, calc(100% - 32px));
+  display: grid;
+  place-items: center;
+}
+
+.end-card {
+  grid-area: 1 / 1;
+  width: 100%;
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.6s var(--ease-out),
+    transform 0.6s var(--ease-out);
+}
+
+.end-card.in {
+  opacity: 1;
+  transform: none;
+}
+
+.end-card.out {
+  opacity: 0;
+  transform: translateY(-14px);
+  transition-duration: 0.35s;
+}
+
+.end-card.title {
+  text-align: center;
+}
+
+.end-title {
+  margin: 8px 0 0;
+  font-family: var(--f-title);
+  font-weight: 900;
+  font-size: clamp(36px, 7vw, 72px);
+  color: var(--gold-hi);
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 30px rgba(227, 192, 122, 0.45);
+}
+
+.end-rule {
+  width: 0;
+  height: 1px;
+  margin: 18px auto;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  animation: end-rule 1.2s var(--ease-out) 0.4s forwards;
+}
+
+@keyframes end-rule {
+  to {
+    width: min(420px, 80%);
+  }
+}
+
+.end-sub {
+  margin: 0;
+  font-family: var(--f-line);
+  font-size: 17px;
+  color: var(--cream);
+  text-align: center;
+}
+
+.end-card.epi {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  align-items: center;
+  gap: 24px;
+  padding: 22px 26px;
+  border: 1px solid var(--line);
+  background: linear-gradient(135deg, rgba(36, 30, 70, 0.92), rgba(16, 13, 34, 0.94));
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.epi-portrait {
+  height: 220px;
+  overflow: hidden;
+  border-bottom: 3px solid var(--c);
+  background: radial-gradient(ellipse at 50% 80%, color-mix(in srgb, var(--c) 35%, transparent), transparent 70%);
+}
+
+.epi-portrait svg {
+  width: 100%;
+  height: 100%;
+}
+
+.epi-body h3 {
+  margin: 4px 0 10px;
+  font-family: var(--f-title);
+  font-size: 26px;
+  color: var(--c);
+}
+
+.epi-body p {
+  margin: 0;
+  font-family: var(--f-line);
+  font-size: 17px;
+  line-height: 1.85;
+  color: var(--cream);
+  word-break: keep-all;
+}
+
+.end-card.fin {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  cursor: default;
+}
+
+.the-end {
+  font-family: var(--f-logo);
+  font-size: clamp(40px, 8vw, 84px);
+  letter-spacing: 0.3em;
+  color: var(--gold-hi);
+  text-shadow: 0 0 24px rgba(227, 192, 122, 0.5);
+}
+
+.end-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.end-list li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  color: var(--muted);
+}
+
+.end-list li b {
+  font-family: var(--f-logo);
+  color: var(--gold-lo);
+}
+
+.end-list li.seen {
+  border-style: solid;
+  color: var(--cream);
+}
+
+.end-list li.now {
+  border-color: var(--gold);
+  background: rgba(227, 192, 122, 0.12);
+  color: var(--gold-hi);
+}
+
+.end-count {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+@media (max-width: 640px), (max-height: 520px) {
+  .end-card.epi {
+    grid-template-columns: 110px 1fr;
+    gap: 14px;
+    padding: 14px 16px;
+  }
+  .epi-portrait {
+    height: 130px;
+  }
+  .epi-body p {
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  .end-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

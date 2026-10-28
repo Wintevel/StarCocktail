@@ -9,10 +9,12 @@
 //   @bg 장면                    칸 배경(bar, alley, canal, rain, office, room, harbor, night, festival, sea)
 //   @show luca:smile noah       칸에 함께 나오는 인물(밤 이야기 만화)
 //   @sfx 쾅!                    만화 효과음 글자
-//   @if 조건 -> 라벨            조건: flag:x / !flag:x / trust:luca>=2 / grade:perfect / rep>=30 / tier>=1 / money>=100
+//   @if 조건 -> 라벨            조건: flag:x / !flag:x / clue:x / !clue:x / done:회차 / dream:레시피 / trust:luca>=2 / grade:perfect
+//                              / rep>=30 / tier>=1 / money>=100 / debt<=0 / dreams>=7. 「조건 & 조건」은 모두 맞아야 한다
 //   @goto 라벨 / @end
 //   @drink 레시피id "대사"      이야기 술 주문(제조 화면으로 갔다가 결과(grade)를 들고 돌아온다)
-//   @set x / @unset x / @trust luca +1 / @rep +2 / @money -100 / @clue x / @news 제목|부제|그림
+//   @set x / @unset x / @trust luca +1 / @rep +2 / @money -100 / @debt -500 / @clue x / @news 제목|부제|그림
+//   (낮꿈 레시피 조각은 @clue piece:레시피id)
 // 대사 속 {name}은 플레이어 이름으로 바뀐다.
 
 import type { Mood } from '../art/people';
@@ -27,11 +29,12 @@ export type Effect =
   | { k: 'trust'; who: CastId; d: number }
   | { k: 'rep'; d: number }
   | { k: 'money'; d: number }
+  | { k: 'debt'; d: number }
   | { k: 'clue'; id: string }
   | { k: 'news'; news: NewsItem };
 
 export interface Cond {
-  k: 'flag' | 'trust' | 'grade' | 'rep' | 'tier' | 'money';
+  k: 'flag' | 'clue' | 'done' | 'dream' | 'trust' | 'grade' | 'rep' | 'tier' | 'money' | 'debt' | 'dreams';
   key?: string;
   op: '>=' | '<=' | '==' | 'is' | 'not';
   v?: number | string;
@@ -40,7 +43,7 @@ export interface Cond {
 export type Node =
   | { t: 'say'; who: Speaker; mood?: Mood; text: string }
   | { t: 'choice'; options: { text: string; goto?: string; effects: Effect[] }[] }
-  | { t: 'if'; cond: Cond; goto: string }
+  | { t: 'if'; cond: Cond[]; goto: string }
   | { t: 'goto'; label: string }
   | { t: 'fx'; effects: Effect[] }
   | { t: 'drink'; recipe: string; line?: string }
@@ -67,6 +70,8 @@ function parseEffect(src: string): Effect {
       return { k: 'rep', d: Number(a) };
     case 'money':
       return { k: 'money', d: Number(a) };
+    case 'debt':
+      return { k: 'debt', d: Number(a) };
     case 'clue':
       return { k: 'clue', id: a };
     case 'news': {
@@ -79,13 +84,66 @@ function parseEffect(src: string): Effect {
 
 function parseCond(src: string): Cond {
   const s = src.trim();
-  if (s.startsWith('!flag:')) return { k: 'flag', key: s.slice(6), op: 'not' };
-  if (s.startsWith('flag:')) return { k: 'flag', key: s.slice(5), op: 'is' };
+  const not = s.startsWith('!');
+  const word = /^!?(flag|clue|done|dream):(\S+)$/.exec(s);
+  if (word) return { k: word[1] as Cond['k'], key: word[2], op: not ? 'not' : 'is' };
   if (s.startsWith('grade:')) return { k: 'grade', op: '==', v: s.slice(6) };
-  const m = /^(trust:(\w+)|rep|tier|money)\s*(>=|<=|==)\s*(-?\d+)$/.exec(s);
+  const m = /^(trust:(\w+)|rep|tier|money|debt|dreams)\s*(>=|<=|==)\s*(-?\d+)$/.exec(s);
   if (!m) throw new Error(`알 수 없는 조건: ${src}`);
   if (m[2]) return { k: 'trust', key: m[2], op: m[3] as Cond['op'], v: Number(m[4]) };
   return { k: m[1] as Cond['k'], op: m[3] as Cond['op'], v: Number(m[4]) };
+}
+
+/** 「조건 & 조건」 → 조건 목록(모두 맞아야 한다) */
+export function parseConds(src: string): Cond[] {
+  return src.split('&').map(parseCond);
+}
+
+/** 조건을 볼 때 필요한 가게·이야기 상태 */
+export interface CondContext {
+  story: StoryState;
+  reputation: number;
+  tier: number;
+  money: number;
+  debt: number;
+  /** 해독한 낮꿈 레시피 */
+  decoded: readonly string[];
+  /** 완성한(손님에게 완벽하게 낸) 낮꿈 레시피 수 */
+  dreamsDone: number;
+}
+
+export function testCond(c: Cond, ctx: CondContext, grade: Grade | null = null): boolean {
+  const s = ctx.story;
+  const num = (v: number) => (c.op === '>=' ? v >= Number(c.v) : c.op === '<=' ? v <= Number(c.v) : v === Number(c.v));
+  const yes = (b: boolean) => (c.op === 'not' ? !b : b);
+  switch (c.k) {
+    case 'flag':
+      return yes(!!s.flags[c.key!]);
+    case 'clue':
+      return yes(s.clues.includes(c.key!));
+    case 'done':
+      return yes(s.done.includes(c.key!));
+    case 'dream':
+      return yes(ctx.decoded.includes(c.key!));
+    case 'trust':
+      return num(s.trust[c.key as CastId] ?? 0);
+    case 'grade':
+      return grade === c.v;
+    case 'rep':
+      return num(ctx.reputation);
+    case 'tier':
+      return num(ctx.tier);
+    case 'money':
+      return num(ctx.money);
+    case 'debt':
+      return num(ctx.debt);
+    case 'dreams':
+      return num(ctx.dreamsDone);
+  }
+}
+
+export function condsOk(src: string | undefined, ctx: CondContext): boolean {
+  return !src || parseConds(src).every((c) => testCond(c, ctx));
 }
 
 const SPEAKER = /^(\w+|~)(?:\((\w+)\))?\s*:\s*(.*)$/;
@@ -136,7 +194,7 @@ export function parseScript(src: string): Script {
           break;
         case 'if': {
           const [c, g] = rest.split('->');
-          nodes.push({ t: 'if', cond: parseCond(c), goto: g.trim() });
+          nodes.push({ t: 'if', cond: parseConds(c), goto: g.trim() });
           break;
         }
         case 'goto':
@@ -167,13 +225,9 @@ export function parseScript(src: string): Script {
 
 // ── 실행 ────────────────────────────────────────────
 
-export interface StoryContext {
-  story: StoryState;
-  reputation: number;
-  tier: number;
-  money: number;
+export interface StoryContext extends CondContext {
   playerName: string;
-  /** 효과 중 가게 살림에 닿는 것(명성·돈)은 바깥에서 처리한다 */
+  /** 효과 중 가게 살림에 닿는 것(명성·돈·빚)은 바깥에서 처리한다 */
   apply: (e: Effect) => void;
 }
 
@@ -216,25 +270,6 @@ export class StoryRunner {
     this.bg = bg;
   }
 
-  private test(c: Cond): boolean {
-    const s = this.ctx.story;
-    const num = (v: number) => (c.op === '>=' ? v >= Number(c.v) : c.op === '<=' ? v <= Number(c.v) : v === Number(c.v));
-    switch (c.k) {
-      case 'flag':
-        return c.op === 'not' ? !s.flags[c.key!] : !!s.flags[c.key!];
-      case 'trust':
-        return num(s.trust[c.key as CastId] ?? 0);
-      case 'grade':
-        return this.grade === c.v;
-      case 'rep':
-        return num(this.ctx.reputation);
-      case 'tier':
-        return num(this.ctx.tier);
-      case 'money':
-        return num(this.ctx.money);
-    }
-  }
-
   private jump(label: string) {
     const at = this.script.labels[label];
     if (at === undefined) throw new Error(`없는 라벨: ${label}`);
@@ -263,7 +298,7 @@ export class StoryRunner {
           this.waitingChoice = n;
           return { t: 'choice', options: n.options.map((o) => ({ text: o.text.replaceAll('{name}', this.ctx.playerName) })) };
         case 'if':
-          if (this.test(n.cond)) this.jump(n.goto);
+          if (n.cond.every((c) => testCond(c, this.ctx, this.grade))) this.jump(n.goto);
           break;
         case 'goto':
           this.jump(n.label);

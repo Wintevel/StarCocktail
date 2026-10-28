@@ -1,8 +1,9 @@
-// 일요일(휴무): 한 주 정산, 카발로 패밀리에 빚 갚기, 상점(새 재료·장식 들이기), 레시피북.
+// 일요일(휴무): 한 주 정산, 카발로 패밀리에 빚 갚기, 스승의 노트(낮꿈 레시피 해독), 상점(새 재료·장식 들이기), 레시피북.
 
 import { sfx } from '../audio';
 import { dayInfo } from '../game/calendar';
-import { RESTOCK_PER_POUR, shopItems, TIERS, tierOf, WEEKLY_MIN_PAYMENT } from '../game/progress';
+import { DREAMS } from '../data';
+import { decodable, dreamStatus, RESTOCK_PER_POUR, shopItems, TIERS, tierOf, WEEKLY_MIN_PAYMENT } from '../game/progress';
 import type { GameState } from '../game/save';
 import { icons } from '../art/icons';
 import { btn, esc } from './dom';
@@ -46,6 +47,19 @@ export function showSunday(state: GameState): Promise<void> {
             ${[WEEKLY_MIN_PAYMENT, 500, 1000].map((v) => btn(`${v.toLocaleString()} 갚기`, 'small', `data-pay="${v}" ${state.money >= v && state.debt > 0 ? '' : 'disabled'}`)).join('')}
           </div>
         </section>
+        <section class="sun-card notebook">
+          <h3>스승의 노트 <small>낮꿈 레시피 · 조각을 모아 해독하고, 손님에게 완벽하게 내면 완성</small></h3>
+          <div class="dream-row">
+            ${DREAMS.map((d) => {
+              const st = dreamStatus(state, d.id);
+              const can = decodable(state).includes(d);
+              const label = st === 'blank' ? '빈 장' : st === 'piece' ? '찢긴 조각' : esc(d.name);
+              const foot =
+                st === 'blank' ? '조각 없음' : st === 'piece' ? (can ? btn('해독', 'small primary', `data-dream="${d.id}"`) : `「${TIERS[d.tier].name}」부터`) : st === 'decoded' ? '해독함 · 미완성' : '✦ 완성';
+              return `<div class="dream-slot ${st}"><b>${label}</b><small>${foot}</small></div>`;
+            }).join('')}
+          </div>
+        </section>
         <section class="sun-card shop">
           <h3>상점 <small>전문성 · ${TIERS[tier].name}</small></h3>
           <div class="shop-list">
@@ -65,6 +79,14 @@ export function showSunday(state: GameState): Promise<void> {
   return new Promise((resolve) => {
     m.box.addEventListener('click', (e) => {
       const t = e.target as HTMLElement;
+      const dream = t.closest<HTMLElement>('[data-dream]');
+      if (dream) {
+        const d = DREAMS.find((x) => x.id === dream.dataset.dream)!;
+        if (!state.dreams.includes(d.id)) state.dreams.push(d.id);
+        sfx('stamp');
+        toast(`낮꿈 레시피 「${d.name}」을(를) 해독했습니다. 레시피북에 실렸습니다`);
+        return render();
+      }
       const pay = t.closest<HTMLElement>('[data-pay]');
       if (pay && !(pay as HTMLButtonElement).disabled) {
         const v = Math.min(Number(pay.dataset.pay), state.debt);
@@ -95,7 +117,7 @@ export function showSunday(state: GameState): Promise<void> {
       const a = t.closest<HTMLElement>('[data-a]')?.dataset.a;
       if (a === 'book') {
         sfx('click');
-        openBook(state.book);
+        openBook(state);
       } else if (a === 'go') {
         sfx('click');
         if (paid < Math.min(WEEKLY_MIN_PAYMENT, state.debt)) state.story.flags.missed_payment = (state.story.flags.missed_payment ?? 0) + 1;

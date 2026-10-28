@@ -262,8 +262,64 @@
   border: 1px solid var(--line);
 }
 
-.sun-card.shop {
+.sun-card.shop,
+.sun-card.notebook {
   grid-column: 1 / -1;
+}
+
+.dream-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dream-slot {
+  display: grid;
+  align-content: space-between;
+  justify-items: center;
+  gap: 6px;
+  min-height: 82px;
+  padding: 10px 6px;
+  text-align: center;
+  border: 1px dashed var(--line);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dream-slot b {
+  font-family: var(--f-title);
+  font-size: 13px;
+  line-height: 1.35;
+  word-break: keep-all;
+}
+
+.dream-slot small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.dream-slot.blank b {
+  color: var(--muted);
+}
+
+.dream-slot.piece {
+  border-style: solid;
+  border-color: rgba(227, 192, 122, 0.4);
+}
+
+.dream-slot.decoded,
+.dream-slot.done {
+  border-style: solid;
+  border-color: var(--gold);
+  background: linear-gradient(180deg, rgba(227, 192, 122, 0.14), rgba(227, 192, 122, 0.03));
+}
+
+.dream-slot.done b {
+  color: var(--gold-hi);
+  text-shadow: 0 0 8px rgba(227, 192, 122, 0.5);
+}
+
+.dream-slot.done small {
+  color: var(--gold-hi);
 }
 
 .sun-card h3 {
@@ -367,6 +423,9 @@
   .sun-grid {
     grid-template-columns: 1fr;
   }
+  .dream-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 /* ── 레시피북 ─────────────────────────── */
@@ -441,6 +500,27 @@
   color: var(--muted);
 }
 
+.book-sep span {
+  display: block;
+  margin: 14px 0 6px;
+  padding: 6px 10px 4px;
+  border-top: 1px solid var(--line);
+  font-family: var(--f-title);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+
+.book-list button.dream > span:first-child::before {
+  content: '✦ ';
+  color: var(--gold);
+  opacity: 0.7;
+}
+
+.book-list button.dream.unknown > span:first-child::before {
+  opacity: 0.3;
+}
+
 .stars i {
   font-style: normal;
   color: rgba(255, 255, 255, 0.18);
@@ -497,6 +577,14 @@
 
 .book-page .desc.hint {
   font-style: italic;
+}
+
+.book-page .desc.dream-note {
+  color: #5a3f18;
+  padding: 8px 12px;
+  border-left: 3px solid #b8862e;
+  background: rgba(184, 134, 46, 0.08);
+  font-size: 15px;
 }
 
 .book-page .conds {

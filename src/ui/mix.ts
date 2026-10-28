@@ -115,7 +115,10 @@ export class MixView {
     root.append(ui);
     for (const k of ['steps', 'peers', 'order-card', 'gauges', 'glass-ui', 'pips', 'tray', 'mix-next', 'step-title', 'stamp-layer', 'mix-bottom']) this.els[k] = ui.querySelector(`.${k}`)!;
     ui.addEventListener('click', (e) => this.click(e));
-    new ResizeObserver(() => this.layoutStage()).observe(root);
+    new ResizeObserver(() => {
+      this.layoutStage();
+      if (this.isOpen) this.fitSide();
+    }).observe(root);
   }
 
   // ── 열기/닫기 ─────────────────────────────────────
@@ -133,6 +136,7 @@ export class MixView {
     this.stage.update(this.drink);
     this.renderOrderCard();
     this.render(true);
+    this.fitSide();
     window.addEventListener('keydown', this.onKey);
     this.introDone = req.mode === 'order' && req.guest && !req.resume ? this.intro() : Promise.resolve();
     return new Promise((r) => (this.resolve = r));
@@ -217,7 +221,23 @@ export class MixView {
       ${g ? `<div class="oc-head"><div class="oc-face" style="--c:${g.color ?? 'var(--gold)'}">${personSvg(g.look, 'neutral')}</div><div><b class="oc-name">${esc(g.name)}</b><small>${esc(g.title)}</small></div></div>` : ''}
       ${r.recipeName ? `<h3 class="oc-title">「${esc(r.recipeName)}」</h3>` : ''}
       <p class="oc-line">“${esc(r.line ?? '')}”</p>
-      <ul class="oc-conds"></ul>`;
+      <ul class="oc-conds${(r.conditions?.length ?? 0) > 4 ? ' many' : ''}"></ul>`;
+  }
+
+  /** 조건이 긴 주문 카드가 맛 게이지와 겹치면 게이지를 줄이고, 그래도 겹치면 카드 아래로 내린다 */
+  private fitSide() {
+    const g = this.els.gauges;
+    g.classList.remove('compact');
+    g.style.top = '';
+    g.style.bottom = '';
+    const root = this.root.getBoundingClientRect();
+    if (!root.width || root.width < 820) return;
+    const cardBottom = this.els['order-card'].getBoundingClientRect().bottom;
+    if (g.getBoundingClientRect().top >= cardBottom + 10) return;
+    g.classList.add('compact');
+    if (g.getBoundingClientRect().top >= cardBottom + 10) return;
+    g.style.top = `${cardBottom - root.top + 10}px`;
+    g.style.bottom = 'auto';
   }
 
   // ── 그리기 ────────────────────────────────────────

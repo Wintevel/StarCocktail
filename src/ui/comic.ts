@@ -79,7 +79,7 @@ export async function runComic(parent: HTMLElement, title: string, runner: Story
     if (s.t === 'end') break;
     if (s.t === 'say') {
       if (!page || slot >= layout.length) await newPage();
-      if (s.show.length) focus = s.show as typeof focus;
+      focus = s.show as typeof focus;
       const { root, text } = makePanel(s, focus, playerName, 'comic-panel');
       const L = layout[slot];
       root.style.left = `${L.box[0]}%`;
