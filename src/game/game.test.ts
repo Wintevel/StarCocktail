@@ -4,7 +4,7 @@ import { judge } from '../mix';
 import { solve } from '../solver';
 import { clockText, dayInfo, LAST_DAY, msAt, OPEN_MIN, SHIFT_MS, SUNDAY } from './calendar';
 import { makeOrder } from './orders';
-import { decodable, dreamsDone, dreamStatus, guestsPerDay, orderableRecipes, payFor, START_GARNISHES, START_INGREDIENTS, starsOf, tierOf } from './progress';
+import { decodable, dreamsDone, dreamStatus, guestsPerDay, orderableRecipes, payFor, START_GARNISHES, START_INGREDIENTS, STAR_AT, starsOf, tierOf } from './progress';
 import { mulberry32 } from './rng';
 import { arrivalTimes, Shift, type Visitor } from './shift';
 
@@ -75,9 +75,10 @@ describe('주문', () => {
 describe('전문성·돈', () => {
   it('완벽하게 낸 횟수로 별이 붙고, 별을 모아 등급이 오른다', () => {
     expect(starsOf({ made: 1, perfect: 0 })).toBe(0);
-    expect(starsOf({ made: 9, perfect: 6 })).toBe(3);
+    expect(starsOf({ made: 9, perfect: STAR_AT[0] })).toBe(1);
+    expect(starsOf({ made: 99, perfect: STAR_AT[2] })).toBe(3);
     expect(tierOf({})).toBe(0);
-    const book = Object.fromEntries(['a', 'b'].map((k) => [k, { made: 6, perfect: 6 }]));
+    const book = Object.fromEntries(['a', 'b'].map((k) => [k, { made: 30, perfect: STAR_AT[2] }]));
     expect(tierOf(book)).toBe(1);
   });
 
@@ -120,7 +121,7 @@ describe('낮꿈 레시피', () => {
     s.story.clues.push('piece:dream-letter', 'piece:dream-oath');
     expect(dreamStatus(s, 'dream-letter')).toBe('piece');
     expect(decodable(s)).toEqual([]); // 견습 등급
-    for (const r of ['sweet-dream', 'golden-balance']) s.book[r] = { made: 6, perfect: 6 }; // 별 6개 → 바텐더
+    for (const r of ['sweet-dream', 'golden-balance']) s.book[r] = { made: 30, perfect: STAR_AT[2] }; // 별 6개 → 바텐더
     expect(decodable(s).map((d) => d.id)).toEqual(['dream-letter']);
     s.dreams.push('dream-letter');
     expect(dreamStatus(s, 'dream-letter')).toBe('decoded');

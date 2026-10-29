@@ -1,13 +1,13 @@
 // 한 판의 흐름: 신문 → 영업(바 화면·제조·이야기) → 마감 결산 → 밤 이야기 → 다음 날. 일요일은 정산·상점.
 // 영업 중에는 매 프레임 영업 규칙(Shift)을 진행하고 바 화면에 반영한다. 이야기·설정·안내 중에는 시계가 멈춘다.
 
-import { sfx, startBgm } from '../audio';
+import { type Music, setAmbience, setMusic, sfx } from '../audio';
 import { ALL_RECIPES, DREAMS, INGREDIENT_BY_ID, RECIPE_BY_ID, RECIPES } from '../data';
-import { type Drink, type Grade, matchRecipes } from '../mix';
+import { computeAttrs, type Drink, type Grade, matchRecipes } from '../mix';
 import type { MixStep } from '../mixSteps';
 import { clockText, dayInfo, dayLabel, LAST_DAY, OPEN_MIN } from '../game/calendar';
 import { makeOrder, orderForRecipe } from '../game/orders';
-import { dreamsDone, guestsPerDay, payFor, REP_DELTA, REP_MAX, starsOf, TIERS, tierOf } from '../game/progress';
+import { dreamsDone, guestsPerDay, payFor, REP_MAX, repDelta, repText, starsOf, TIERS, tierOf } from '../game/progress';
 import { hash, mulberry32 } from '../game/rng';
 import { addEnding, clearGame, emptyWeek, type GameState, saveGame } from '../game/save';
 import { arrivalTimes, type Seat, Shift, type ShiftEvent, type Visitor } from '../game/shift';
@@ -104,7 +104,6 @@ export class Game {
 
   /** 새 게임: 프롤로그 만화 → 첫날 */
   async begin(isNew: boolean) {
-    startBgm();
     if (isNew) {
       await this.night(episode('prologue'));
     }
@@ -135,6 +134,8 @@ export class Game {
   private async sunday() {
     this.host.barRoot.hidden = true;
     for (const ep of nightEpisodesFor(this.s.day, this.storyCtx())) await this.night(ep);
+    setMusic('sunday');
+    setAmbience(null);
     await showSunday(this.s);
     this.s.week = emptyWeek();
     this.s.ending = earlyEnding(this.s.story);
@@ -150,15 +151,19 @@ export class Game {
       this.bar.setHud({ day, money: this.s.money, reputation: this.s.reputation, tier: tierOf(this.s.book), minute: OPEN_MIN, closing: false });
     }, dayLabel(day));
     const tier = tierOf(this.s.book);
-    const briefs = [`오늘의 손님 예상 ${this.plannedCount()}명 · 명성 ${this.s.reputation}`, `전문성 「${TIERS[tier].name}」`];
+    const briefs = [`오늘의 손님 예상 ${this.plannedCount()}명 · 명성 ${repText(this.s.reputation)}`, `전문성 「${TIERS[tier].name}」`];
     if (this.s.debt > 0) briefs.push(`카발로 패밀리 빚 ${this.s.debt.toLocaleString()} 크라운`);
+    setMusic('bar');
+    setAmbience(null);
     await showPaper(this.host.app, day, news, briefs);
+    setAmbience('bar');
     if (this.quit) return;
     this.run = new DayRun(this, this.s, this.bar, this.host);
     const summary = await this.run.play();
     this.run = null;
     if (this.quit) return;
     const last = day === LAST_DAY - 1;
+    setAmbience(null);
     await showDayEnd(summary, last ? '마지막 밤으로' : '밤으로');
     for (const ep of nightEpisodesFor(day, this.storyCtx())) await this.night(ep);
     if (!this.s.tutorialDone) this.s.tutorialDone = true;
@@ -185,7 +190,7 @@ export class Game {
     this.s.ending = key;
     this.host.barRoot.hidden = true;
     this.host.mixRoot.hidden = true;
-    await runEnding(this.host.app, key, this.s, (ep) => runNight(this.host.app, ep, this.storyCtx()));
+    await runEnding(this.host.app, key, this.s, (ep) => runNight(this.host.app, ep, this.storyCtx(), 'ending'));
     addEnding(key);
     clearGame();
     this.host.toTitle();
@@ -193,8 +198,8 @@ export class Game {
 }
 
 /** 밤 이야기 하나를 만화로 */
-async function runNight(app: HTMLElement, ep: Episode, ctx: StoryContext) {
-  await runComic(app, ep.title, new StoryRunner(scriptOf(ep.id), ctx, 'night'), ctx.playerName);
+async function runNight(app: HTMLElement, ep: Episode, ctx: StoryContext, music?: Music) {
+  await runComic(app, ep.title, new StoryRunner(scriptOf(ep.id), ctx, 'night'), ctx.playerName, music);
 }
 
 // ── 하루 영업 ───────────────────────────────────────
@@ -316,13 +321,13 @@ class DayRun {
     if (e.type === 'angry') {
       this.sum.missed++;
       this.s.week.missed++;
-      this.addRep(REP_DELTA.missed);
+      this.addRep('missed');
       const seat = e.seat;
       this.bar.setMood(seat, this.seatLook({ visitor: e.visitor } as Seat).look, 'angry');
       this.bar.emote(seat, 'anger');
       sfx('angry');
       const p = this.bar.seatPoint(seat);
-      floatText(p.x, p.y, `명성 ${REP_DELTA.missed}`, true);
+      floatText(p.x, p.y, '명성 ▼', true);
       if (e.visitor.kind === 'special' && e.visitor.episode && !this.s.story.postponed.includes(e.visitor.episode)) {
         this.s.story.postponed.push(e.visitor.episode);
         toast(`${CAST[e.visitor.cast!].name}이(가) 그냥 떠났습니다. 이야기는 다음에 이어집니다.`);
@@ -332,7 +337,7 @@ class DayRun {
         this.host.mix.forceBack();
       }
     }
-    if (e.type === 'turnaway') this.addRep(-1);
+    if (e.type === 'turnaway') this.addRep('turnaway');
   }
 
   /** 안내에서 밝힐 자리: 손님과 머리 위 말풍선 */
@@ -341,8 +346,8 @@ class DayRun {
     return [root, root?.querySelector('.seat-bubble') ?? null];
   }
 
-  private addRep(d: number) {
-    this.s.reputation = Math.max(0, Math.min(REP_MAX, this.s.reputation + d));
+  private addRep(o: Parameters<typeof repDelta>[0]) {
+    this.s.reputation = repDelta(o, this.s.reputation);
   }
 
   // ── 자리 누르기 ─────────────────────────────────
@@ -425,7 +430,7 @@ class DayRun {
     this.s.week.served++;
     if (grade === 'perfect') this.s.week.perfect++;
     this.s.week.pours += drink.pours.length;
-    this.addRep(REP_DELTA[grade]);
+    this.addRep(grade);
     // 레시피북: 주문한 레시피를 완벽하게 내면 숙련, 조건이 맞은 레시피는 모두 실린다
     const known = [...RECIPES, ...DREAMS.filter((d) => this.s.dreams.includes(d.id))];
     const found = new Set(matchRecipes(known, drink).map((r) => r.id));
@@ -442,16 +447,25 @@ class DayRun {
       const rec = (this.s.book[recipeId] ??= { made: 1, perfect: 0 });
       rec.perfect++;
       if (starsOf(rec) > this.bookBefore[recipeId] && !this.sum.starUps.includes(RECIPE_BY_ID[recipeId].name)) this.sum.starUps.push(RECIPE_BY_ID[recipeId].name);
+      if (RECIPE_BY_ID[recipeId].dream && rec.perfect === 1) sfx('fanfare');
       if (RECIPE_BY_ID[recipeId].dream && rec.perfect === 1) toast(`낮꿈 레시피 「${RECIPE_BY_ID[recipeId].name}」 완성 · 스승의 노트 한 장이 채워졌습니다`);
     }
     const tierNow = tierOf(this.s.book);
     if (tierNow > this.tierBefore) {
       this.sum.tierUp = TIERS[tierNow].name;
+      sfx('fanfare');
       this.tierBefore = tierNow;
       toast(`전문성 등급이 올랐습니다 · ${TIERS[tierNow].name}`);
     }
     const look = this.seatLook({ visitor: v } as Seat).look;
-    this.bar.setMood(i, look, grade === 'fail' ? 'sad' : 'smile');
+    this.bar.setMood(i, look, grade === 'fail' ? 'sad' : grade === 'perfect' ? 'laugh' : 'smile');
+    // 독한 술은 마시는 사이 얼굴이 붉어진다
+    if (grade !== 'fail' && computeAttrs(drink).strength >= 3) {
+      const id = v.id;
+      setTimeout(() => {
+        if (this.shift.seats[i]?.visitor.id === id && this.shift.seats[i]?.phase === 'drink') this.bar.setMood(i, look, 'tipsy');
+      }, 4500);
+    }
     this.bar.emote(i, grade === 'perfect' ? 'love' : grade === 'good' ? 'note' : 'dots');
     this.bar.placeGlass(i, drink.glass!, glassColor(drink) ?? INGREDIENT_BY_ID.gin.color);
     const p = this.bar.seatPoint(i);

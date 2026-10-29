@@ -297,7 +297,7 @@ button {
 .modal {
   width: min(560px, 100%);
   max-height: calc(100% - 24px);
-  overflow: auto;
+  overflow: hidden auto;
   padding: 28px 30px;
   animation: modal-in 0.42s var(--ease-back);
 }
@@ -465,6 +465,9 @@ button {
 }
 
 .field input[type='text'] {
+  /* 좁은 화면에서 입력 칸이 창보다 넓어져 가로로 밀리지 않게 */
+  width: 100%;
+  min-width: 0;
   height: 48px;
   padding: 0 16px;
   font: 500 18px var(--f-ui);

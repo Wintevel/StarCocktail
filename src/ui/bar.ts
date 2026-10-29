@@ -7,7 +7,7 @@ import { type Look, type Mood, personSvg } from '../art/people';
 import { barRoomSvg, counterSvg } from '../art/scenes';
 import { sfx } from '../audio';
 import { clockText, CLOSE_MIN, dayInfo, OPEN_MIN, WEEKDAYS } from '../game/calendar';
-import { TIERS } from '../game/progress';
+import { repText, TIERS } from '../game/progress';
 import { type Seat, SEATS, type Shift } from '../game/shift';
 import { btn, el, esc } from './dom';
 
@@ -59,7 +59,8 @@ export class BarView {
     const seatsEl = el('div', 'seats');
     for (let i = 0; i < SEATS; i++) {
       const s = el('div', 'seat');
-      s.style.left = `${SEAT_X[i]}%`;
+      // 자리 가로 위치는 CSS 변수로: 세로 화면에서는 CSS가 앞뒤 두 줄로 다시 놓는다
+      s.style.setProperty('--x', `${SEAT_X[i]}%`);
       s.dataset.seat = String(i);
       const guest = el('div', 'seat-guest');
       const bubble = el(
@@ -78,7 +79,8 @@ export class BarView {
     const counter = el('div', 'counter', counterSvg());
     const glasses = el('div', 'counter-glasses');
     this.seats.forEach((s, i) => {
-      s.glass.style.left = `${SEAT_X[i]}%`;
+      s.glass.style.setProperty('--x', `${SEAT_X[i]}%`);
+      s.glass.dataset.seat = String(i);
       glasses.append(s.glass);
     });
     counter.append(glasses);
@@ -122,7 +124,7 @@ export class BarView {
     (this.hud.querySelector('.hud-night i') as HTMLElement).style.width = `${p * 100}%`;
     (this.hud.querySelector('.hud-night .moon') as HTMLElement).style.left = `${p * 100}%`;
     this.hud.querySelector('.hud-money')!.textContent = o.money.toLocaleString();
-    this.hud.querySelector('.hud-rep')!.textContent = String(o.reputation);
+    this.hud.querySelector('.hud-rep')!.textContent = repText(o.reputation);
     this.hud.querySelector('.hud-tier')!.textContent = TIERS[o.tier].name;
   }
 
@@ -155,7 +157,7 @@ export class BarView {
         v.guest.innerHTML = personSvg(info.look, 'neutral');
         v.tag.innerHTML = info.name ? `<b style="--c:${info.color ?? '#e3c07a'}">${esc(info.name)}</b>` : '';
         v.glass.innerHTML = '';
-        sfx('bell');
+        sfx('door');
       }
       if (v.phase !== s.phase) {
         v.phase = s.phase;

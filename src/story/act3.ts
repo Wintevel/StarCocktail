@@ -48,7 +48,7 @@ cavallo(smile): 흉내는 냈구나. 고맙다.
 @trust cavallo +1
 @end
 #perfect
-cavallo(sad): ……쉰 해 전, 이 잔을 들고 맹세했다. 가난한 항구 사람들을 지키겠다고.
+cavallo(serious): ……쉰 해 전, 이 잔을 들고 맹세했다. 가난한 항구 사람들을 지키겠다고.
 cavallo: 오렐리아는 그걸 기억하고 있었구나. 그 아이가 빚을 진 건 노아를 살리려고였다. 실바가 그 회계사를 태워 죽이려 했으니까. 나는 알고도 모른 척했다.
 @trust cavallo +2
 @set cavallo_oath
@@ -87,7 +87,7 @@ silva(smile): 그래야지.
     script: `
 noah: 결정해야 할 것 같아요. 축제 날 밤, 새벽 배를 타고 떠날지. 남아서 증언할지.
 @if flag:noah_testify_wish -> wish
-noah(worried): 솔직히 무서워요. 하지만 이제 혼자 정하고 싶진 않아요.
+noah(scared): 솔직히 무서워요. 하지만 이제 혼자 정하고 싶진 않아요.
 @goto choice
 #wish
 noah: 전에 말했죠. 누군가 장부를 바르게 써 준다면 증언하겠다고.
@@ -218,7 +218,7 @@ arthur(smile): 이 색이야. 고맙네.
 arthur(smile): 고맙네. 이 정도면 클라라도 웃어 줄 거야.
 @end
 #peace
-arthur(sad): ……이제 됐네. 이제 한 잔은 내가 마시고, 한 잔은 여기 두고 가겠네.
+arthur(cry): ……이제 됐네. 이제 한 잔은 내가 마시고, 한 잔은 여기 두고 가겠네.
 arthur(smile): 클라라가 늦게 오면, 그 잔을 내줘.
 @set arthur_peace
 @trust arthur +2
@@ -233,7 +233,7 @@ arthur(smile): 클라라가 늦게 오면, 그 잔을 내줘.
     at: 22 * 60 + 30,
     title: '피 묻은 모자',
     script: `
-luca(sad): …미안, 뒷문으로 들어왔어. 형님 사람들이 날 찾아. 배신자래.
+luca(scared): …미안, 뒷문으로 들어왔어. 형님 사람들이 날 찾아. 배신자래.
 @if flag:luca_ally -> ally
 luca: 영감님 창고 불 끄는 걸 도왔거든. 그게 다야.
 @goto choice
@@ -260,7 +260,7 @@ luca(sad): 알아. 그냥 한 잔만 하고 갈게.
     title: '협박 편지',
     script: `
 sera(worried): 편집국에 협박 편지가 왔어요. 장부 기사를 쓰면 인쇄소를 태우겠대요.
-sera: 편집장은 버티겠대요. 나도요. 그래도 손이 떨리네요.
+sera(scared): 편집장은 버티겠대요. 나도요. 그래도 손이 떨리네요.
 @if dream:dream-ink -> ink
 @drink meteor-highball "정신 차리게 하이볼."
 sera: 고마워요.
@@ -273,7 +273,7 @@ sera(smile): 쓰네요. 좋아요.
 @end
 #perfect
 sera(smile): 쓰고, 얼음 없이, 지워지지 않는 맛.
-sera: 손이 안 떨려요. 축제 날 밤, 인쇄소 문 열어 두고 기다릴게요.
+sera(serious): 손이 안 떨려요. 축제 날 밤, 인쇄소 문 열어 두고 기다릴게요.
 @set sera_ready
 @trust sera +2
 @end
@@ -294,7 +294,7 @@ pip(smile): 사장님! 편지! 이번엔 엄청 짧아요!
 pip: 오렐리아 씨가 와요? 진짜로?
 @goto end
 #reply
-pip(smile): 사장님 답장, 잘 도착했나 봐요! 제가 바다 건너까지 배달한 거예요!
+pip(laugh): 사장님 답장, 잘 도착했나 봐요! 제가 바다 건너까지 배달한 거예요!
 @trust pip +1
 #end
 ? 축제 날 밤, 핍도 같이 마중 나가자 -> together | set pip_festival; trust pip +1
@@ -316,7 +316,7 @@ pip(sad): …창문으로라도 볼래요.
     title: '남은 빚',
     when: '!flag:teo_debt_paid',
     script: `
-teo(sad): 실바가 축제 날 밤 배 위에서 연주하래요. 그 배가… 돈 카발로를 치러 가는 배래요.
+teo(scared): 실바가 축제 날 밤 배 위에서 연주하래요. 그 배가… 돈 카발로를 치러 가는 배래요.
 teo: 거기서 피아노를 치면, 저도 그 일의 일부가 되겠죠.
 ? 남은 500, 이번엔 제가 낼게요 -> pay
 ? 그날 밤 이 바로 도망쳐 와요 -> run | set teo_run
@@ -408,7 +408,7 @@ harin(worried): 저… 저기…
 ? 테오 씨, 먼저 말해 줄래요? -> teo | set lovers_together; trust teo +1
 #push
 @show harin:smile teo:surprised
-harin(smile): 테오 씨 피아노가 좋아요! 그리고, 그, 테오 씨가 좋아요!
+harin(blush): 테오 씨 피아노가 좋아요! 그리고, 그, 테오 씨가 좋아요!
 teo(smile): ……저는 그 꽃다발이 처음 보였던 날부터요.
 @end
 #teo
@@ -418,7 +418,7 @@ harin(smile): …네!
 @end
 #brave
 @show harin:smile teo:smile
-harin(smile): 테오 씨. 좋아해요. 꽃 말고, 저로 말할게요.
+harin(blush): 테오 씨. 좋아해요. 꽃 말고, 저로 말할게요.
 teo(smile): 저도요. 처음 그 꽃다발을 본 날부터.
 @set lovers_together
 @trust harin +1
@@ -444,7 +444,7 @@ pip: 이번 편지는요… "마지막"이라고 써 있어요.
 ~: 편지 끝에 그림 하나. 층이 진 잔과 '낮꿈'. 「뱃사공에게 이 잔을 보이면 새벽 첫 배에 자리를 내줄 거야.」
 @clue piece:dream-dawn
 #end
-pip(sad): 마지막이면… 이제 배달할 편지가 없는 거예요?
+pip(cry): 마지막이면… 이제 배달할 편지가 없는 거예요?
 ? 이제 핍이 이 바의 편지를 써 줘 -> write | trust pip +1; set pip_writer
 ? 오렐리아 씨가 오면, 직접 배달해 줘 -> deliver | trust pip +1
 #write
@@ -536,7 +536,7 @@ sera: 등불도 진실이죠. 아름다운 쪽의.
     title: '루카의 이름',
     script: `
 @if flag:luca_ally -> ally
-luca(sad): 형님이 축제 날 밤 이 바에 나를 보낸대. 불 지르러.
+luca(serious): 형님이 축제 날 밤 이 바에 나를 보낸대. 불 지르러.
 ? 루카, 그날 여기 오지 마요 -> stay | trust luca +1
 ? 오면, 당신이 정해요 -> choose
 #stay
@@ -793,7 +793,7 @@ sera(smile): 오지 않으면, 등불 사진을 넣을게요. 그래도 원망 �
     at: 21 * 60 + 30,
     title: '시장 옆의 청장',
     script: `
-eve: 토요일 밤 자정, 청장은 시장 옆에서 등불을 띄울 거예요. 판사는 영장에 서명만 남겨 뒀어요.
+eve(serious): 토요일 밤 자정, 청장은 시장 옆에서 등불을 띄울 거예요. 판사는 영장에 서명만 남겨 뒀어요.
 @if flag:eve_whistle -> whistle
 eve: 이 바에 무슨 일이 생기면, 길 건너에 내 사람 둘이 있을 거예요. 배지는 없지만.
 @end
@@ -827,7 +827,7 @@ luca: 이 모자는 그날 밤 운하에 던질 거야. 등불이랑 같이.
     at: 20 * 60 + 30,
     title: '제일 큰 등불',
     script: `
-pip(smile): 사장님! 등불 다 만들었어요! 제일 큰 거!
+pip(laugh): 사장님! 등불 다 만들었어요! 제일 큰 거!
 pip: 소원은 비밀인데… 힌트! 바다 건너 사람이랑 관계 있어요.
 @if flag:pip_writer -> writer
 @end

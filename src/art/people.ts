@@ -3,7 +3,8 @@
 // 좌표: viewBox 0 0 240 300. 머리 가운데 (120,104), 턱 ≈ 160, 어깨 ≈ 185, 300에서 잘린다(바 카운터가 아래를 가린다).
 // 같은 Look이면 늘 같은 그림이 나온다. 표정(Mood)만 바꿔 다시 그린다.
 
-export type Mood = 'neutral' | 'smile' | 'sad' | 'angry' | 'surprised' | 'smirk' | 'worried';
+export const MOODS = ['neutral', 'smile', 'sad', 'angry', 'surprised', 'smirk', 'worried', 'laugh', 'cry', 'blush', 'serious', 'tipsy', 'scared'] as const;
+export type Mood = (typeof MOODS)[number];
 export type HairStyle = 'short' | 'slick' | 'messy' | 'bob' | 'long' | 'bun' | 'old' | 'curly' | 'ponytail' | 'wavy';
 export type EyeStyle = 'round' | 'sharp' | 'sleepy' | 'soft';
 export type Outfit = 'suit' | 'vest' | 'coat' | 'dress' | 'sweater' | 'uniform' | 'cardigan' | 'blouse' | 'shirt' | 'apron';
@@ -217,25 +218,35 @@ function eye(cx: number, look: Look, mood: Mood, right: boolean) {
   const y = look.age === 'kid' ? 112 : 108;
   const dir = right ? 1 : -1;
   const iris = look.iris;
-  if (mood === 'smile' && look.eyes !== 'sharp') {
-    // 웃는 눈: 아치
-    return line(`M${cx - 10},${y + 2} C${cx - 5},${y - 8} ${cx + 5},${y - 8} ${cx + 10},${y + 2}`, 3.6);
+  if ((mood === 'smile' && look.eyes !== 'sharp') || mood === 'laugh') {
+    // 웃는 눈: 아치(크게 웃으면 더 굵고 둥글게)
+    return mood === 'laugh'
+      ? line(`M${cx - 11},${y + 3} C${cx - 6},${y - 10} ${cx + 6},${y - 10} ${cx + 11},${y + 3}`, 4.4)
+      : line(`M${cx - 10},${y + 2} C${cx - 5},${y - 8} ${cx + 5},${y - 8} ${cx + 10},${y + 2}`, 3.6);
   }
   const big = look.eyes === 'round' || look.age === 'kid';
   const rx = big ? 8 : 7;
   const ry = look.eyes === 'sleepy' ? 6 : big ? 10 : look.eyes === 'sharp' ? 7 : 9;
-  const pr = mood === 'surprised' ? 2.4 : 4;
+  const pr = mood === 'surprised' || mood === 'scared' ? 2.4 : 4;
+  // 부끄러우면 시선을 옆으로 돌린다
+  const look2 = mood === 'blush' ? dir * -3 : 0;
   let lid = '';
   // 윗눈꺼풀(굵은 속눈썹 선)
   if (look.eyes === 'sharp') lid = line(`M${cx - 12},${y - 2 + dir * -1} C${cx - 4},${y - ry - 4} ${cx + 6},${y - ry - 2} ${cx + 12 * 1},${y - ry + 2 + (right ? 2 : -2)}`, 4.2);
   else lid = line(`M${cx - 11},${y - ry + 4} C${cx - 6},${y - ry - 3} ${cx + 6},${y - ry - 3} ${cx + 11},${y - ry + 4}`, 4.2);
   let lower = '';
   if (look.eyes === 'sleepy') lower = flat(`M${cx - 10},${y - ry + 2} C${cx - 4},${y - 2} ${cx + 4},${y - 2} ${cx + 10},${y - ry + 2} L${cx + 10},${y - ry - 4} L${cx - 10},${y - ry - 4} Z`, look.skin) + line(`M${cx - 10},${y - 2} C${cx - 4},${y + 1} ${cx + 4},${y + 1} ${cx + 10},${y - 2}`, 2.4);
+  // 반쯤 감긴 눈(취함)·가늘게 뜬 눈(진지함): 위 눈꺼풀을 피부색으로 덮는다
+  const lidDrop = mood === 'tipsy' ? ry * 0.9 : mood === 'serious' ? ry * 0.45 : 0;
+  if (lidDrop) lower += flat(`M${cx - 12},${y - ry - 5} L${cx + 12},${y - ry - 5} L${cx + 12},${y - ry + lidDrop} C${cx + 4},${y - ry + lidDrop + 2} ${cx - 4},${y - ry + lidDrop + 2} ${cx - 12},${y - ry + lidDrop} Z`, look.skin) + line(`M${cx - 11},${y - ry + lidDrop} C${cx - 4},${y - ry + lidDrop + 2} ${cx + 4},${y - ry + lidDrop + 2} ${cx + 11},${y - ry + lidDrop}`, 3.6);
+  if (mood === 'cry') lower += line(`M${cx - 9},${y + ry + 1} C${cx - 3},${y + ry + 4} ${cx + 3},${y + ry + 4} ${cx + 9},${y + ry + 1}`, 2.2, '#7cc6ff');
   if (mood === 'sad' || mood === 'worried') lower += line(`M${cx - 7},${y + ry + 3} C${cx - 2},${y + ry + 5} ${cx + 2},${y + ry + 5} ${cx + 7},${y + ry + 3}`, 1.6, shadeOf(look.skin, 0.4));
   const white = `<ellipse cx="${cx}" cy="${y}" rx="${rx + 2}" ry="${ry}" fill="#fffaf2"/>`;
-  const irisE = `<ellipse cx="${cx + dir * 0.5}" cy="${y + 1}" rx="${rx - 1}" ry="${ry - 1}" fill="${iris}"/>` + `<ellipse cx="${cx + dir * 0.5}" cy="${y + 4}" rx="${rx - 2.5}" ry="${(ry - 1) * 0.55}" fill="${lightOf(iris, 0.35)}" opacity="0.7"/>`;
-  const pupil = `<circle cx="${cx + dir * 0.5}" cy="${y + 1}" r="${pr}" fill="${LINE}"/>`;
-  const hi = `<circle cx="${cx - 3}" cy="${y - 3}" r="2.6" fill="#fff"/><circle cx="${cx + 3}" cy="${y + 4}" r="1.2" fill="#fff"/>`;
+  const ix = cx + dir * 0.5 + look2;
+  const irisE = `<ellipse cx="${ix}" cy="${y + 1}" rx="${rx - 1}" ry="${ry - 1}" fill="${iris}"/>` + `<ellipse cx="${ix}" cy="${y + 4}" rx="${rx - 2.5}" ry="${(ry - 1) * 0.55}" fill="${lightOf(iris, 0.35)}" opacity="0.7"/>`;
+  const pupil = `<circle cx="${ix}" cy="${y + 1}" r="${pr}" fill="${LINE}"/>`;
+  // 울 때는 눈물이 고여 반짝임이 커진다
+  const hi = mood === 'cry' ? `<circle cx="${ix - 3}" cy="${y - 3}" r="3.6" fill="#fff"/><circle cx="${ix + 3}" cy="${y + 3}" r="2.2" fill="#fff"/><circle cx="${ix - 4}" cy="${y + 5}" r="1.2" fill="#fff"/>` : `<circle cx="${ix - 3}" cy="${y - 3}" r="2.6" fill="#fff"/><circle cx="${ix + 3}" cy="${y + 4}" r="1.2" fill="#fff"/>`;
   return white + irisE + pupil + hi + lid + lower;
 }
 
@@ -252,8 +263,26 @@ function brows(look: Look, mood: Mood) {
       break;
     case 'sad':
     case 'worried':
+    case 'blush':
       l = `M90,${y + 2} C98,${y + 1} 106,${y - 3} 112,${y - 6}`;
       r = `M150,${y + 2} C142,${y + 1} 134,${y - 3} 128,${y - 6}`;
+      break;
+    case 'cry':
+    case 'scared':
+      l = `M88,${y + 1} C96,${y - 1} 106,${y - 6} 112,${y - 11}`;
+      r = `M152,${y + 1} C144,${y - 1} 134,${y - 6} 128,${y - 11}`;
+      break;
+    case 'serious':
+      l = `M88,${y + 1} L112,${y + 2}`;
+      r = `M152,${y + 1} L128,${y + 2}`;
+      break;
+    case 'laugh':
+      l = `M88,${y - 4} C96,${y - 10} 106,${y - 10} 112,${y - 6}`;
+      r = `M152,${y - 4} C144,${y - 10} 134,${y - 10} 128,${y - 6}`;
+      break;
+    case 'tipsy':
+      l = `M88,${y - 2} C96,${y - 5} 106,${y - 4} 112,${y}`;
+      r = `M152,${y + 1} C144,${y - 3} 134,${y - 3} 128,${y - 1}`;
       break;
     case 'surprised':
       l = `M88,${y - 4} C96,${y - 10} 106,${y - 10} 112,${y - 6}`;
@@ -290,6 +319,23 @@ function mouth(look: Look, mood: Mood) {
       return line(`M108,${y + 1} C116,${y + 4} 124,${y + 2} 133,${y - 5}`, 2.8, lip ? shadeOf(lip, 0.2) : LINE);
     case 'worried':
       return line(`M108,${y + 2} C112,${y - 1} 116,${y + 3} 120,${y + 1} C124,${y - 1} 128,${y + 3} 132,${y}`, 2.6, lip ? shadeOf(lip, 0.2) : LINE);
+    case 'laugh':
+      // 활짝 연 입(D자) + 혀
+      return (
+        path(`M102,${y - 3} C104,${y + 20} 136,${y + 20} 138,${y - 3} C126,${y} 114,${y} 102,${y - 3} Z`, '#7a2a3c') +
+        flat(`M110,${y + 10} C116,${y + 16} 124,${y + 16} 130,${y + 10} C124,${y + 6} 116,${y + 6} 110,${y + 10} Z`, '#ff8f9e') +
+        flat(`M106,${y - 1} C114,${y + 2} 126,${y + 2} 134,${y - 1} L133,${y + 2} C124,${y + 4} 116,${y + 4} 107,${y + 2} Z`, '#fffaf2')
+      );
+    case 'cry':
+      return path(`M108,${y + 6} C110,${y - 2} 116,${y + 1} 120,${y - 1} C124,${y + 1} 130,${y - 2} 132,${y + 6} C126,${y + 10} 114,${y + 10} 108,${y + 6} Z`, '#7a2a3c');
+    case 'blush':
+      return line(`M112,${y + 1} C115,${y + 4} 118,${y + 4} 120,${y + 2} C122,${y + 4} 125,${y + 4} 128,${y + 1}`, 2.4, lip ? shadeOf(lip, 0.2) : LINE);
+    case 'serious':
+      return line(`M110,${y + 1} L130,${y + 1}`, 2.8, lip ? shadeOf(lip, 0.2) : LINE);
+    case 'tipsy':
+      return path(`M108,${y} C114,${y + 9} 128,${y + 8} 133,${y - 3} C126,${y + 2} 116,${y + 3} 108,${y} Z`, '#8a2e45');
+    case 'scared':
+      return path(`M112,${y + 3} C114,${y - 3} 118,${y + 1} 120,${y - 2} C122,${y + 1} 126,${y - 3} 128,${y + 3} C124,${y + 9} 116,${y + 9} 112,${y + 3} Z`, '#7a2a3c');
     default:
       return line(`M110,${y} C116,${y + 4} 124,${y + 4} 130,${y}`, 2.8, lip ? shadeOf(lip, 0.2) : LINE);
   }
@@ -303,7 +349,40 @@ function face(look: Look, mood: Mood) {
     wr =
       line('M100,74 C112,70 128,70 140,74 M104,80 C114,77 126,77 136,80', 1.6, shadeOf(look.skin, 0.45)) +
       line('M104,128 C100,136 102,144 106,148 M136,128 C140,136 138,144 134,148', 1.8, shadeOf(look.skin, 0.4));
-  return brows(look, mood) + eye(100, look, mood, false) + eye(140, look, mood, true) + nose + mouth(look, mood) + wr;
+  return brows(look, mood) + eye(100, look, mood, false) + eye(140, look, mood, true) + nose + mouth(look, mood) + wr + moodFx(look, mood);
+}
+
+/** 표정에 붙는 만화 기호: 눈물, 식은땀, 홍조, 볼 빗금 */
+function moodFx(look: Look, mood: Mood) {
+  const dy = look.age === 'kid' ? 4 : 0;
+  const ey = 108 + dy;
+  switch (mood) {
+    case 'cry':
+      // 두 눈에서 볼을 타고 흐르는 눈물 줄기
+      return [100, 140]
+        .map((cx) => path(`M${cx - 4},${ey + 9} C${cx - 7},${ey + 22} ${cx - 5},${ey + 34} ${cx - 2},${ey + 40} C${cx + 2},${ey + 34} ${cx + 3},${ey + 22} ${cx + 2},${ey + 9} Z`, '#a9dcff', ' stroke-width="2" opacity="0.9"'))
+        .join('');
+    case 'blush':
+      return (
+        `<ellipse cx="96" cy="${130 + dy}" rx="12" ry="6" fill="#ff6f8e" opacity="0.6"/><ellipse cx="144" cy="${130 + dy}" rx="12" ry="6" fill="#ff6f8e" opacity="0.6"/>` +
+        [88, 94, 100, 136, 142, 148].map((x) => line(`M${x + 2},${126 + dy} L${x - 2},${133 + dy}`, 1.6, '#d63a5f')).join('')
+      );
+    case 'tipsy':
+      // 코와 볼을 가로지르는 붉은 기
+      return `<path d="M84,${122 + dy} C100,${116 + dy} 140,${116 + dy} 156,${122 + dy} C150,${134 + dy} 90,${134 + dy} 84,${122 + dy} Z" fill="#ff5d7a" opacity="0.38"/>` + line(`M162,${70 + dy} C166,${64 + dy} 172,${66 + dy} 170,${72 + dy} C168,${78 + dy} 176,${80 + dy} 178,${74 + dy}`, 2, '#ff8fb1');
+    case 'scared':
+      // 볼에 흐르는 식은땀 + 머리 양옆의 떨림 선 + 이마의 질린 그늘
+      return (
+        `<path d="M92,${92 + dy} C104,${88 + dy} 136,${88 + dy} 148,${92 + dy} L146,${98 + dy} C134,${95 + dy} 106,${95 + dy} 94,${98 + dy} Z" fill="#6b7cff" opacity="0.28"/>` +
+        path(`M156,${110 + dy} C149,${121 + dy} 149,${130 + dy} 156,${132 + dy} C163,${130 + dy} 163,${121 + dy} 156,${110 + dy} Z`, '#bfe6ff', ' stroke-width="2.2"') +
+        `<circle cx="154" cy="${125 + dy}" r="1.6" fill="#fff"/>` +
+        line(`M58,${92 + dy} C54,${98 + dy} 62,${102 + dy} 58,${108 + dy} M182,${92 + dy} C186,${98 + dy} 178,${102 + dy} 182,${108 + dy}`, 2.2, '#cfc4ff')
+      );
+    case 'serious':
+      return line(`M116,${84 + dy} L118,${92 + dy} M124,${84 + dy} L122,${92 + dy}`, 1.6, shadeOf(look.skin, 0.45));
+    default:
+      return '';
+  }
 }
 
 // ── 머리카락 ────────────────────────────────────────
