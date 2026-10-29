@@ -50,6 +50,8 @@ export interface GameState {
   story: StoryState;
   week: WeekStats;
   tutorialDone: boolean;
+  /** 해독한 낮꿈 레시피 */
+  dreams: string[];
   /** 엔딩을 봤으면 그 id */
   ending: string | null;
 }
@@ -70,6 +72,7 @@ export function newGame(playerName: string): GameState {
     story: { flags: {}, trust: {}, done: [], postponed: [], clues: [], news: null },
     week: emptyWeek(),
     tutorialDone: false,
+    dreams: [],
     ending: null,
   };
 }
@@ -87,7 +90,9 @@ export function loadGame(): GameState | null {
     const raw = storage()?.getItem(SAVE_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw) as GameState;
-    return s && s.version === VERSION ? s : null;
+    if (!s || s.version !== VERSION) return null;
+    s.dreams ??= []; // 1단계 저장에는 없던 칸
+    return s;
   } catch {
     return null;
   }
@@ -104,6 +109,29 @@ export function saveGame(s: GameState) {
 export function clearGame() {
   try {
     storage()?.removeItem(SAVE_KEY);
+  } catch {
+    /* 무시 */
+  }
+}
+
+// ── 본 엔딩(게임을 새로 해도 남는다) ─────────────────
+export const ENDINGS_KEY = 'ripple-of-daydream/endings';
+
+export function loadEndings(): string[] {
+  try {
+    const raw = storage()?.getItem(ENDINGS_KEY);
+    const v = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function addEnding(key: string) {
+  const seen = loadEndings();
+  if (seen.includes(key)) return;
+  try {
+    storage()?.setItem(ENDINGS_KEY, JSON.stringify([...seen, key]));
   } catch {
     /* 무시 */
   }

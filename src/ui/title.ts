@@ -3,7 +3,8 @@
 import { titleSceneSvg } from '../art/title';
 import { sfx, unlock } from '../audio';
 import { dayLabel } from '../game/calendar';
-import type { GameState } from '../game/save';
+import { type GameState, loadEndings } from '../game/save';
+import { ENDINGS } from '../story/endings';
 import { btn, el } from './dom';
 
 export interface TitleActions {
@@ -38,7 +39,7 @@ export function renderTitle(root: HTMLElement, save: GameState | null, act: Titl
          ${btn('<span class="m-main">설정</span>', 'menu-btn', 'data-a="settings"')}
        </nav>`,
     ),
-    el('div', 'title-foot', '© Ripple of Daydream · 마우스나 손가락으로 플레이합니다'),
+    el('div', 'title-foot', `© Ripple of Daydream · 마우스나 손가락으로 플레이합니다${loadEndings().length ? ` · 본 엔딩 ${loadEndings().length} / ${ENDINGS.length}` : ''}`),
   );
   root.querySelector('.title-menu')!.addEventListener('click', (e) => {
     const a = (e.target as HTMLElement).closest<HTMLElement>('[data-a]')?.dataset.a;

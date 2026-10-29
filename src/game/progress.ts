@@ -1,6 +1,6 @@
 // 바텐더 실력과 가게 살림: 레시피 숙련(별) → 전문성 등급 → 상점·주문 범위, 손님 만족 → 명성 → 하루 손님 수·팁.
 
-import { type GarnishId, GARNISHES, type IngredientId, INGREDIENTS, type Recipe, RECIPES } from '../data';
+import { DREAMS, type GarnishId, GARNISHES, type IngredientId, INGREDIENTS, type Recipe, RECIPES } from '../data';
 import type { Grade } from '../mix';
 
 export interface RecipeRecord {
@@ -63,13 +63,37 @@ export function payFor(price: number, grade: Grade, reputation: number): { price
 export const START_INGREDIENTS: IngredientId[] = INGREDIENTS.filter((i) => i.tier === 0).map((i) => i.id);
 export const START_GARNISHES: GarnishId[] = ['none', 'lemon', 'mint', 'cherry'];
 
-/** 이 등급에서 손님이 주문할 수 있는 레시피(재료가 갖춰진 것만) */
-export function orderableRecipes(tier: number, have: ReadonlySet<IngredientId>, garnishes: ReadonlySet<GarnishId>): Recipe[] {
-  return RECIPES.filter(
-    (r) =>
-      r.tier <= tier &&
-      r.conditions.every((c) => (c.kind === 'contains' ? have.has(c.ingredient) : c.kind === 'garnish' ? garnishes.has(c.garnish) : true)),
+/** 이 등급에서 손님이 주문할 수 있는 레시피(재료가 갖춰진 것만). 낮꿈 레시피는 해독한 것만. */
+export function orderableRecipes(tier: number, have: ReadonlySet<IngredientId>, garnishes: ReadonlySet<GarnishId>, decoded: readonly string[] = []): Recipe[] {
+  return [...RECIPES.filter((r) => r.tier <= tier), ...DREAMS.filter((r) => decoded.includes(r.id))].filter((r) =>
+    r.conditions.every((c) => (c.kind === 'contains' ? have.has(c.ingredient) : c.kind === 'garnish' ? garnishes.has(c.garnish) : true)),
   );
+}
+
+// ── 낮꿈 레시피 ─────────────────────────────────────
+/** 조각 단서 id */
+export const pieceOf = (id: string) => `piece:${id}`;
+
+export interface DreamState {
+  book: Record<string, RecipeRecord>;
+  dreams: string[];
+  story: { clues: string[] };
+}
+
+/** 낮꿈 레시피 하나의 상태: 빈 장 → 조각 → 해독 → 완성(손님에게 완벽하게 냄) */
+export function dreamStatus(s: DreamState, id: string): 'blank' | 'piece' | 'decoded' | 'done' {
+  if (s.dreams.includes(id)) return (s.book[id]?.perfect ?? 0) > 0 ? 'done' : 'decoded';
+  return s.story.clues.includes(pieceOf(id)) ? 'piece' : 'blank';
+}
+
+export function dreamsDone(s: DreamState): number {
+  return DREAMS.filter((d) => dreamStatus(s, d.id) === 'done').length;
+}
+
+/** 지금 해독할 수 있는 조각(등급이 닿은 것) */
+export function decodable(s: DreamState): Recipe[] {
+  const tier = tierOf(s.book);
+  return DREAMS.filter((d) => dreamStatus(s, d.id) === 'piece' && d.tier <= tier);
 }
 
 /** 일요일 상점에서 이 등급에 들일 수 있는 것 */

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { DREAMS } from '../data';
 import { judge } from '../mix';
 import { solve } from '../solver';
 import { clockText, dayInfo, LAST_DAY, msAt, OPEN_MIN, SHIFT_MS, SUNDAY } from './calendar';
 import { makeOrder } from './orders';
-import { guestsPerDay, payFor, START_GARNISHES, START_INGREDIENTS, starsOf, tierOf } from './progress';
+import { decodable, dreamsDone, dreamStatus, guestsPerDay, orderableRecipes, payFor, START_GARNISHES, START_INGREDIENTS, starsOf, tierOf } from './progress';
 import { mulberry32 } from './rng';
 import { arrivalTimes, Shift, type Visitor } from './shift';
 
@@ -83,5 +84,48 @@ describe('전문성·돈', () => {
   it('완벽하면 팁, 아쉬우면 술값 절반', () => {
     expect(payFor(20, 'perfect', 0).tip).toBeGreaterThan(0);
     expect(payFor(20, 'fail', 0)).toEqual({ price: 10, tip: 0 });
+  });
+});
+
+describe('낮꿈 레시피', () => {
+  const limits = { ingredients: new Set(START_INGREDIENTS), garnishes: new Set(START_GARNISHES) };
+
+  it('일곱 가지 모두 처음 가진 재료·장식으로 완벽하게 만들 수 있다', () => {
+    expect(DREAMS).toHaveLength(7);
+    for (const d of DREAMS) {
+      const drink = solve(d.conditions, limits);
+      expect(drink, d.name).not.toBeNull();
+      expect(judge(d.conditions, drink!).grade, d.name).toBe('perfect');
+    }
+  });
+
+  it('서로 다른 잔이다(한 레시피의 완벽한 잔이 다른 낮꿈 레시피까지 맞추지 않는다)', () => {
+    for (const d of DREAMS) {
+      const drink = solve(d.conditions, limits)!;
+      const others = DREAMS.filter((o) => o !== d && judge(o.conditions, drink).grade === 'perfect');
+      expect(others.map((o) => o.name), d.name).toEqual([]);
+    }
+  });
+
+  it('해독한 것만 손님이 주문한다', () => {
+    const have = new Set(START_INGREDIENTS);
+    const gar = new Set(START_GARNISHES);
+    expect(orderableRecipes(4, have, gar).some((r) => r.dream)).toBe(false);
+    expect(orderableRecipes(4, have, gar, ['dream-ink']).filter((r) => r.dream).map((r) => r.id)).toEqual(['dream-ink']);
+  });
+
+  it('조각 → 해독(등급) → 완성 순서로 진행된다', () => {
+    const s = { book: {} as Record<string, { made: number; perfect: number }>, dreams: [] as string[], story: { clues: [] as string[] } };
+    expect(dreamStatus(s, 'dream-letter')).toBe('blank');
+    s.story.clues.push('piece:dream-letter', 'piece:dream-oath');
+    expect(dreamStatus(s, 'dream-letter')).toBe('piece');
+    expect(decodable(s)).toEqual([]); // 견습 등급
+    for (const r of ['sweet-dream', 'golden-balance']) s.book[r] = { made: 6, perfect: 6 }; // 별 6개 → 바텐더
+    expect(decodable(s).map((d) => d.id)).toEqual(['dream-letter']);
+    s.dreams.push('dream-letter');
+    expect(dreamStatus(s, 'dream-letter')).toBe('decoded');
+    s.book['dream-letter'] = { made: 1, perfect: 1 };
+    expect(dreamStatus(s, 'dream-letter')).toBe('done');
+    expect(dreamsDone(s)).toBe(1);
   });
 });

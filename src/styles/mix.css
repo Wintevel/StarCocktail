@@ -329,6 +329,34 @@
   color: var(--ok);
 }
 
+/* 조건이 많은 주문(낮꿈 레시피 등): 두 줄로 */
+.oc-conds.many {
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 10px;
+}
+
+.oc-conds.many li {
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+
+.oc-conds.many i {
+  width: 11px;
+  height: 11px;
+}
+
+.gauges.compact {
+  padding: 8px 14px 10px;
+}
+
+.gauges.compact .gauge {
+  margin-top: 6px;
+}
+
+.gauges.compact .g-ends {
+  display: none;
+}
+
 .oc-conds li.ok i {
   background: var(--ok);
   transform: rotate(225deg) scale(1.1);

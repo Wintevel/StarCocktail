@@ -2,27 +2,29 @@
 // 영업 중에는 매 프레임 영업 규칙(Shift)을 진행하고 바 화면에 반영한다. 이야기·설정·안내 중에는 시계가 멈춘다.
 
 import { sfx, startBgm } from '../audio';
-import { INGREDIENT_BY_ID, RECIPE_BY_ID, RECIPES } from '../data';
+import { ALL_RECIPES, DREAMS, INGREDIENT_BY_ID, RECIPE_BY_ID, RECIPES } from '../data';
 import { type Drink, type Grade, matchRecipes } from '../mix';
 import type { MixStep } from '../mixSteps';
 import { clockText, dayInfo, dayLabel, LAST_DAY, OPEN_MIN } from '../game/calendar';
 import { makeOrder, orderForRecipe } from '../game/orders';
-import { guestsPerDay, payFor, REP_DELTA, REP_MAX, starsOf, TIERS, tierOf } from '../game/progress';
+import { dreamsDone, guestsPerDay, payFor, REP_DELTA, REP_MAX, starsOf, TIERS, tierOf } from '../game/progress';
 import { hash, mulberry32 } from '../game/rng';
-import { emptyWeek, type GameState, saveGame } from '../game/save';
+import { addEnding, clearGame, emptyWeek, type GameState, saveGame } from '../game/save';
 import { arrivalTimes, type Seat, Shift, type ShiftEvent, type Visitor } from '../game/shift';
 import { CAST, patron, REACTIONS } from '../story/cast';
 import { barEpisodesFor, episode, type Episode, newsFor, nightEpisodesFor, scriptOf } from '../story/episodes';
-import { type Effect, StoryRunner } from '../story/script';
+import { computeEnding, earlyEnding, type EndingKey } from '../story/endings';
+import { type Effect, type StoryContext, StoryRunner } from '../story/script';
 import { BarView, type SeatLook } from './bar';
 import { openBook } from './book';
 import { coach } from './coach';
 import { runComic } from './comic';
 import { showDayEnd, type DaySummary } from './dayEnd';
-import { btn, wait } from './dom';
-import { floatText, openModal, toast, transition } from './fx';
+import { wait } from './dom';
+import { floatText, toast, transition } from './fx';
 import { glassColor, type MixRequest, type MixResult, MixView } from './mix';
 import { showPaper } from './paper';
+import { runEnding } from './ending';
 import { openSettings } from './settingsModal';
 import { showSunday } from './sunday';
 import { runTalk } from './talk';
@@ -46,7 +48,7 @@ export class Game {
     this.host = host;
     this.bar = new BarView(host.barRoot, {
       onSeat: (i) => this.run?.clickSeat(i),
-      onBook: () => this.run?.pauseFor(() => new Promise<void>((r) => openBook(this.s.book, () => r()))),
+      onBook: () => this.run?.pauseFor(() => new Promise<void>((r) => openBook(this.s, () => r()))),
       onSettings: () =>
         this.run?.pauseFor(
           () =>
@@ -72,20 +74,48 @@ export class Game {
     return this.s;
   }
 
+  /** 이야기가 조건을 볼 때 쓰는 상태(늘 지금 값을 읽는다) */
+  storyCtx(apply: (e: Effect) => void = (e) => this.applyEconomy(e)): StoryContext {
+    const s = this.s;
+    return {
+      story: s.story,
+      get reputation() {
+        return s.reputation;
+      },
+      get tier() {
+        return tierOf(s.book);
+      },
+      get money() {
+        return s.money;
+      },
+      get debt() {
+        return s.debt;
+      },
+      get decoded() {
+        return s.dreams;
+      },
+      get dreamsDone() {
+        return dreamsDone(s);
+      },
+      playerName: s.playerName,
+      apply,
+    };
+  }
+
   /** 새 게임: 프롤로그 만화 → 첫날 */
   async begin(isNew: boolean) {
     startBgm();
     if (isNew) {
-      await runNight(this.host.app, episode('prologue'), this.s, () => undefined);
-      this.s.story.done.push('prologue');
+      await this.night(episode('prologue'));
     }
     await this.loop();
   }
 
   private async loop() {
     while (!this.quit) {
-      if (this.s.day > LAST_DAY || this.s.ending) {
-        await this.showEndingPlaceholder();
+      // 14주차 토요일 밤(마지막 선택)이 끝나면, 또는 그전에 배드 엔딩이 정해지면 엔딩
+      if (this.s.day >= LAST_DAY || this.s.ending) {
+        await this.ending();
         return;
       }
       saveGame(this.s);
@@ -97,14 +127,17 @@ export class Game {
     }
   }
 
+  private async night(ep: Episode) {
+    await runNight(this.host.app, ep, this.storyCtx());
+    this.s.story.done.push(ep.id);
+  }
+
   private async sunday() {
     this.host.barRoot.hidden = true;
-    for (const ep of nightEpisodesFor(this.s.day, this.s.story)) {
-      await runNight(this.host.app, ep, this.s, (e) => this.applyEconomy(e));
-      this.s.story.done.push(ep.id);
-    }
+    for (const ep of nightEpisodesFor(this.s.day, this.storyCtx())) await this.night(ep);
     await showSunday(this.s);
     this.s.week = emptyWeek();
+    this.s.ending = earlyEnding(this.s.story);
   }
 
   private async businessDay() {
@@ -127,10 +160,7 @@ export class Game {
     if (this.quit) return;
     const last = day === LAST_DAY - 1;
     await showDayEnd(summary, last ? '마지막 밤으로' : '밤으로');
-    for (const ep of nightEpisodesFor(day, this.s.story)) {
-      await runNight(this.host.app, ep, this.s, (e) => this.applyEconomy(e));
-      this.s.story.done.push(ep.id);
-    }
+    for (const ep of nightEpisodesFor(day, this.storyCtx())) await this.night(ep);
     if (!this.s.tutorialDone) this.s.tutorialDone = true;
   }
 
@@ -141,22 +171,30 @@ export class Game {
   applyEconomy(e: Effect) {
     if (e.k === 'rep') this.s.reputation = Math.max(0, Math.min(REP_MAX, this.s.reputation + e.d));
     if (e.k === 'money') this.s.money += e.d;
+    if (e.k === 'debt') this.s.debt = Math.max(0, this.s.debt + e.d);
+    if (e.k === 'clue' && e.id.startsWith('piece:')) {
+      const n = this.s.story.clues.filter((c) => c.startsWith('piece:')).length;
+      toast(`스승의 노트 조각을 얻었습니다 (${n} / ${DREAMS.length}) · 일요일에 해독할 수 있습니다`);
+    }
+    if (e.k === 'debt' && this.s.debt === 0) toast('카발로 패밀리 빚이 모두 사라졌습니다');
   }
 
-  private async showEndingPlaceholder() {
-    const m = openModal(
-      `<div class="eyebrow">To be continued</div><h2 class="panel-title">열네 번째 주가 저물었습니다</h2><p class="modal-body">엔딩과 그 사이의 이야기들은 다음 업데이트에서 이어집니다.</p><div class="actions">${btn('메인 화면으로', 'primary', 'data-a="ok"')}</div>`,
-    );
-    await new Promise<void>((r) => m.box.querySelector('[data-a="ok"]')!.addEventListener('click', () => r(), { once: true }));
-    await m.close();
+  /** 엔딩: 엔딩 만화 → 손님별 후일담 → 끝. 본 엔딩은 따로 남기고, 이번 판 저장은 지운다. */
+  private async ending() {
+    const key: EndingKey = (this.s.ending as EndingKey | null) ?? computeEnding({ story: this.s.story, reputation: this.s.reputation, dreamsDone: dreamsDone(this.s) });
+    this.s.ending = key;
+    this.host.barRoot.hidden = true;
+    this.host.mixRoot.hidden = true;
+    await runEnding(this.host.app, key, this.s, (ep) => runNight(this.host.app, ep, this.storyCtx()));
+    addEnding(key);
+    clearGame();
     this.host.toTitle();
   }
 }
 
 /** 밤 이야기 하나를 만화로 */
-async function runNight(app: HTMLElement, ep: Episode, s: GameState, econ: (e: Effect) => void) {
-  const runner = new StoryRunner(scriptOf(ep.id), { story: s.story, reputation: s.reputation, tier: tierOf(s.book), money: s.money, playerName: s.playerName, apply: econ }, 'night');
-  await runComic(app, ep.title, runner, s.playerName);
+async function runNight(app: HTMLElement, ep: Episode, ctx: StoryContext) {
+  await runComic(app, ep.title, new StoryRunner(scriptOf(ep.id), ctx, 'night'), ctx.playerName);
 }
 
 // ── 하루 영업 ───────────────────────────────────────
@@ -192,20 +230,20 @@ class DayRun {
     this.host = host;
     this.tutorial = !s.tutorialDone && s.day === 0;
     const rng = mulberry32(hash(`day:${s.day}:${s.playerName}`));
-    const specials = barEpisodesFor(s.day, s.story);
+    const { today: specials, later } = barEpisodesFor(s.day, game.storyCtx());
     const total = game.plannedCount();
     const tier = tierOf(s.book);
-    const ctx = { tier, have: new Set(s.ingredients), garnishes: new Set(s.garnishes) };
+    const ctx = { tier, have: new Set(s.ingredients), garnishes: new Set(s.garnishes), decoded: s.dreams };
     const times = arrivalTimes(Math.max(0, total - specials.length), rng, this.tutorial ? OPEN_MIN + 1 : OPEN_MIN + 2);
     const visitors: Visitor[] = times.map((at, i) => ({ id: `p:${s.day}:${i}`, kind: 'patron', at, order: makeOrder(rng, ctx) }));
     if (this.tutorial && visitors[0]) visitors[0].order = orderForRecipe('golden-balance', '첫 손님이에요! 「황금 균형」 한 잔 부탁해요.');
     for (const ep of specials) visitors.push({ id: `s:${ep.id}`, kind: 'special', cast: ep.cast, episode: ep.id, at: (ep.at! - OPEN_MIN) * 4000 });
-    // 특별 손님 회차 중 이날 처리되지 않은 것은 마감 때 다음 날로 밀린다
-    s.story.postponed = s.story.postponed.filter((id) => !specials.some((e) => e.id === id));
+    // 오늘 오지 못하는 회차는 다음 날로 밀어 둔다(오늘 온 손님이 대화 전에 떠나면 그때 다시 밀린다)
+    s.story.postponed = later;
     this.shift = new Shift(visitors, rng);
     this.sum = { day: s.day, served: 0, perfect: 0, good: 0, fail: 0, missed: 0, income: 0, tips: 0, repBefore: s.reputation, repAfter: s.reputation, newRecipes: [], starUps: [], tierUp: null };
     this.tierBefore = tier;
-    this.bookBefore = Object.fromEntries(RECIPES.map((r) => [r.id, starsOf(s.book[r.id])]));
+    this.bookBefore = Object.fromEntries(ALL_RECIPES.map((r) => [r.id, starsOf(s.book[r.id])]));
   }
 
   play(): Promise<DaySummary> {
@@ -389,7 +427,8 @@ class DayRun {
     this.s.week.pours += drink.pours.length;
     this.addRep(REP_DELTA[grade]);
     // 레시피북: 주문한 레시피를 완벽하게 내면 숙련, 조건이 맞은 레시피는 모두 실린다
-    const found = new Set(matchRecipes(RECIPES, drink).map((r) => r.id));
+    const known = [...RECIPES, ...DREAMS.filter((d) => this.s.dreams.includes(d.id))];
+    const found = new Set(matchRecipes(known, drink).map((r) => r.id));
     if (recipeId && grade !== 'fail') found.add(recipeId);
     for (const id of found) {
       const rec = (this.s.book[id] ??= { made: 0, perfect: 0 });
@@ -403,6 +442,7 @@ class DayRun {
       const rec = (this.s.book[recipeId] ??= { made: 1, perfect: 0 });
       rec.perfect++;
       if (starsOf(rec) > this.bookBefore[recipeId] && !this.sum.starUps.includes(RECIPE_BY_ID[recipeId].name)) this.sum.starUps.push(RECIPE_BY_ID[recipeId].name);
+      if (RECIPE_BY_ID[recipeId].dream && rec.perfect === 1) toast(`낮꿈 레시피 「${RECIPE_BY_ID[recipeId].name}」 완성 · 스승의 노트 한 장이 채워졌습니다`);
     }
     const tierNow = tierOf(this.s.book);
     if (tierNow > this.tierBefore) {
@@ -426,14 +466,7 @@ class DayRun {
     this.shift.beginTalk(i);
     this.pauses++;
     this.mixSeat = null;
-    const runner = new StoryRunner(scriptOf(ep.id), {
-      story: this.s.story,
-      reputation: this.s.reputation,
-      tier: tierOf(this.s.book),
-      money: this.s.money,
-      playerName: this.s.playerName,
-      apply: (e) => this.game.applyEconomy(e),
-    });
+    const runner = new StoryRunner(scriptOf(ep.id), this.game.storyCtx());
     await runTalk(this.host.barRoot, v.cast!, ep.title, runner, {
       playerName: this.s.playerName,
       drink: async (recipe, line) => {
