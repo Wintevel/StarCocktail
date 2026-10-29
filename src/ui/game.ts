@@ -3,7 +3,7 @@
 
 import { sfx, startBgm } from '../audio';
 import { ALL_RECIPES, DREAMS, INGREDIENT_BY_ID, RECIPE_BY_ID, RECIPES } from '../data';
-import { type Drink, type Grade, matchRecipes } from '../mix';
+import { computeAttrs, type Drink, type Grade, matchRecipes } from '../mix';
 import type { MixStep } from '../mixSteps';
 import { clockText, dayInfo, dayLabel, LAST_DAY, OPEN_MIN } from '../game/calendar';
 import { makeOrder, orderForRecipe } from '../game/orders';
@@ -451,7 +451,14 @@ class DayRun {
       toast(`전문성 등급이 올랐습니다 · ${TIERS[tierNow].name}`);
     }
     const look = this.seatLook({ visitor: v } as Seat).look;
-    this.bar.setMood(i, look, grade === 'fail' ? 'sad' : 'smile');
+    this.bar.setMood(i, look, grade === 'fail' ? 'sad' : grade === 'perfect' ? 'laugh' : 'smile');
+    // 독한 술은 마시는 사이 얼굴이 붉어진다
+    if (grade !== 'fail' && computeAttrs(drink).strength >= 3) {
+      const id = v.id;
+      setTimeout(() => {
+        if (this.shift.seats[i]?.visitor.id === id && this.shift.seats[i]?.phase === 'drink') this.bar.setMood(i, look, 'tipsy');
+      }, 4500);
+    }
     this.bar.emote(i, grade === 'perfect' ? 'love' : grade === 'good' ? 'note' : 'dots');
     this.bar.placeGlass(i, drink.glass!, glassColor(drink) ?? INGREDIENT_BY_ID.gin.color);
     const p = this.bar.seatPoint(i);

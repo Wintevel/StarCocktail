@@ -160,7 +160,7 @@ harin(surprised): 꽃으로요? 피아노 위에 한 송이 두고 가면… 알
 @goto drink
 #met
 harin(surprised): 테오 씨가… 제 얘길 했다고요? 맨 앞줄 꽃다발을 기억한다고?
-harin(smile): 어떡해, 꽃 가게 문 닫을 시간인데 손이 떨려서 리본을 못 묶겠어요.
+harin(blush): 어떡해, 꽃 가게 문 닫을 시간인데 손이 떨려서 리본을 못 묶겠어요.
 ? 다음엔 직접 꽃을 건네 봐요 -> brave | set harin_brave; trust harin +1
 ? 천천히 해요. 피아노는 도망 안 가요 -> slow | trust harin +1
 #slow
@@ -225,7 +225,7 @@ arthur(sad): 「여보, 목요일에 바에서 만나요. 내가 늦으면 먼�
 #letter
 ~: 클라라의 편지를 건넸다. 아서는 한참 동안 봉투만 쓰다듬었다.
 arthur(sad): 「여보, 목요일에 바에서 만나요. 내가 늦으면 먼저 두 잔 시켜 둬요.」
-arthur(sad): …그래서였군. 3년 동안 나는 그 사람의 부탁을 지키고 있었어.
+arthur(cry): …그래서였군. 3년 동안 나는 그 사람의 부탁을 지키고 있었어.
 arthur(smile): 고맙네. 오늘은 한 잔만 주게. 이제야 마주 앉은 기분이야.
 @trust arthur +2
 @set arthur_letter
@@ -263,7 +263,7 @@ luca: 뒷방. 일주일에 한 번, 문 잠그고 쓸 방. 거절하면… 형�
 @sfx 퍽!
 @show luca:sad
 ~: 가스등 아래, 루카가 벽에 기대 주저앉아 있다. 입가에 피.
-luca(sad): …봤어? 못 본 척해. 수금이 모자랐대. 운하 거리 놈들한테 너무 무르다고.
+luca(scared): …봤어? 못 본 척해. 수금이 모자랐대. 운하 거리 놈들한테 너무 무르다고.
 ? 안으로 들어와요. 상처부터 봐요 -> help | trust luca +2; set luca_helped; money -30
 ? 못 본 걸로 할게요 -> leave | set careful_host
 #help
@@ -311,7 +311,7 @@ silva: 다시 생각할 시간은 없을 거다.
     at: 20 * 60 + 40,
     title: '조각 난 레시피',
     script: `
-pip(smile): 세 번째 편지! 이번엔 두꺼워요!
+pip(laugh): 세 번째 편지! 이번엔 두꺼워요!
 ~: 봉투 안에는 편지 대신 레시피 노트에서 뜯어낸 듯한 반 장짜리 종이.
 ~: 「바다를 건너오느라 짠 바람이 두 번 스몄어. 그래도 마지막 한 줄은 달게 썼지.」
 ~: 종이 귀퉁이에는 '낮꿈' 이라는 글자. 스승 노트의 빈 장과 찢긴 자국이 맞아 들어간다.
@@ -445,7 +445,7 @@ harin(sad): 이러다 평생 꽃만 두겠어요.
 @drink sweet-dream "오늘도 달콤한 거요."
 @end
 #met
-harin(smile): 들었어요! 테오 씨가 꽃집 앞을 세 번이나 지나갔대요. 옆집 아주머니가 그랬어요.
+harin(blush): 들었어요! 테오 씨가 꽃집 앞을 세 번이나 지나갔대요. 옆집 아주머니가 그랬어요.
 harin: 이번엔 제가 먼저 말할 거예요. 무슨 꽃을 들고 갈까요?
 ? 프리지아. 꽃말은 '시작' -> start | set harin_brave; trust harin +1
 ? 꽃 없이, 그냥 하린 씨로 -> self | set harin_brave; set harin_plain
@@ -532,7 +532,7 @@ sera(smile): 원래 이 바 거잖아요. 대신 언젠가 진짜 1면 기사를
 noah(worried): …문 닫을 시간인가요. 미안해요, 비가 너무 와서.
 noah: 오렐리아를 찾아왔어요. 그녀가… 여기 없다는 건 알고 있었지만.
 ~: 동그란 안경. 사진 속 그 남자다. 소매 끝이 피에 젖어 있다.
-noah(sad): 노아 렌이에요. 패밀리가 절 찾고 있어요. 하룻밤만, 아니 며칠만 숨겨 줄 수 있을까요.
+noah(scared): 노아 렌이에요. 패밀리가 절 찾고 있어요. 하룻밤만, 아니 며칠만 숨겨 줄 수 있을까요.
 ? 위층 방을 쓰세요. 스승님 방이에요 -> hide | set noah_hidden; trust noah +2
 ? 미안해요. 이 바까지 위험해질 순 없어요 -> no | set noah_refused; trust noah -1
 #hide
@@ -657,7 +657,7 @@ pip(surprised): 위층에서 발소리 나요. 손님 있어요?
 ? 스승님 친구야. 비밀이야 -> secret | trust pip +1; set pip_knows_noah
 ? 쥐가 많아서 그래 -> mouse
 #secret
-pip(smile): 배달부는 입이 무거워요! 편지만큼은 아니지만!
+pip(laugh): 배달부는 입이 무거워요! 편지만큼은 아니지만!
 @clue letter_noah
 @end
 #mouse
@@ -713,7 +713,7 @@ noah: 오늘 밤은 다 말할게요. 숨겨 준 사람한테는 그래야죠.
 noah: 난 카발로 상사의 회계사였어요. 장부를 맡았죠. 진짜 장부. 시장, 판사, 경찰청장… 패밀리가 돈을 준 사람들의 이름.
 noah: 실바가 돈 몰래 장부를 빼돌리려 했어요. 그걸 알고 나는 장부를 들고 도망쳤고, 오렐리아가 날 숨겨 줬어요.
 @show noah:sad
-noah(sad): 1년 전 부두 불은 실바가 낸 거예요. 나를 태우려고. 오렐리아는 날 배에 태우고… 패밀리에 "회계사의 빚은 내가 지겠다"고 했대요.
+noah(serious): 1년 전 부두 불은 실바가 낸 거예요. 나를 태우려고. 오렐리아는 날 배에 태우고… 패밀리에 "회계사의 빚은 내가 지겠다"고 했대요.
 @clue fire_silva
 @clue aurelia_debt_truth
 me: 그 빚이… 스승님의 빚.
