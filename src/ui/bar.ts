@@ -59,7 +59,8 @@ export class BarView {
     const seatsEl = el('div', 'seats');
     for (let i = 0; i < SEATS; i++) {
       const s = el('div', 'seat');
-      s.style.left = `${SEAT_X[i]}%`;
+      // 자리 가로 위치는 CSS 변수로: 세로 화면에서는 CSS가 앞뒤 두 줄로 다시 놓는다
+      s.style.setProperty('--x', `${SEAT_X[i]}%`);
       s.dataset.seat = String(i);
       const guest = el('div', 'seat-guest');
       const bubble = el(
@@ -78,7 +79,8 @@ export class BarView {
     const counter = el('div', 'counter', counterSvg());
     const glasses = el('div', 'counter-glasses');
     this.seats.forEach((s, i) => {
-      s.glass.style.left = `${SEAT_X[i]}%`;
+      s.glass.style.setProperty('--x', `${SEAT_X[i]}%`);
+      s.glass.dataset.seat = String(i);
       glasses.append(s.glass);
     });
     counter.append(glasses);
