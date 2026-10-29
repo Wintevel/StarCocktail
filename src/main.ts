@@ -18,7 +18,7 @@ import './styles/mix.css';
 import './styles/story.css';
 import './styles/screens.css';
 
-import { sfx, startBgm, unlock } from './audio';
+import { setAmbience, setMusic, sfx, unlock } from './audio';
 import { GARNISHES, INGREDIENTS } from './data';
 import { loadGame, newGame } from './game/save';
 import { btn, el, settings, updateSettings } from './ui/dom';
@@ -46,6 +46,8 @@ function showTitle() {
   barRoot.hidden = true;
   mixRoot.hidden = true;
   titleRoot.hidden = false;
+  setMusic('title');
+  setAmbience(null);
   renderTitle(titleRoot, loadGame(), {
     continueGame: () => {
       const s = loadGame();
@@ -93,7 +95,7 @@ async function start(state: ReturnType<typeof newGame>, isNew: boolean) {
 }
 
 async function freeMix() {
-  startBgm();
+  setMusic('bar');
   await transition(() => {
     titleRoot.hidden = true;
     mixRoot.hidden = false;

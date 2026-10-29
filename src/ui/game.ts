@@ -1,7 +1,7 @@
 // 한 판의 흐름: 신문 → 영업(바 화면·제조·이야기) → 마감 결산 → 밤 이야기 → 다음 날. 일요일은 정산·상점.
 // 영업 중에는 매 프레임 영업 규칙(Shift)을 진행하고 바 화면에 반영한다. 이야기·설정·안내 중에는 시계가 멈춘다.
 
-import { sfx, startBgm } from '../audio';
+import { type Music, setAmbience, setMusic, sfx } from '../audio';
 import { ALL_RECIPES, DREAMS, INGREDIENT_BY_ID, RECIPE_BY_ID, RECIPES } from '../data';
 import { computeAttrs, type Drink, type Grade, matchRecipes } from '../mix';
 import type { MixStep } from '../mixSteps';
@@ -104,7 +104,6 @@ export class Game {
 
   /** 새 게임: 프롤로그 만화 → 첫날 */
   async begin(isNew: boolean) {
-    startBgm();
     if (isNew) {
       await this.night(episode('prologue'));
     }
@@ -135,6 +134,8 @@ export class Game {
   private async sunday() {
     this.host.barRoot.hidden = true;
     for (const ep of nightEpisodesFor(this.s.day, this.storyCtx())) await this.night(ep);
+    setMusic('sunday');
+    setAmbience(null);
     await showSunday(this.s);
     this.s.week = emptyWeek();
     this.s.ending = earlyEnding(this.s.story);
@@ -152,13 +153,17 @@ export class Game {
     const tier = tierOf(this.s.book);
     const briefs = [`오늘의 손님 예상 ${this.plannedCount()}명 · 명성 ${repText(this.s.reputation)}`, `전문성 「${TIERS[tier].name}」`];
     if (this.s.debt > 0) briefs.push(`카발로 패밀리 빚 ${this.s.debt.toLocaleString()} 크라운`);
+    setMusic('bar');
+    setAmbience(null);
     await showPaper(this.host.app, day, news, briefs);
+    setAmbience('bar');
     if (this.quit) return;
     this.run = new DayRun(this, this.s, this.bar, this.host);
     const summary = await this.run.play();
     this.run = null;
     if (this.quit) return;
     const last = day === LAST_DAY - 1;
+    setAmbience(null);
     await showDayEnd(summary, last ? '마지막 밤으로' : '밤으로');
     for (const ep of nightEpisodesFor(day, this.storyCtx())) await this.night(ep);
     if (!this.s.tutorialDone) this.s.tutorialDone = true;
@@ -185,7 +190,7 @@ export class Game {
     this.s.ending = key;
     this.host.barRoot.hidden = true;
     this.host.mixRoot.hidden = true;
-    await runEnding(this.host.app, key, this.s, (ep) => runNight(this.host.app, ep, this.storyCtx()));
+    await runEnding(this.host.app, key, this.s, (ep) => runNight(this.host.app, ep, this.storyCtx(), 'ending'));
     addEnding(key);
     clearGame();
     this.host.toTitle();
@@ -193,8 +198,8 @@ export class Game {
 }
 
 /** 밤 이야기 하나를 만화로 */
-async function runNight(app: HTMLElement, ep: Episode, ctx: StoryContext) {
-  await runComic(app, ep.title, new StoryRunner(scriptOf(ep.id), ctx, 'night'), ctx.playerName);
+async function runNight(app: HTMLElement, ep: Episode, ctx: StoryContext, music?: Music) {
+  await runComic(app, ep.title, new StoryRunner(scriptOf(ep.id), ctx, 'night'), ctx.playerName, music);
 }
 
 // ── 하루 영업 ───────────────────────────────────────
@@ -442,11 +447,13 @@ class DayRun {
       const rec = (this.s.book[recipeId] ??= { made: 1, perfect: 0 });
       rec.perfect++;
       if (starsOf(rec) > this.bookBefore[recipeId] && !this.sum.starUps.includes(RECIPE_BY_ID[recipeId].name)) this.sum.starUps.push(RECIPE_BY_ID[recipeId].name);
+      if (RECIPE_BY_ID[recipeId].dream && rec.perfect === 1) sfx('fanfare');
       if (RECIPE_BY_ID[recipeId].dream && rec.perfect === 1) toast(`낮꿈 레시피 「${RECIPE_BY_ID[recipeId].name}」 완성 · 스승의 노트 한 장이 채워졌습니다`);
     }
     const tierNow = tierOf(this.s.book);
     if (tierNow > this.tierBefore) {
       this.sum.tierUp = TIERS[tierNow].name;
+      sfx('fanfare');
       this.tierBefore = tierNow;
       toast(`전문성 등급이 올랐습니다 · ${TIERS[tierNow].name}`);
     }

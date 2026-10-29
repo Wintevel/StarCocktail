@@ -1,5 +1,6 @@
 // 만화 칸 하나 그리기: 배경 장면 + 인물 + 말풍선/해설 상자/효과음. 바 대화(talk)와 밤 이야기(comic)가 함께 쓴다.
 
+import { sfx } from '../audio';
 import { type Mood, personSvg } from '../art/people';
 import { sceneSvg } from '../art/scenes';
 import { CAST, type CastId } from '../story/cast';
@@ -64,10 +65,12 @@ export function choiceBar(parent: HTMLElement, options: { text: string }[]): Pro
         .join(''),
     );
     parent.append(bar);
+    sfx('choice');
     const done = (i: number) => {
       window.removeEventListener('keydown', onKey);
       bar.classList.add('picked');
       bar.querySelector(`[data-i="${i}"]`)?.classList.add('chosen');
+      sfx('click');
       setTimeout(() => bar.remove(), 420);
       resolve(i);
     };

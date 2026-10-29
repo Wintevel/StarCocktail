@@ -155,7 +155,7 @@ export class BarView {
         v.guest.innerHTML = personSvg(info.look, 'neutral');
         v.tag.innerHTML = info.name ? `<b style="--c:${info.color ?? '#e3c07a'}">${esc(info.name)}</b>` : '';
         v.glass.innerHTML = '';
-        sfx('bell');
+        sfx('door');
       }
       if (v.phase !== s.phase) {
         v.phase = s.phase;
