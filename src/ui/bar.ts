@@ -7,7 +7,7 @@ import { type Look, type Mood, personSvg } from '../art/people';
 import { barRoomSvg, counterSvg } from '../art/scenes';
 import { sfx } from '../audio';
 import { clockText, CLOSE_MIN, dayInfo, OPEN_MIN, WEEKDAYS } from '../game/calendar';
-import { TIERS } from '../game/progress';
+import { repText, TIERS } from '../game/progress';
 import { type Seat, SEATS, type Shift } from '../game/shift';
 import { btn, el, esc } from './dom';
 
@@ -122,7 +122,7 @@ export class BarView {
     (this.hud.querySelector('.hud-night i') as HTMLElement).style.width = `${p * 100}%`;
     (this.hud.querySelector('.hud-night .moon') as HTMLElement).style.left = `${p * 100}%`;
     this.hud.querySelector('.hud-money')!.textContent = o.money.toLocaleString();
-    this.hud.querySelector('.hud-rep')!.textContent = String(o.reputation);
+    this.hud.querySelector('.hud-rep')!.textContent = repText(o.reputation);
     this.hud.querySelector('.hud-tier')!.textContent = TIERS[o.tier].name;
   }
 

@@ -7,7 +7,7 @@ import { type Drink, type Grade, matchRecipes } from '../mix';
 import type { MixStep } from '../mixSteps';
 import { clockText, dayInfo, dayLabel, LAST_DAY, OPEN_MIN } from '../game/calendar';
 import { makeOrder, orderForRecipe } from '../game/orders';
-import { dreamsDone, guestsPerDay, payFor, REP_DELTA, REP_MAX, starsOf, TIERS, tierOf } from '../game/progress';
+import { dreamsDone, guestsPerDay, payFor, REP_MAX, repDelta, repText, starsOf, TIERS, tierOf } from '../game/progress';
 import { hash, mulberry32 } from '../game/rng';
 import { addEnding, clearGame, emptyWeek, type GameState, saveGame } from '../game/save';
 import { arrivalTimes, type Seat, Shift, type ShiftEvent, type Visitor } from '../game/shift';
@@ -150,7 +150,7 @@ export class Game {
       this.bar.setHud({ day, money: this.s.money, reputation: this.s.reputation, tier: tierOf(this.s.book), minute: OPEN_MIN, closing: false });
     }, dayLabel(day));
     const tier = tierOf(this.s.book);
-    const briefs = [`오늘의 손님 예상 ${this.plannedCount()}명 · 명성 ${this.s.reputation}`, `전문성 「${TIERS[tier].name}」`];
+    const briefs = [`오늘의 손님 예상 ${this.plannedCount()}명 · 명성 ${repText(this.s.reputation)}`, `전문성 「${TIERS[tier].name}」`];
     if (this.s.debt > 0) briefs.push(`카발로 패밀리 빚 ${this.s.debt.toLocaleString()} 크라운`);
     await showPaper(this.host.app, day, news, briefs);
     if (this.quit) return;
@@ -316,13 +316,13 @@ class DayRun {
     if (e.type === 'angry') {
       this.sum.missed++;
       this.s.week.missed++;
-      this.addRep(REP_DELTA.missed);
+      this.addRep('missed');
       const seat = e.seat;
       this.bar.setMood(seat, this.seatLook({ visitor: e.visitor } as Seat).look, 'angry');
       this.bar.emote(seat, 'anger');
       sfx('angry');
       const p = this.bar.seatPoint(seat);
-      floatText(p.x, p.y, `명성 ${REP_DELTA.missed}`, true);
+      floatText(p.x, p.y, '명성 ▼', true);
       if (e.visitor.kind === 'special' && e.visitor.episode && !this.s.story.postponed.includes(e.visitor.episode)) {
         this.s.story.postponed.push(e.visitor.episode);
         toast(`${CAST[e.visitor.cast!].name}이(가) 그냥 떠났습니다. 이야기는 다음에 이어집니다.`);
@@ -332,7 +332,7 @@ class DayRun {
         this.host.mix.forceBack();
       }
     }
-    if (e.type === 'turnaway') this.addRep(-1);
+    if (e.type === 'turnaway') this.addRep('turnaway');
   }
 
   /** 안내에서 밝힐 자리: 손님과 머리 위 말풍선 */
@@ -341,8 +341,8 @@ class DayRun {
     return [root, root?.querySelector('.seat-bubble') ?? null];
   }
 
-  private addRep(d: number) {
-    this.s.reputation = Math.max(0, Math.min(REP_MAX, this.s.reputation + d));
+  private addRep(o: Parameters<typeof repDelta>[0]) {
+    this.s.reputation = repDelta(o, this.s.reputation);
   }
 
   // ── 자리 누르기 ─────────────────────────────────
@@ -425,7 +425,7 @@ class DayRun {
     this.s.week.served++;
     if (grade === 'perfect') this.s.week.perfect++;
     this.s.week.pours += drink.pours.length;
-    this.addRep(REP_DELTA[grade]);
+    this.addRep(grade);
     // 레시피북: 주문한 레시피를 완벽하게 내면 숙련, 조건이 맞은 레시피는 모두 실린다
     const known = [...RECIPES, ...DREAMS.filter((d) => this.s.dreams.includes(d.id))];
     const found = new Set(matchRecipes(known, drink).map((r) => r.id));
