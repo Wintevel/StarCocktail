@@ -1153,3 +1153,14 @@
 .mix-screen.free .peers {
   display: none;
 }
+
+/* 세로 휴대폰: 조건이 많아도 한 줄에 하나씩(두 칸으로 나누면 글자가 꺾인다) */
+@media (max-width: 600px) and (orientation: portrait) {
+  .oc-conds.many {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .oc-conds.many li {
+    font-size: 12.5px;
+  }
+}

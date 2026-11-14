@@ -713,3 +713,14 @@
 .modal.confirm {
   width: min(440px, 100%);
 }
+
+/* 세로 휴대폰: 낮꿈 레시피 칸을 세 개씩, 해독 버튼이 세로로 꺾이지 않게 */
+@media (max-width: 480px) {
+  .dream-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .dream-slot .btn {
+    white-space: nowrap;
+    padding-inline: 10px;
+  }
+}

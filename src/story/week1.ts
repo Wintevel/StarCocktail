@@ -169,7 +169,7 @@ pip(smile): 진짜요? 그럼 술 말고! 레모네이드!
 #drink
 @drink zero-g-lemonade "무중력 레모네이드! 민트 꼭 올려 주세요!"
 @if grade:fail -> sour
-pip(smile): 우와, 하늘로 떠오를 것 같아요!
+pip(laugh): 우와, 하늘로 떠오를 것 같아요!
 @set pip_friend
 @end
 #sour
@@ -225,7 +225,7 @@ arthur(worried): 사라지기 전 몇 주는… 늘 문 쪽을 보고 있었다�
 @clue aurelia_waiting
 @end
 #clara
-arthur(smile): 클라라는 웃음소리가 컸어. 이 바가 좁다고 투덜대면서도 매주 왔지.
+arthur(laugh): 클라라는 웃음소리가 컸어. 이 바가 좁다고 투덜대면서도 매주 왔지.
 arthur(sad): …미안하네, 늙은이 넋두리를.
 @end
 `,
@@ -288,7 +288,7 @@ sera(worried): …맞아요. 이 바엔 귀가 많죠. 미안해요.
     when: 'flag:teo_plays',
     script: `
 harin(surprised): 지난번에 피아노 소리… 혹시 그 사람, 키 크고 조용한 사람이에요?
-harin(smile): 월광 극장 피아니스트였던 테오 씨요! 저 공연 매주 보러 갔었거든요…
+harin(blush): 월광 극장 피아니스트였던 테오 씨요! 저 공연 매주 보러 갔었거든요…
 ? 다음에 오면 소개해 드릴까요? -> intro | set harin_wants_intro; trust harin +1
 ? 직접 말 걸어 보세요 -> self
 #intro

@@ -137,6 +137,7 @@ export class MixView {
     this.renderOrderCard();
     this.render(true);
     this.fitSide();
+    this.layoutStage();
     window.addEventListener('keydown', this.onKey);
     this.introDone = req.mode === 'order' && req.guest && !req.resume ? this.intro() : Promise.resolve();
     return new Promise((r) => (this.resolve = r));
@@ -575,7 +576,13 @@ export class MixView {
     const top = Math.min(this.els['mix-bottom'].getBoundingClientRect().top - r.top, r.height - 200);
     const narrow = r.width < 820;
     const short = r.height < 520;
-    const f: Frame = short
+    // 세로 휴대폰: 위쪽 주문 카드·맛 게이지 아래에서 카드 줄 위까지(움직임 연출과 상관없이 자리 기준으로 잰다)
+    const tall = narrow && r.height > r.width * 1.3;
+    const below = (e: HTMLElement) => (e.offsetParent ? e.offsetTop + e.offsetHeight : 0);
+    const under = Math.max(below(this.els['order-card']), below(this.els.gauges)) + 8;
+    const f: Frame = tall
+      ? { x: r.width * 0.18, y: under, w: r.width * 0.64, h: Math.max(140, top - under - 16) }
+      : short
       ? { x: r.width * 0.34, y: 50, w: r.width * 0.32, h: Math.max(120, Math.min(top, r.height - 130) - 60) }
       : narrow
         ? { x: r.width * 0.25, y: 130, w: r.width * 0.5, h: Math.max(160, top - 150) }

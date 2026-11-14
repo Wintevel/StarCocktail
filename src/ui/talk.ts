@@ -1,7 +1,7 @@
 // 특별 손님 이야기(바 화면 위): 대사 한 줄마다 만화 칸이 오른쪽에서 미끄러져 들어오고, 앞 칸들은 왼쪽으로 밀려난다.
 // 선택지가 나오면 화면 아래 두 버튼. 이야기 술을 부탁하면 제조 화면에 다녀와 결과(grade)를 들고 이어 간다.
 
-import { sfx } from '../audio';
+import { comicSfx, sfx } from '../audio';
 import type { Grade } from '../mix';
 import { CAST, type CastId } from '../story/cast';
 import type { StoryRunner } from '../story/script';
@@ -41,13 +41,13 @@ export async function runTalk(parent: HTMLElement, cast: CastId, title: string, 
       while (strip.children.length > 4) strip.firstElementChild!.remove();
       await frame();
       root.classList.add('in');
-      sfx('pop');
+      if (s.sfx) comicSfx(s.sfx);
+      else sfx('pop');
       await wait(220);
       await advanceLine(box, text, s.text);
     } else if (s.t === 'choice') {
       box.classList.add('choosing');
       const i = await choiceBar(box, s.options);
-      sfx('click');
       box.classList.remove('choosing');
       runner.choose(i);
       await wait(300);

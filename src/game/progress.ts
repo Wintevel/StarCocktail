@@ -11,7 +11,7 @@ export interface RecipeRecord {
 }
 
 /** 숙련 별: 완벽 1회 ★, 3회 ★★, 6회 ★★★ */
-export const STAR_AT = [1, 3, 6];
+export const STAR_AT = [3, 10, 25];
 
 export function starsOf(r: RecipeRecord | undefined): number {
   if (!r) return 0;
@@ -20,10 +20,10 @@ export function starsOf(r: RecipeRecord | undefined): number {
 
 export const TIERS = [
   { name: '견습 바텐더', stars: 0 },
-  { name: '바텐더', stars: 5 },
-  { name: '수석 바텐더', stars: 13 },
-  { name: '바 마스터', stars: 25 },
-  { name: '전설의 바텐더', stars: 40 },
+  { name: '바텐더', stars: 6 },
+  { name: '수석 바텐더', stars: 18 },
+  { name: '바 마스터', stars: 34 },
+  { name: '전설의 바텐더', stars: 48 },
 ];
 
 export function totalStars(book: Record<string, RecipeRecord>): number {
@@ -51,12 +51,23 @@ export function guestsPerDay(reputation: number): number {
   return 16 + Math.min(8, Math.floor(Math.max(0, reputation) / 12.5));
 }
 
-export const REP_DELTA: Record<Grade | 'missed', number> = { perfect: 3, good: 1, fail: -2, missed: -3 };
+/** 손님 한 명이 명성을 바꾸는 폭. 오를 때는 명성이 높을수록 덜 오른다(쌓을수록 더 쌓기 어렵다). 내릴 때는 그대로. */
+export const REP_DELTA: Record<Grade | 'missed' | 'turnaway', number> = { perfect: 0.13, good: 0.06, fail: -0.2, missed: -0.4, turnaway: -0.2 };
+
+/** 화면에 보이는 명성(소수점 아래는 버린다) */
+export const repText = (rep: number) => String(Math.floor(rep));
+
+/** 손님 한 명을 보낸 뒤의 명성 */
+export function repDelta(o: Grade | 'missed' | 'turnaway', rep: number): number {
+  const d = REP_DELTA[o];
+  const next = rep + (d > 0 ? d * (1 - rep / REP_MAX) : d);
+  return Math.max(0, Math.min(REP_MAX, next));
+}
 
 /** 한 잔에서 받는 돈: 값 + 팁(완벽이면 값의 절반, 명성이 높을수록 조금 더) */
 export function payFor(price: number, grade: Grade, reputation: number): { price: number; tip: number } {
   if (grade === 'fail') return { price: Math.round(price / 2), tip: 0 };
-  const tipRate = grade === 'perfect' ? 0.5 + reputation / 400 : 0.1;
+  const tipRate = grade === 'perfect' ? 0.25 + reputation / 400 : 0.05;
   return { price, tip: Math.round(price * tipRate) };
 }
 
@@ -100,7 +111,7 @@ export function decodable(s: DreamState): Recipe[] {
 export function shopItems(tier: number, have: ReadonlySet<IngredientId>, garnishes: ReadonlySet<GarnishId>) {
   return {
     ingredients: INGREDIENTS.filter((i) => !have.has(i.id) && i.cost > 0).map((i) => ({ item: i, locked: i.tier > tier })),
-    garnishes: GARNISHES.filter((g) => !garnishes.has(g.id)).map((g) => ({ item: g, cost: 80, locked: tier < 2 })),
+    garnishes: GARNISHES.filter((g) => !garnishes.has(g.id)).map((g) => ({ item: g, cost: GARNISH_COST, locked: tier < 2 })),
   };
 }
 
@@ -109,4 +120,8 @@ export function shopItems(tier: number, have: ReadonlySet<IngredientId>, garnish
 export const START_DEBT = 6000;
 export const WEEKLY_MIN_PAYMENT = 300;
 /** 재료 보충비: 한 주 동안 부은 횟수당 */
-export const RESTOCK_PER_POUR = 1;
+export const RESTOCK_PER_POUR = 3;
+/** 한 주 가게 운영비(얼음·전기·세탁) */
+export const WEEKLY_UPKEEP = 400;
+/** 상점 장식 값 */
+export const GARNISH_COST = 80;

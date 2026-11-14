@@ -481,6 +481,13 @@
   opacity: 1;
 }
 
+/* 세로 휴대폰: 세로로 긴 쪽 */
+.comic.tall .comic-viewport {
+  top: 53%;
+  width: min(94vw, calc(78vh * 0.62));
+  aspect-ratio: 10 / 16;
+}
+
 .comic-cam {
   position: absolute;
   inset: 0;

@@ -2,7 +2,7 @@
 
 import { personSvg } from '../art/people';
 import { sceneSvg } from '../art/scenes';
-import { sfx } from '../audio';
+import { setMusic, sfx } from '../audio';
 import { loadEndings, type GameState } from '../game/save';
 import { CAST } from '../story/cast';
 import { ENDING_BY_KEY, ENDINGS, type EndingKey, epilogues } from '../story/endings';
@@ -20,6 +20,7 @@ const ENDING_SCENE: Record<EndingKey, string> = {
 
 export async function runEnding(app: HTMLElement, key: EndingKey, state: GameState, comic: (ep: Episode) => Promise<void>) {
   await comic(episode(`ending-${key}`));
+  setMusic('ending');
   const info = ENDING_BY_KEY[key];
   const box = el(
     'div',

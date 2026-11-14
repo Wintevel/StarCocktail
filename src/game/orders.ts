@@ -71,6 +71,15 @@ function recipeOrder(rng: Rng, r: Recipe): Order {
   };
 }
 
+/** 같은 재료·장식으로 같은 조건을 다시 풀지 않게 기억한다(solver는 모든 조합을 훑어 느리다) */
+const solvable = new Map<string, boolean>();
+function canSolve(conditions: Constraint[], ctx: OrderContext): boolean {
+  const key = `${[...ctx.have].sort().join(',')}|${[...ctx.garnishes].sort().join(',')}|${JSON.stringify(conditions)}`;
+  let ok = solvable.get(key);
+  if (ok === undefined) solvable.set(key, (ok = !!solve(conditions, { ingredients: ctx.have, garnishes: ctx.garnishes })));
+  return ok;
+}
+
 function tasteOrder(rng: Rng, ctx: OrderContext): Order | null {
   for (let attempt = 0; attempt < 12; attempt++) {
     // 맛 둘(서로 다른 축) + 가끔 잔·얼음·젓기 하나
@@ -78,7 +87,7 @@ function tasteOrder(rng: Rng, ctx: OrderContext): Order | null {
     const parts = axes.map((a) => pick(rng, TASTE_PARTS[a]));
     if (rng() < 0.45) parts.push(pick(rng, TASTE_PARTS[3]));
     const conditions = parts.map((p) => p.c);
-    if (!solve(conditions, { ingredients: ctx.have, garnishes: ctx.garnishes })) continue;
+    if (!canSolve(conditions, ctx)) continue;
     return {
       kind: 'taste',
       conditions,

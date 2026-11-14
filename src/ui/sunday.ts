@@ -3,7 +3,7 @@
 import { sfx } from '../audio';
 import { dayInfo } from '../game/calendar';
 import { DREAMS } from '../data';
-import { decodable, dreamStatus, RESTOCK_PER_POUR, shopItems, TIERS, tierOf, WEEKLY_MIN_PAYMENT } from '../game/progress';
+import { decodable, dreamStatus, GARNISH_COST, RESTOCK_PER_POUR, shopItems, TIERS, tierOf, WEEKLY_MIN_PAYMENT, WEEKLY_UPKEEP } from '../game/progress';
 import type { GameState } from '../game/save';
 import { icons } from '../art/icons';
 import { btn, esc } from './dom';
@@ -14,8 +14,8 @@ import { openModal, toast } from './fx';
 export function showSunday(state: GameState): Promise<void> {
   const { week } = dayInfo(state.day);
   const restock = state.week.pours * RESTOCK_PER_POUR;
-  // 재료 보충비는 자동으로 빠진다
-  state.money -= restock;
+  // 재료 보충비와 가게 운영비는 자동으로 빠진다
+  state.money -= restock + WEEKLY_UPKEEP;
   let paid = 0;
   const m = openModal('', 'sunday');
   const render = () => {
@@ -35,6 +35,7 @@ export function showSunday(state: GameState): Promise<void> {
             <div class="row"><dt>술값</dt><dd>${state.week.income.toLocaleString()}</dd></div>
             <div class="row"><dt>팁</dt><dd>${state.week.tips.toLocaleString()}</dd></div>
             <div class="row bad"><dt>재료 보충(${state.week.pours}번 부음)</dt><dd>−${restock.toLocaleString()}</dd></div>
+            <div class="row bad"><dt>가게 운영비(얼음·전기·세탁)</dt><dd>−${WEEKLY_UPKEEP.toLocaleString()}</dd></div>
             <div class="row"><dt>응대 · 완벽 · 놓침</dt><dd>${state.week.served} · ${state.week.perfect} · ${state.week.missed}</dd></div>
             <div class="row total"><dt>지금 가진 돈</dt><dd>${state.money.toLocaleString()} 크라운</dd></div>
           </dl>
@@ -109,7 +110,7 @@ export function showSunday(state: GameState): Promise<void> {
       }
       const gar = t.closest<HTMLButtonElement>('[data-gar]');
       if (gar && !gar.disabled) {
-        state.money -= 80;
+        state.money -= GARNISH_COST;
         state.garnishes.push(gar.dataset.gar as GameState['garnishes'][number]);
         sfx('coin');
         return render();

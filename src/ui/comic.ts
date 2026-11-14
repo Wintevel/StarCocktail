@@ -3,7 +3,7 @@
 // 쪽이 다 차면 카메라가 물러나 한 쪽 전체를 잠깐 보여 준 뒤, 다음 쪽이 옆에서 넘어온다.
 // 선택지는 화면 아래 두 버튼.
 
-import { sfx } from '../audio';
+import { ambienceOfScene, comicSfx, type Music, musicOfScene, setAmbience, setMusic, sfx } from '../audio';
 import type { CastId } from '../story/cast';
 import type { StoryRunner } from '../story/script';
 import { el, esc, frame, reduced, wait } from './dom';
@@ -26,7 +26,27 @@ const LAYOUTS: { clip: string; box: [number, number, number, number] }[][] = [
   ],
 ];
 
-export async function runComic(parent: HTMLElement, title: string, runner: StoryRunner, playerName: string): Promise<void> {
+/** music: 정해 두면 장면이 바뀌어도 그 곡을 그대로 쓴다(엔딩) */
+/** 세로 휴대폰: 세로로 긴 쪽에 칸을 위아래로 쌓는다 */
+const LAYOUTS_TALL: { clip: string; box: [number, number, number, number] }[][] = [
+  [
+    { clip: 'polygon(0 0, 100% 0, 100% 90%, 0 100%)', box: [2, 1.5, 96, 32] },
+    { clip: 'polygon(0 9%, 100% 0, 100% 100%, 0 92%)', box: [2, 33.5, 96, 32] },
+    { clip: 'polygon(0 7%, 100% 0, 100% 100%, 0 100%)', box: [2, 65.5, 96, 33] },
+  ],
+  [
+    { clip: 'polygon(0 0, 100% 0, 100% 100%, 0 92%)', box: [2, 1.5, 96, 30] },
+    { clip: 'polygon(0 8%, 100% 0, 94% 100%, 0 100%)', box: [2, 33, 49, 34] },
+    { clip: 'polygon(10% 0, 100% 0, 100% 100%, 0 100%)', box: [47, 33, 51, 34] },
+    { clip: 'polygon(0 0, 100% 6%, 100% 100%, 0 100%)', box: [2, 68.5, 96, 30] },
+  ],
+];
+
+export const tallScreen = () => window.matchMedia('(orientation: portrait) and (max-width: 600px)').matches;
+
+export async function runComic(parent: HTMLElement, title: string, runner: StoryRunner, playerName: string, music?: Music): Promise<void> {
+  if (music) setMusic(music);
+  let scene = '';
   const box = el(
     'div',
     'comic',
@@ -43,7 +63,10 @@ export async function runComic(parent: HTMLElement, title: string, runner: Story
   const cam = box.querySelector<HTMLElement>('.comic-cam')!;
   let page: HTMLElement | null = null;
   let slot = 0;
-  let layout = LAYOUTS[0];
+  const tall = tallScreen();
+  if (tall) box.classList.add('tall');
+  const layouts = tall ? LAYOUTS_TALL : LAYOUTS;
+  let layout = layouts[0];
   let pageNo = 0;
   let focus: { id: CastId; mood: 'neutral' }[] = [];
 
@@ -57,7 +80,7 @@ export async function runComic(parent: HTMLElement, title: string, runner: Story
       await wait(reduced() ? 30 : 420);
       page.remove();
     }
-    layout = LAYOUTS[pageNo % LAYOUTS.length];
+    layout = layouts[pageNo % layouts.length];
     pageNo++;
     page = el('div', 'comic-page');
     cam.append(page);
@@ -69,6 +92,11 @@ export async function runComic(parent: HTMLElement, title: string, runner: Story
   const focusSlot = (i: number) => {
     const [x, y, w, h] = layout[i].box;
     const scale = Math.min(1.8, 94 / w, 94 / h);
+    // 칸이 쪽 너비를 거의 다 차지하면(세로 화면) 다가가지 않고 쪽 전체를 보여 준다
+    if (scale < 1.1) {
+      cam.style.transform = 'translate(0,0) scale(1)';
+      return;
+    }
     const cx = x + w / 2;
     const cy = y + h / 2;
     cam.style.transform = `scale(${scale}) translate(${50 - cx}%, ${50 - cy}%)`;
@@ -78,6 +106,11 @@ export async function runComic(parent: HTMLElement, title: string, runner: Story
     const s = runner.next();
     if (s.t === 'end') break;
     if (s.t === 'say') {
+      if (s.bg !== scene) {
+        scene = s.bg;
+        if (!music) setMusic(musicOfScene(scene));
+        setAmbience(ambienceOfScene(scene));
+      }
       if (!page || slot >= layout.length) await newPage();
       focus = s.show as typeof focus;
       const { root, text } = makePanel(s, focus, playerName, 'comic-panel');
@@ -92,7 +125,7 @@ export async function runComic(parent: HTMLElement, title: string, runner: Story
       slot++;
       await frame();
       root.classList.add('in');
-      if (s.sfx) sfx('stamp');
+      if (s.sfx) comicSfx(s.sfx);
       await wait(reduced() ? 20 : 420);
       await advanceLine(box, text, s.text);
     } else if (s.t === 'choice') {
@@ -108,6 +141,7 @@ export async function runComic(parent: HTMLElement, title: string, runner: Story
   cam.style.transform = 'translate(0,0) scale(1)';
   await wait(reduced() ? 40 : 800);
   box.classList.add('out');
+  setAmbience(null);
   await wait(500);
   box.remove();
 }

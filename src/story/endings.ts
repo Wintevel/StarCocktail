@@ -1,6 +1,7 @@
 // 엔딩: 마지막 밤의 선택과 그동안 쌓은 값(노아의 생사·낮꿈 레시피·명성·빚)으로 메인 엔딩 여섯 중 하나가 정해지고,
 // 엔딩 만화 뒤에 손님별 후일담 카드가 이어진다.
 
+import type { Mood } from '../art/people';
 import type { StoryState } from '../game/save';
 import type { CastId } from './cast';
 import type { Episode } from './episodes';
@@ -63,7 +64,7 @@ export interface Epilogue {
   cast: CastId;
   text: string;
   /** 후일담 카드 속 표정 */
-  mood: 'smile' | 'sad' | 'neutral';
+  mood: Mood;
 }
 
 export function epilogues(story: StoryState, ending: EndingKey): Epilogue[] {
@@ -88,7 +89,7 @@ export function epilogues(story: StoryState, ending: EndingKey): Epilogue[] {
   else if (f('noah_hidden')) out.push({ cast: 'noah', text: '축제의 혼란 속에서 노아는 다쳤지만 살아남았다. 그는 다시 숨어야 했다. 이번엔 혼자가 아니었지만.', mood: 'sad' });
 
   // 하린과 테오
-  if (f('lovers_together')) out.push({ cast: 'harin', text: '하린과 테오는 이듬해 봄, 바 피아노 앞에서 작은 결혼식을 올렸다. 축가는 신랑이 직접 쳤다. 꽃은 물론 신부가.', mood: 'smile' });
+  if (f('lovers_together')) out.push({ cast: 'harin', text: '하린과 테오는 이듬해 봄, 바 피아노 앞에서 작은 결혼식을 올렸다. 축가는 신랑이 직접 쳤다. 꽃은 물론 신부가.', mood: 'laugh' });
   else if (f('lovers_met')) out.push({ cast: 'teo', text: '하린은 지금도 피아노 위에 꽃 한 송이를 둔다. 테오는 그 꽃을 보며 친다. 두 사람은 아직 그 이상의 말을 하지 못했다.', mood: 'sad' });
   else out.push({ cast: 'harin', text: '하린의 꽃집과 테오의 피아노는 같은 거리에 있었지만, 둘은 끝내 서로를 알아보지 못했다.', mood: 'sad' });
 
@@ -98,24 +99,24 @@ export function epilogues(story: StoryState, ending: EndingKey): Epilogue[] {
   else out.push({ cast: 'arthur', text: '목요일마다 두 잔을 시키던 노신사는 어느새 보이지 않았다. 그 자리에는 늘 잔 두 개가 놓인다.', mood: 'sad' });
 
   // 핍
-  if (f('pip_writer')) out.push({ cast: 'pip', text: '핍은 이제 바의 편지를 쓴다. 배달은 물론 직접. 맞춤법은 오렐리아가 봐 준다.', mood: 'smile' });
+  if (f('pip_writer')) out.push({ cast: 'pip', text: '핍은 이제 바의 편지를 쓴다. 배달은 물론 직접. 맞춤법은 오렐리아가 봐 준다.', mood: 'laugh' });
   else if (f('pip_friend')) out.push({ cast: 'pip', text: '핍은 여전히 「무중력 레모네이드」를 외상으로 마신다. 장부는 사장만 안다.', mood: 'smile' });
   else out.push({ cast: 'pip', text: '핍은 우체국에서 가장 빠른 배달부가 되었다. 운하 거리 7번지만큼은 꼭 직접 간다.', mood: 'smile' });
 
   // 세라
   if (ending === 'ripple') out.push({ cast: 'sera', text: '세라의 장부 기사는 그해 가장 많이 팔린 1면이 되었다. 기사 맨 끝 한 줄은 이 바의 칵테일 이야기였다.', mood: 'smile' });
-  else if (story.flags.final_sera) out.push({ cast: 'sera', text: '세라의 1면은 도시를 흔들었다. 그 대가로 인쇄소 하나가 불탔다. 그녀는 다음 날도 기사를 썼다.', mood: 'sad' });
+  else if (story.flags.final_sera) out.push({ cast: 'sera', text: '세라의 1면은 도시를 흔들었다. 그 대가로 인쇄소 하나가 불탔다. 그녀는 다음 날도 기사를 썼다.', mood: 'serious' });
   else if (t('sera') >= 3) out.push({ cast: 'sera', text: '세라는 옛 칼럼 「한 잔의 1면」을 다시 연재한다. 첫 회는 운하 거리 7번지 이야기.', mood: 'smile' });
   else out.push({ cast: 'sera', text: '세라는 다른 도시의 신문사로 옮겼다. 가끔 엽서가 온다. 「그 장부, 어떻게 됐어요?」', mood: 'sad' });
 
   // 이브
-  if (ending === 'justice' || ending === 'ripple') out.push({ cast: 'eve', text: '이브는 배지를 되찾았다. 청장의 재판 날, 그녀는 증인석 맞은편에 앉아 있었다.', mood: 'smile' });
+  if (ending === 'justice' || ending === 'ripple') out.push({ cast: 'eve', text: '이브는 배지를 되찾았다. 청장의 재판 날, 그녀는 증인석 맞은편에 앉아 있었다.', mood: 'serious' });
   else if (f('eve_informant')) out.push({ cast: 'eve', text: '이브는 비번인 밤마다 와서 「블랙홀」을 마신다. 정보원은 이제 단골이 되었다.', mood: 'smile' });
   else out.push({ cast: 'eve', text: '이브는 다른 항구로 발령받았다. 떠나기 전날, 바 문 앞에서 한참 서 있다 갔다.', mood: 'sad' });
 
   // 돈 카발로(만난 적이 있으면)
   if (met('cavallo')) {
-    if (ending === 'family') out.push({ cast: 'cavallo', text: '돈 카발로는 패밀리를 다시 쥐었다. 장부는 그의 금고에 들어갔고, 그 손은 예전보다 떨렸다.', mood: 'sad' });
+    if (ending === 'family') out.push({ cast: 'cavallo', text: '돈 카발로는 패밀리를 다시 쥐었다. 장부는 그의 금고에 들어갔고, 그 손은 예전보다 떨렸다.', mood: 'serious' });
     else if (f('cavallo_oath')) out.push({ cast: 'cavallo', text: '돈 카발로는 법정에 서기 전날 밤, 이 바에서 마지막 「불타는 서약」을 마셨다. "가난한 항구 사람들에게"라고 건배했다.', mood: 'smile' });
     else out.push({ cast: 'cavallo', text: '돈 카발로는 조용히 물러났다. 휠체어를 밀어 주는 사람은 이제 아무도 없다.', mood: 'sad' });
   }
@@ -213,7 +214,7 @@ sera(worried): 써냈어요. 그런데… 이 도시는 아직 준비가 안 됐
 @goto end
 #luca
 @show luca:sad
-luca(sad): 미안. 막으려고 했는데… 늦었어.
+luca(cry): 미안. 막으려고 했는데… 늦었어.
 #end
 @bg canal
 @show

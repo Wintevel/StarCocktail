@@ -61,7 +61,7 @@ eve(smirk): 이거예요. 눈이 번쩍 뜨이네.
     title: '마지막 부탁',
     when: 'flag:noah_alone',
     script: `
-noah(sad): 창고에도 사람이 왔어요. 다음 숨을 곳이 없어요.
+noah(scared): 창고에도 사람이 왔어요. 다음 숨을 곳이 없어요.
 noah: 한 번만 더 부탁할게요. 이번이 마지막이에요.
 ? 위층으로 올라가요. 이번엔 지킬게요 -> hide | set noah_hidden; unset noah_alone; trust noah +1
 ? 도시를 떠나요. 그게 살 길이에요 -> go | set noah_gone; unset noah_alone
@@ -105,12 +105,12 @@ noah(worried): 맞아요. 그 장부는 가진 사람을 표적으로 만들어�
     at: 22 * 60 + 30,
     title: '취한 루카',
     script: `
-luca(sad): 한 잔 더. 아니, 두 잔.
+luca(tipsy): 한 잔 더. 아니, 두 잔.
 @if flag:luca_mother -> mother
 luca: 오늘은 피아니스트한테 수금하러 갔어. 그 사람, 손이 떨리더라. 피아노 치는 손이.
 @goto choice
 #mother
-luca(sad): 병원에서 엄마가 물었어. "무슨 일 하니?" …항구 일 한다고 했어. 거짓말은 아니지.
+luca(tipsy): 병원에서 엄마가 물었어. "무슨 일 하니?" …항구 일 한다고 했어. 거짓말은 아니지.
 #choice
 ? 그만두고 싶으면, 그만둬도 돼요 -> quit | set luca_doubt; trust luca +1
 ? 오늘은 마시고 잊어요 -> drink
@@ -138,12 +138,12 @@ luca(smile): 너 진짜 술 잘 만든다. 이게 이 동네에서 제일 정직
     when: 'flag:lovers_met',
     script: `
 @show harin:smile teo:smile
-harin(smile): 사장님! 저희… 창가 자리 앉아도 돼요?
+harin(blush): 사장님! 저희… 창가 자리 앉아도 돼요?
 teo(smile): 오늘은 제가 피아노 대신 손님이에요.
 ~: 둘은 한참 동안 말없이 웃기만 했다.
 @drink ruby-serenade "루비 세레나데 두 잔이요. 같은 색으로."
 @if grade:perfect -> good
-harin: 예쁘다…
+harin(blush): 예쁘다…
 @goto choice
 #good
 @show harin:surprised teo:smile
@@ -250,7 +250,7 @@ eve(smile): 그리고… 고마워요. 이 도시에서 나 혼자가 아니란 
     at: 22 * 60,
     title: '기한',
     script: `
-teo(sad): 이번 주가 기한이에요. 남은 건 500. 못 갚으면 토요일부터 패밀리 연회 전속이래요.
+teo(scared): 이번 주가 기한이에요. 남은 건 500. 못 갚으면 토요일부터 패밀리 연회 전속이래요.
 @if flag:harin_brave -> harin
 teo: …괜찮아요. 피아노는 어디서 쳐도 피아노니까.
 @goto choice
@@ -471,7 +471,7 @@ pip(smile): 편지 쓰는 사람, 오렐리아 씨죠? 살아 있는 거죠?
 pip(smile): 배달부한테 맡겨요! 바다 건너도 가요!
 @end
 #secret
-pip(smile): 약속! 새끼손가락!
+pip(laugh): 약속! 새끼손가락!
 @end
 `,
   },
@@ -614,7 +614,7 @@ harin(smile): 건반을 열면 보이게. 좋아요.
 harin(sad): …네.
 @end
 #free
-harin(smile): 오늘 테오 씨가 꽃집 일을 도와줬어요. 꽃 이름을 하나도 모르면서!
+harin(laugh): 오늘 테오 씨가 꽃집 일을 도와줬어요. 꽃 이름을 하나도 모르면서!
 harin: 사장님 덕분인 것 같아요. 뭔지는 모르지만.
 @trust harin +1
 @end
@@ -634,7 +634,7 @@ harin: 사장님 덕분인 것 같아요. 뭔지는 모르지만.
 aurelia(smile): 나는 살아 있어. 세렌 섬, 바다 냄새 나는 작은 방에서 매주 너에게 편지를 써.
 aurelia: 장부는 사람을 지키기 위한 것이자, 가진 사람을 위험하게 만드는 거야. 그래서 바에 두고 왔어. 네가 준비될 때까지.
 @show aurelia:sad
-aurelia(sad): 빚은 미안해. 노아를 살리려면 누군가 대신 서야 했어. 네가 그걸 떠안을 줄 알았다면… 아니, 알았어. 그래서 더 미안해.
+aurelia(cry): 빚은 미안해. 노아를 살리려면 누군가 대신 서야 했어. 네가 그걸 떠안을 줄 알았다면… 아니, 알았어. 그래서 더 미안해.
 @show aurelia:smile
 aurelia(smile): 노트의 빈 장은 내가 너한테 남긴 길이야. 일곱 장을 다 채우면, 너는 나보다 좋은 바텐더가 돼 있을 거야.
 @bg room
@@ -653,7 +653,7 @@ me: …스승님.
     at: 22 * 60,
     title: '서약의 잔',
     script: `
-luca(sad): 명령이 떨어졌어. 축제 날까지 장부가 안 나오면… 이 바에 불을 놓으래. 내 손으로.
+luca(serious): 명령이 떨어졌어. 축제 날까지 장부가 안 나오면… 이 바에 불을 놓으래. 내 손으로.
 luca: 그리고 이거. 형님이 버리라던 오렐리아의 메모야. 패밀리 사람들은 다 아는 잔이래.
 ~: 「젊은 돈 카발로가 처음 맹세하던 밤의 잔. 맹세는 독하고, 피처럼 붉어야 했지.」 귀퉁이에 '낮꿈'.
 @clue piece:dream-oath
@@ -715,7 +715,7 @@ pip: 시립 병원 할머니가 편지를 맡겼어요. "모자 쓴 우리 아�
 pip(smile): 부탁해요! 할머니가 많이 우셨어요.
 @end
 #pip
-pip(surprised): 무서운데… 배달부니까요!
+pip(scared): 무서운데… 배달부니까요!
 @end
 `,
   },
@@ -827,7 +827,7 @@ arthur(smile): 비슷하네. 비슷해. 고맙네.
 @trust arthur +1
 @end
 #perfect
-arthur(sad): ……이 맛이야. 두 번 붉고 한 번 노란.
+arthur(cry): ……이 맛이야. 두 번 붉고 한 번 노란.
 arthur(smile): 클라라가 웃었을 거야. 아니, 지금 웃고 있는 것 같구먼.
 @trust arthur +2
 @set arthur_clara_tasted
@@ -944,7 +944,7 @@ silva(smirk): 축제 날까지다. 하루도 더는 없다.
     title: '증인 보호',
     script: `
 eve: 소문 들었어요. 그리고 당신 얼굴을 보니 알겠네요.
-eve: 장부를 넘겨줘요. 법정에 세울게요. 당신과 노아 렌, 둘 다 증인 보호를 해 줄 수 있어요.
+eve(serious): 장부를 넘겨줘요. 법정에 세울게요. 당신과 노아 렌, 둘 다 증인 보호를 해 줄 수 있어요.
 eve(worried): 다만 청장이 먼저 알면… 장부는 증거물 창고에서 사라질 거예요. 그래서 축제 날, 청장이 시장 옆에 서 있는 그 시간에 받고 싶어요.
 ? 알겠어요. 생각해 볼게요 -> think | trust eve +1
 ? 경찰을 믿어도 될지 모르겠어요 -> doubt
@@ -993,7 +993,7 @@ pip: 큰길로 도망쳤어요. 편지는 지켰어요!
 ? 오늘부터 축제까지 바 다락방에서 지내 -> stay | set pip_safe; trust pip +1
 ? 배달은 잠시 쉬자 -> rest
 #stay
-pip(smile): 다락방! 비밀 기지다!
+pip(laugh): 다락방! 비밀 기지다!
 @end
 #rest
 pip(sad): …배달부가 배달을 쉬면 뭐가 돼요.

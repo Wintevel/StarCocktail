@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MOODS } from '../art/people';
 import { DREAMS, INGREDIENT_BY_ID, RECIPE_BY_ID } from '../data';
 import { dayOf, LAST_DAY, OPEN_MIN, LAST_ARRIVAL_MIN } from '../game/calendar';
 import { orderForRecipe } from '../game/orders';
@@ -52,6 +53,15 @@ const allConds = EPISODES.flatMap((e) => [...condsIn(e.script), ...(e.when ? [e.
 const allSrc = EPISODES.map((e) => e.script).join('\n');
 
 describe('이야기 대본', () => {
+  it('대사·@show에 쓴 표정은 모두 그릴 수 있는 표정이다', () => {
+    const known = new Set<string>(MOODS);
+    for (const e of EPISODES)
+      for (const n of parseScript(e.script).nodes) {
+        if (n.t === 'say' && n.mood) expect(known.has(n.mood), `${e.id}: ${n.mood}`).toBe(true);
+        if (n.t === 'show') for (const c of n.cast) expect(known.has(c.mood), `${e.id}: ${c.mood}`).toBe(true);
+      }
+  });
+
   it('회차 id가 겹치지 않고, 날짜·시각·인물이 맞다', () => {
     const ids = EPISODES.map((e) => e.id);
     expect(new Set(ids).size).toBe(ids.length);
