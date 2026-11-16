@@ -237,7 +237,7 @@ function eye(cx: number, look: Look, mood: Mood, right: boolean) {
   );
 }
 
-function brows(look: Look, mood: Mood) {
+function brows(_look: Look, mood: Mood) {
   const y = 97;
   let l: string;
   let r: string;
