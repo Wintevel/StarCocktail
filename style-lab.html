@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>그림체 시안</title>
+    <style>
+      body { margin: 0; background: #fbf6e9; font-family: sans-serif; color: #17131a; }
+      .row { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 24px; align-items: flex-end; }
+      .cell { text-align: center; font-size: 12px; letter-spacing: 0.08em; }
+      .cell svg { display: block; width: var(--w, 300px); height: auto; overflow: visible; }
+      .dark { background: #1c1733; color: #e9dcc0; }
+      h2 { margin: 0; padding: 18px 24px 0; font-weight: 400; font-size: 15px; letter-spacing: 0.2em; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { paperPersonSvg } from '/src/art/paperPeople.ts';
+      import { personSvg, MOODS } from '/src/art/people.ts';
+      import { CAST } from '/src/story/cast.ts';
+      const q = new URLSearchParams(location.search);
+      const ids = (q.get('ids') ?? 'harin,luca').split(',');
+      const app = document.getElementById('app');
+      const add = (html) => app.insertAdjacentHTML('beforeend', html);
+      const view = q.get('view') ?? 'hero';
+      if (view === 'hero') {
+        add(`<div class="row" style="--w:${q.get('w') ?? 420}px;justify-content:center;gap:60px">${ids.map((i) => `<div class="cell">${paperPersonSvg(CAST[i].look, 'neutral')}${CAST[i].name}</div>`).join('')}</div>`);
+      } else if (view === 'moods') {
+        for (const i of ids) add(`<div class="row" style="--w:140px">${MOODS.map((m) => `<div class="cell">${paperPersonSvg(CAST[i].look, m)}${m}</div>`).join('')}</div>`);
+      } else if (view === 'compare') {
+        for (const i of ids) add(`<div class="row dark" style="--w:300px;justify-content:center;gap:40px"><div class="cell">${personSvg(CAST[i].look, 'neutral')}지금</div><div class="cell">${paperPersonSvg(CAST[i].look, 'neutral')}시안</div></div>`);
+      } else if (view === 'bar' || view === 'panel') {
+        for (const f of ['base', 'bar', 'story']) await import(`/src/styles/${f}.css`);
+        for (const f of ['hahmlet/700', 'ibm-plex-sans-kr/500', 'gowun-batang/700']) await import(/* @vite-ignore */ `/node_modules/@fontsource/${f}.css`);
+        document.body.style.background = '#0d0b1c';
+        if (view === 'bar') {
+          const { BarView } = await import('/src/ui/bar.ts');
+          const root = document.createElement('div');
+          app.append(root);
+          new BarView(root, {});
+          const seats = [...root.querySelectorAll('.seat')];
+          const who = (q.get('seats') ?? 'harin,,luca').split(',');
+          who.forEach((id, i) => {
+            if (!id) return;
+            const [cid, mood] = id.split(':');
+            seats[i].className = 'seat phase-wait special';
+            seats[i].querySelector('.seat-guest').innerHTML = personSvg(CAST[cid].look, mood ?? 'neutral');
+            seats[i].querySelector('.seat-tag').innerHTML = `<b style="--c:${CAST[cid].color}">${CAST[cid].name}</b>`;
+          });
+        } else {
+          const { makePanel } = await import('/src/ui/panel.ts');
+          const wrap = document.createElement('div');
+          wrap.style.cssText = 'display:flex;gap:24px;padding:40px;justify-content:center';
+          app.append(wrap);
+          const lines = [
+            { who: 'harin', mood: 'blush', text: '저, 그 피아노 치는 분… 오늘도 오시나요?', bg: 'bar' },
+            { who: 'luca', mood: 'worried', text: '형님들한텐 비밀로 해 줘요. 진짜로.', bg: 'alley' },
+          ];
+          for (const l of lines) {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:relative;width:420px;height:520px';
+            const p = makePanel({ t: 'say', show: [{ id: l.who, mood: l.mood }], ...l }, [], '나');
+            p.text.textContent = l.text;
+            p.root.style.cssText = 'position:absolute;inset:0';
+            box.append(p.root);
+            wrap.append(box);
+          }
+        }
+      }
+    </script>
+  </body>
+</html>

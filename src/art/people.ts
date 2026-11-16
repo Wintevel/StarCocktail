@@ -3,6 +3,8 @@
 // 좌표: viewBox 0 0 240 300. 머리 가운데 (120,104), 턱 ≈ 160, 어깨 ≈ 185, 300에서 잘린다(바 카운터가 아래를 가린다).
 // 같은 Look이면 늘 같은 그림이 나온다. 표정(Mood)만 바꿔 다시 그린다.
 
+import { paperPersonSvg, paperSupports } from './paperPeople';
+
 export const MOODS = ['neutral', 'smile', 'sad', 'angry', 'surprised', 'smirk', 'worried', 'laugh', 'cry', 'blush', 'serious', 'tipsy', 'scared'] as const;
 export type Mood = (typeof MOODS)[number];
 export type HairStyle = 'short' | 'slick' | 'messy' | 'bob' | 'long' | 'bun' | 'old' | 'curly' | 'ponytail' | 'wavy';
@@ -529,6 +531,8 @@ function accessories(look: Look, mood: Mood, front: boolean) {
 
 /** 인물 SVG(문자열). cls는 바깥 svg 요소 클래스. */
 export function personSvg(look: Look, mood: Mood = 'neutral', cls = 'person'): string {
+  // v10 시안: 주소에 ?style=paper 를 붙이면 지원하는 인물만 새 그림체로 그린다
+  if (typeof location !== 'undefined' && location.search.includes('style=paper') && paperSupports(look)) return paperPersonSvg(look, mood, cls);
   const id = `pc${++uid}`;
   const torso = torsoPath(look);
   const kidHead = look.age === 'kid' ? ' transform="translate(0 4)"' : '';
