@@ -4,6 +4,8 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   base: './',
   build: {
+    // 본편(index.html)과 학술제 전시판(exhibit.html)을 함께 빌드한다.
+    rollupOptions: { input: { main: 'index.html', exhibit: 'exhibit.html' } },
     // three.js가 번들 대부분을 차지해 기본 경고 기준(500kB)을 넘는다.
     chunkSizeWarningLimit: 900,
     // 한글 글꼴은 유니코드 구간마다 작은 파일로 나뉜다. 작은 조각을 CSS 안에 base64로 넣으면

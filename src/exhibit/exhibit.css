@@ -1,0 +1,59 @@
+/* 향을 짓는 바: 배치만 잡아 둔 최소 스타일. 미술 방향(흑백 + 향이 닿은 곳만 색)은 docs/exhibit/기획서.md 참고. */
+.ex-bg { position: absolute; inset: -20px; filter: blur(8px) brightness(.5); }
+.ex-bg svg { width: 100%; height: 100%; }
+.ex-shade { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 30%, rgba(8,6,20,.75) 100%); }
+.ex-stage, .ex-vapor { position: absolute; inset: 0; }
+.ex-stage canvas, .ex-vapor canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+.ex-vapor { pointer-events: none; }
+.ex-ui { position: absolute; inset: 0; pointer-events: none; }
+.ex-ui > * { pointer-events: auto; }
+.ex-top { position: absolute; left: 2%; right: 2%; top: 2%; display: flex; justify-content: space-between; align-items: center; }
+.ex-brand .logo { font-family: var(--f-logo); color: var(--gold); letter-spacing: .3em; font-size: 12px; display: block; }
+.ex-brand b { font-family: var(--f-title); font-size: 22px; }
+.ex-progress { display: flex; gap: 12px; list-style: none; margin: 0; padding: 0; }
+.ex-progress li { opacity: .5; } .ex-progress li.now { opacity: 1; color: var(--gold); }
+.ex-story { position: absolute; left: 2.5%; top: 11%; width: 30%; padding: 18px 22px; }
+.ex-lines p { opacity: 0; transition: opacity .6s; font-family: var(--f-line); line-height: 1.7; }
+.ex-lines p.show { opacity: 1; }
+.clue { font-style: normal; color: var(--gold-hi); border-bottom: 1px dashed var(--gold); }
+.ex-clue-tip { opacity: 0; font-size: 13px; color: var(--muted); } .ex-clue-tip.on { opacity: 1; }
+.ex-guest { position: absolute; left: 4%; bottom: 22%; width: 22%; pointer-events: none; }
+.ex-guest svg { width: 100%; height: auto; }
+.ex-side { position: absolute; right: 2.5%; top: 11%; width: 27%; padding: 18px 22px; }
+.ex-sniff-card .words span { display: inline-block; margin: 2px 4px 2px 0; padding: 2px 8px; border: 1px solid var(--c); border-radius: 99px; }
+.ex-sniff-card .swatch { height: 6px; background: var(--c); border-radius: 3px; }
+.ex-pyramid { list-style: none; padding: 0; } .ex-pyramid li.now { color: var(--gold); } .ex-pyramid li.set b { color: var(--c); }
+.ex-shelf { position: absolute; left: 20%; right: 20%; bottom: 0; height: 26%; }
+.ex-shelf canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+.ex-labels { position: absolute; inset: 0; pointer-events: none; }
+.ex-label { position: absolute; transform: translate(-50%, 0); font-size: 14px; white-space: nowrap; }
+.ex-label i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.ex-label.on { color: var(--gold-hi); }
+.ex-serve { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.ex-redo-mini { position: absolute; left: calc(var(--gx, 50%) + 120px); top: calc(var(--gfoot, 70%) - 40px); }
+.ex-floaters { position: absolute; inset: 0; pointer-events: none; }
+.ex-word { position: absolute; color: var(--c); font-family: var(--f-line); animation: ex-rise 2.2s ease-out both; }
+@keyframes ex-rise { from { opacity: 0; transform: translateY(0); } 20% { opacity: 1; } to { opacity: 0; transform: translateY(-80px); } }
+.ex-reveal, .ex-summary, .ex-title { position: absolute; inset: 0; }
+.rv-scene { position: absolute; inset: 0; filter: blur(var(--blur)) grayscale(var(--gray)); }
+.rv-scene svg, .rv-scene img { width: 100%; height: 100%; object-fit: cover; }
+.rv-veil { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 40%, rgba(8,6,20,.7)); }
+.rv-head { position: absolute; top: 6%; width: 100%; text-align: center; }
+.rv-poem { position: absolute; top: 22%; width: 100%; text-align: center; font-family: var(--f-line); font-size: 24px; text-shadow: 0 2px 10px #000; }
+.rv-poem p { opacity: 0; transition: opacity 1s; } .rv-poem p.show { opacity: 1; }
+.rv-card { position: absolute; left: 50%; bottom: 5%; transform: translate(-50%, 30px); opacity: 0; transition: .5s; display: flex; gap: 20px; padding: 20px; width: min(860px, 90%); }
+.rv-card.show { opacity: 1; transform: translate(-50%, 0); }
+.rv-guest { width: 160px; } .rv-guest svg { width: 100%; }
+.rv-stars i, .sm-total i, .sm-stars i { color: #555; font-style: normal; } .rv-stars i.on, .sm-total i.on, .sm-stars i.on { color: var(--gold); }
+.rv-compare ol { list-style: none; padding: 0; } .rv-compare li, .rv-col-h { display: grid; grid-template-columns: 90px 1fr 30px 1fr; }
+.ex-summary { background: rgba(8,6,20,.85); display: grid; place-items: center; text-align: center; }
+.sm-cards { display: flex; gap: 20px; justify-content: center; } .sm-card { padding: 18px; width: 260px; }
+.sm-bottle span { display: block; height: 14px; }
+.ex-title { display: grid; place-items: center; text-align: center; cursor: pointer; background: rgba(8,6,20,.55); }
+.ex-title h1 { font-family: var(--f-title); font-size: 72px; margin: 10px 0; }
+.ex-title .logo { font-family: var(--f-logo); color: var(--gold); letter-spacing: .4em; }
+.tt-start { margin-top: 40px; animation: ex-blink 1.6s infinite; } @keyframes ex-blink { 50% { opacity: .35; } }
+.tt-how { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(8,6,20,.6); cursor: default; }
+.tt-how-box { padding: 30px 40px; text-align: left; max-width: 640px; }
+.tt-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .6; }
+.tt-full { position: absolute; right: 20px; top: 20px; font-size: 22px; background: none; border: 0; color: var(--muted); cursor: pointer; }
